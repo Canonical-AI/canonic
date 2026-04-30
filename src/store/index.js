@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 
 export const useAppStore = defineStore('app', () => {
   const workspacePath = ref(null)
+  const workspaceName = ref(null)
+  const recentWorkspaces = ref(JSON.parse(localStorage.getItem('canonic:recentWorkspaces') || '[]'))
   const files = ref([])
   const currentFile = ref(null)
   const currentContent = ref('')
@@ -14,18 +16,54 @@ export const useAppStore = defineStore('app', () => {
   const isLoading = ref(false)
   const shareInfo = ref(null)
   const searchResults = ref([])
+  const config = ref(null)
   const sidebarTab = ref('files') // 'files' | 'search' | 'peers'
   const rightPanelTab = ref('comments') // 'comments' | 'ai' | 'history'
 
   const api = window.canonic
 
-  async function openWorkspace(chosenPath) {
+  async function loadConfig() {
+    config.value = await api.config.read()
+    return config.value
+  }
+
+  async function saveConfig(newConfig) {
+    const result = await api.config.write(newConfig)
+    if (result.success) config.value = result.config
+    return result
+  }
+
+  async function openWorkspace(chosenPath, template = 'blank') {
     isLoading.value = true
-    const result = await api.workspace.init(chosenPath)
+    const result = await api.workspace.init(chosenPath, template)
     workspacePath.value = result.path
+    workspaceName.value = chosenPath.split('/').pop()
+    // Track recent workspaces
+    const recent = recentWorkspaces.value.filter(w => w.path !== chosenPath)
+    recent.unshift({ path: chosenPath, name: workspaceName.value, openedAt: Date.now() })
+    recentWorkspaces.value = recent.slice(0, 8)
+    localStorage.setItem('canonic:recentWorkspaces', JSON.stringify(recentWorkspaces.value))
+    currentFile.value = null
+    currentContent.value = ''
+    comments.value = []
     await refreshFiles()
     await refreshBranches()
     isLoading.value = false
+  }
+
+  async function renameFile(oldPath, newName) {
+    if (!workspacePath.value) return
+    const dir = oldPath.includes('/') ? oldPath.split('/').slice(0, -1).join('/') : ''
+    const newPath = dir ? `${dir}/${newName}.md` : `${newName}.md`
+    const content = await api.files.read(workspacePath.value, oldPath)
+    await api.files.write(workspacePath.value, newPath, content)
+    await api.files.delete(workspacePath.value, oldPath)
+    // If it was open, switch to new path
+    if (currentFile.value === oldPath) {
+      currentFile.value = newPath
+    }
+    await refreshFiles()
+    return newPath
   }
 
   async function refreshFiles() {
@@ -162,10 +200,12 @@ export const useAppStore = defineStore('app', () => {
   }
 
   return {
-    workspacePath, files, currentFile, currentContent, branches, currentBranch,
-    commitLog, comments, isDirty, isLoading, shareInfo, searchResults,
+    workspacePath, workspaceName, recentWorkspaces,
+    files, currentFile, currentContent, branches, currentBranch,
+    commitLog, comments, isDirty, isLoading, shareInfo, searchResults, config,
     sidebarTab, rightPanelTab,
-    openWorkspace, refreshFiles, openFile, saveFile, createFile,
+    loadConfig, saveConfig,
+    openWorkspace, refreshFiles, openFile, saveFile, createFile, renameFile,
     commitFile, refreshBranches, createBranch, checkoutBranch, mergeBranch,
     loadCommitLog, loadComments, addComment, resolveComment, deleteComment,
     startShare, stopShare, searchDocs

@@ -129,7 +129,7 @@ function addSelectionComment() {
 
   store.addComment({
     id: uuidv4(),
-    author: 'You',
+    author: store.config?.displayName || 'You',
     type: 'selection',
     anchor: {
       quotedText: text,

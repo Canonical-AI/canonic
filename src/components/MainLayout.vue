@@ -19,12 +19,17 @@
         <button class="icon-btn" title="Share document" @click="showShare = true" v-if="store.currentFile">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M11.13 2.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-7.75 2a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm7.75 5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/>
-            <path d="M6.128 7.851a2.5 2.5 0 010-1.702L4.53 5.127a3.5 3.5 0 000 5.746l1.598-1.022a2.5 2.5 0 010-2zm1.744-5.098a3.5 3.5 0 015.252 2.247H15a5 5 0 00-8.75-3.03l1.622 1.038a3.5 3.5 0 01-.002-.255zm-.002 8.494a3.5 3.5 0 000-.494H6.248A5 5 0 0015 13.5h-1.876a3.5 3.5 0 01-5.254 2.247L6.248 16.784A5 5 0 006.128 11.247z"/>
+            <path fill-rule="evenodd" d="M4.53 5.127a3.5 3.5 0 000 5.746l1.598-1.022a2 2 0 010-3.702L4.53 5.127zm6.94 0L9.872 6.149a2 2 0 010 3.702l1.598 1.022a3.5 3.5 0 000-5.746z"/>
           </svg>
         </button>
         <button class="icon-btn" title="Commit checkpoint" @click="showCommit = true" v-if="store.currentFile">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M10.5 7.75a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zm1.43.75a4.002 4.002 0 01-7.86 0H.75a.75.75 0 110-1.5h3.32a4.001 4.001 0 017.86 0h3.32a.75.75 0 110 1.5h-3.32z"/>
+          </svg>
+        </button>
+        <button class="icon-btn" title="Settings" @click="showSettings = true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path fill-rule="evenodd" d="M7.429 1.525a6.593 6.593 0 011.142 0c.036.003.108.036.137.146l.289 1.105c.147.56.55.967.997 1.189.174.086.341.178.502.274.455.268.97.287 1.438.057l1.02-.5c.096-.047.18-.03.241.027.43.397.806.86 1.115 1.375.031.05.043.12.012.195l-.46 1.094c-.202.48-.164 1.01.082 1.46.089.16.168.327.236.499.263.675.812 1.134 1.419 1.25l1.112.213c.11.02.155.089.162.126a6.63 6.63 0 010 1.167c-.008.047-.06.11-.169.128l-1.092.208c-.614.117-1.167.567-1.43 1.249-.068.168-.148.333-.236.492-.248.45-.287.98-.085 1.46l.458 1.088c.032.078.017.15-.02.2a7.077 7.077 0 01-1.112 1.374c-.06.057-.147.073-.242.025l-1.02-.5c-.468-.23-.983-.21-1.438.057a6.57 6.57 0 01-.502.274c-.447.222-.85.629-.997 1.189l-.289 1.105c-.029.11-.1.143-.137.146a6.593 6.593 0 01-1.142 0c-.036-.003-.108-.036-.137-.146l-.289-1.105c-.147-.56-.55-.967-.997-1.189a6.57 6.57 0 01-.502-.274c-.455-.268-.97-.287-1.438-.057l-1.02.5c-.095.047-.181.03-.241-.027a7.077 7.077 0 01-1.115-1.374c-.037-.05-.05-.123-.018-.2l.458-1.088c.201-.48.163-1.01-.085-1.46a6.57 6.57 0 01-.236-.492c-.263-.682-.816-1.132-1.43-1.249L1.04 9.228c-.11-.02-.161-.08-.169-.128a6.63 6.63 0 010-1.167c.007-.037.051-.105.161-.126l1.113-.213c.607-.116 1.156-.575 1.419-1.25.068-.172.147-.339.236-.499.246-.45.284-.98.082-1.46L3.42 3.291c-.031-.074-.019-.145.012-.195.31-.515.684-.978 1.115-1.375.06-.057.145-.074.24-.027l1.021.5c.468.23.983.21 1.438-.057.161-.096.328-.188.502-.274.447-.222.85-.63.997-1.189l.289-1.105c.029-.11.1-.143.137-.146zM8 11a3 3 0 110-6 3 3 0 010 6z"/>
           </svg>
         </button>
       </div>
@@ -80,6 +85,7 @@
     <CommitModal v-if="showCommit" @close="showCommit = false" />
     <ShareModal v-if="showShare" @close="showShare = false" />
     <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
+    <SettingsModal v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
@@ -96,12 +102,14 @@ import BranchMenu from './BranchMenu.vue'
 import CommitModal from './CommitModal.vue'
 import ShareModal from './ShareModal.vue'
 import NewDocModal from './NewDocModal.vue'
+import SettingsModal from './SettingsModal.vue'
 
 const store = useAppStore()
 const showBranchMenu = ref(false)
 const showCommit = ref(false)
 const showShare = ref(false)
 const showNewDoc = ref(false)
+const showSettings = ref(false)
 
 provide('showNewDoc', () => { showNewDoc.value = true })
 

@@ -42,6 +42,9 @@ async function startShare(workspacePath, filePath, options = {}, mainWindow) {
   const app = express()
   const PORT = 3800 + Math.floor(Math.random() * 200)
 
+  const scope = options.scope || 'file'
+  const ignore = loadIgnorePatterns(workspacePath)
+
   app.get('/doc', (req, res) => {
     if (req.query.token !== token) {
       return res.status(403).json({ error: 'Invalid token' })
@@ -50,12 +53,55 @@ async function startShare(workspacePath, filePath, options = {}, mainWindow) {
     const commentsFile = path.join(os.homedir(), '.canonic', 'comments', `${filePath.replace(/\//g, '_')}.json`)
     const comments = fs.existsSync(commentsFile) ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8')) : []
     res.json({
+      scope: 'file',
       filePath,
       content,
       comments,
       sharedAt: new Date().toISOString(),
       author: os.userInfo().username
     })
+  })
+
+  // Directory / workspace manifest endpoint
+  app.get('/manifest', (req, res) => {
+    if (req.query.token !== token) {
+      return res.status(403).json({ error: 'Invalid token' })
+    }
+
+    let rootDir = workspacePath
+    if (scope === 'directory') {
+      rootDir = path.dirname(fullPath)
+    }
+
+    const files = collectMarkdownFiles(rootDir, workspacePath, ignore)
+    res.json({
+      scope,
+      rootDir: path.relative(workspacePath, rootDir) || '.',
+      files,
+      sharedAt: new Date().toISOString(),
+      author: os.userInfo().username
+    })
+  })
+
+  // Individual file within a directory/workspace share
+  app.get('/file', (req, res) => {
+    if (req.query.token !== token) {
+      return res.status(403).json({ error: 'Invalid token' })
+    }
+    const relPath = req.query.path
+    if (!relPath) return res.status(400).json({ error: 'Missing path' })
+
+    const resolved = path.resolve(workspacePath, relPath)
+    // Security: ensure the resolved path is within the workspace
+    if (!resolved.startsWith(workspacePath)) {
+      return res.status(403).json({ error: 'Path outside workspace' })
+    }
+    if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'Not found' })
+
+    const content = fs.readFileSync(resolved, 'utf-8')
+    const commentsFile = path.join(os.homedir(), '.canonic', 'comments', `${relPath.replace(/\//g, '_')}.json`)
+    const comments = fs.existsSync(commentsFile) ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8')) : []
+    res.json({ filePath: relPath, content, comments })
   })
 
   app.get('/health', (_, res) => res.json({ ok: true }))
@@ -126,6 +172,35 @@ function startCloudflaredTunnel(port, token, mainWindow) {
       }
     })
   })
+}
+
+function loadIgnorePatterns(workspacePath) {
+  const ignoreFile = path.join(workspacePath, '.canonicignore')
+  if (!fs.existsSync(ignoreFile)) return []
+  return fs.readFileSync(ignoreFile, 'utf-8')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'))
+}
+
+function collectMarkdownFiles(rootDir, workspacePath, ignore = []) {
+  const results = []
+  const scan = (dir) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      const full = path.join(dir, entry.name)
+      const rel = path.relative(workspacePath, full)
+      if (ignore.some(p => rel.startsWith(p) || entry.name === p)) continue
+      if (entry.isDirectory()) {
+        scan(full)
+      } else if (entry.name.endsWith('.md')) {
+        results.push(rel)
+      }
+    }
+  }
+  scan(rootDir)
+  return results
 }
 
 function stopShare(filePath) {

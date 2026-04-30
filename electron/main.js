@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const configService = require('./config')
 
 const isDev = process.env.NODE_ENV !== 'production'
 const CANONIC_DIR = path.join(os.homedir(), '.canonic')
@@ -66,8 +67,8 @@ function setupIpcHandlers() {
     return result.canceled ? null : result.filePaths[0]
   })
 
-  ipcMain.handle('workspace:init', async (_, workspacePath) => {
-    return gitService.initWorkspace(workspacePath)
+  ipcMain.handle('workspace:init', async (_, workspacePath, template = 'blank') => {
+    return gitService.initWorkspace(workspacePath, template)
   })
 
   ipcMain.handle('workspace:get-default', async () => {
@@ -188,5 +189,35 @@ function setupIpcHandlers() {
 
   ipcMain.handle('peers:open-shared', async (_, url, token) => {
     return shareService.fetchSharedDoc(url, token)
+  })
+
+  // --- Config ---
+  ipcMain.handle('config:read', async () => {
+    return configService.read()
+  })
+
+  ipcMain.handle('config:write', async (_, config) => {
+    const { valid, errors } = configService.validate(config)
+    if (!valid) return { success: false, errors }
+    const saved = configService.write(config)
+    // Hot-reload author in git service
+    const gitService = require('./git')
+    gitService.setAuthor({ name: saved.displayName, email: `${saved.displayName.replace(/\s+/g, '.')}@canonic.local` })
+    return { success: true, config: saved }
+  })
+
+  ipcMain.handle('config:exists', async () => {
+    return configService.exists()
+  })
+
+  ipcMain.handle('config:validate', async (_, config) => {
+    return configService.validate(config)
+  })
+
+  ipcMain.handle('dialog:open-directory', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return result.canceled ? null : result.filePaths[0]
   })
 }

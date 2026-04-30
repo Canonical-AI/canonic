@@ -48,7 +48,8 @@ const messages = ref([])
 const streaming = ref(false)
 const streamBuffer = ref('')
 
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
+const getApiKey = () => store.config?.apiKey || import.meta.env.VITE_ANTHROPIC_API_KEY
+const getModel = () => store.config?.model || 'claude-sonnet-4-6'
 
 const suggestions = [
   "What's missing from this document?",
@@ -100,11 +101,12 @@ async function sendMessage() {
   userInput.value = ''
   scrollToBottom()
 
-  if (!ANTHROPIC_API_KEY) {
+  const apiKey = getApiKey()
+  if (!apiKey) {
     messages.value.push({
       id: uuidv4(),
       role: 'assistant',
-      content: 'To use the AI assistant, add your Anthropic API key as VITE_ANTHROPIC_API_KEY in a .env file.'
+      content: 'No API key configured. Open Settings (gear icon) to add your Anthropic API key.'
     })
     return
   }
@@ -125,12 +127,12 @@ async function sendMessage() {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: getModel(),
         max_tokens: 1024,
         system: SYSTEM_PROMPT + docContext,
         messages: contextMessages,

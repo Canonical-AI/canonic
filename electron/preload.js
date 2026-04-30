@@ -1,11 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('canonic', {
+  // Config
+  config: {
+    read: () => ipcRenderer.invoke('config:read'),
+    write: (config) => ipcRenderer.invoke('config:write', config),
+    exists: () => ipcRenderer.invoke('config:exists'),
+    validate: (config) => ipcRenderer.invoke('config:validate', config)
+  },
+
   // Workspace
   workspace: {
     openDialog: () => ipcRenderer.invoke('workspace:open-dialog'),
-    init: (path) => ipcRenderer.invoke('workspace:init', path),
-    getDefault: () => ipcRenderer.invoke('workspace:get-default')
+    init: (path, template) => ipcRenderer.invoke('workspace:init', path, template),
+    getDefault: () => ipcRenderer.invoke('workspace:get-default'),
+    openDirectoryDialog: () => ipcRenderer.invoke('dialog:open-directory')
   },
 
   // Files

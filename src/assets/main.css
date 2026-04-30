@@ -1,0 +1,45 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-base:      #0d0f14;
+  --bg-titlebar:  #111318;
+  --bg-sidebar:   #111318;
+  --bg-surface:   #181b23;
+  --bg-editor:    #0d0f14;
+  --bg-hover:     #1e2230;
+  --bg-active:    #1f2535;
+
+  --border:       #262b38;
+
+  --text-primary:   #e8eaf0;
+  --text-secondary: #9da3b4;
+  --text-muted:     #5c6278;
+
+  --accent:         #6c8cff;
+  --accent-muted:   #2a3560;
+
+  --error:    #f87171;
+  --success:  #4ade80;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+::selection { background: var(--accent-muted); }
+
+/* Remove focus outline from all elements that aren't keyboard-focused */
+button:focus:not(:focus-visible) { outline: none; }
+
+/* Ensure modals appear above everything */
+.modal-backdrop { isolation: isolate; }

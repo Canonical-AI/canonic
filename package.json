@@ -1,0 +1,64 @@
+{
+  "name": "canonic",
+  "version": "0.1.0",
+  "description": "Local-first markdown document editor with git versioning",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview",
+    "electron": "electron ."
+  },
+  "dependencies": {
+    "@milkdown/core": "^7.5.0",
+    "@milkdown/plugin-listener": "^7.5.0",
+    "@milkdown/preset-commonmark": "^7.5.0",
+    "@milkdown/theme-nord": "^7.5.0",
+    "@milkdown/vue": "^7.5.0",
+    "@vueuse/core": "^10.11.0",
+    "bonjour-service": "^1.2.1",
+    "express": "^4.21.2",
+    "flexsearch": "^0.8.212",
+    "isomorphic-git": "^1.27.2",
+    "node-fetch": "^3.3.2",
+    "pinia": "^2.2.6",
+    "uuid": "^10.0.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "concurrently": "^9.1.2",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "ai.canonic.app",
+    "productName": "Canonic",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/",
+        "to": "bin/",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  }
+}

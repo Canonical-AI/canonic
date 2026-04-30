@@ -17,13 +17,12 @@ const DEFAULTS = {
 }
 
 function read() {
-  if (!fs.existsSync(CONFIG_PATH)) return null
+  if (!fs.existsSync(CONFIG_PATH)) return { ...DEFAULTS }
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-    // Merge with defaults to handle older config files missing new fields
     return { ...DEFAULTS, ...raw, sharingDefaults: { ...DEFAULTS.sharingDefaults, ...(raw.sharingDefaults || {}) } }
   } catch {
-    return null
+    return { ...DEFAULTS }
   }
 }
 

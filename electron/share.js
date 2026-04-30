@@ -132,7 +132,12 @@ async function startShare(workspacePath, filePath, options = {}, mainWindow) {
 function startCloudflaredTunnel(port, token, mainWindow) {
   return new Promise((resolve, reject) => {
     // Look for cloudflared in common locations
-    const candidates = [
+    const isWin = process.platform === 'win32'
+    const candidates = isWin ? [
+      path.join(process.env.ProgramFiles || 'C:\\Program Files', 'cloudflared', 'cloudflared.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'cloudflared', 'cloudflared.exe'),
+      path.join(process.resourcesPath || '', 'bin', 'cloudflared.exe')
+    ] : [
       '/usr/local/bin/cloudflared',
       '/opt/homebrew/bin/cloudflared',
       path.join(process.resourcesPath || '', 'bin', 'cloudflared')

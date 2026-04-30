@@ -29,7 +29,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    icon: path.join(__dirname, '../public/canonical-logo.svg'),
+    icon: path.join(__dirname, '../public', process.platform === 'win32' ? 'canonical-logo.ico' : 'canonical-logo.svg'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -137,6 +137,20 @@ function setupIpcHandlers() {
   })
 
   // --- Trash (soft delete) ---
+  function moveItem(src, dest) {
+    // fs.renameSync fails cross-device (EXDEV) on Windows — fall back to copy+delete
+    try {
+      fs.renameSync(src, dest)
+    } catch (err) {
+      if (err.code === 'EXDEV') {
+        fs.cpSync(src, dest, { recursive: true })
+        fs.rmSync(src, { recursive: true, force: true })
+      } else {
+        throw err
+      }
+    }
+  }
+
   function getTrashDir(workspacePath) {
     const d = path.join(workspacePath, '.canonic', 'trash')
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true })
@@ -156,7 +170,7 @@ function setupIpcHandlers() {
     const id = require('crypto').randomUUID()
     const src = path.join(workspacePath, itemPath)
     if (!fs.existsSync(src)) return { success: false, error: 'File not found' }
-    fs.renameSync(src, path.join(trashDir, id))
+    moveItem(src, path.join(trashDir, id))
     const index = readTrashIndex(trashDir)
     index.unshift({ id, originalPath: itemPath, deletedAt: new Date().toISOString(), isDirectory: !!isDirectory })
     writeTrashIndex(trashDir, index)
@@ -177,7 +191,7 @@ function setupIpcHandlers() {
     const dest = path.join(workspacePath, item.originalPath)
     const destDir = path.dirname(dest)
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true })
-    fs.renameSync(src, dest)
+    moveItem(src, dest)
     writeTrashIndex(trashDir, index.filter(i => i.id !== id))
     return { success: true, originalPath: item.originalPath }
   })

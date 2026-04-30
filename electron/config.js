@@ -5,11 +5,8 @@ const os = require('os')
 const CANONIC_DIR = process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), '.canonic')
 const CONFIG_PATH = path.join(CANONIC_DIR, 'config.json')
 
-console.log(os.hostname())
-console.log(os.userInfo().username)
-
 const DEFAULTS = {
-  displayName: os.hostname().replace(/\.local$/, ''),
+  displayName: os.userInfo().username,
   apiKey: '',
   model: 'claude-sonnet-4-6',
   defaultWorkspacePath: path.join(os.homedir(), 'canonic'),

@@ -26,22 +26,21 @@
           </div>
 
           <div class="field">
-            <label class="field-label">Anthropic API key <span class="required">*</span></label>
+            <label class="field-label">Anthropic API key <span class="optional">(optional)</span></label>
             <div class="secret-input">
               <input
                 v-model="form.apiKey"
                 :type="showKey ? 'text' : 'password'"
                 class="field-input"
-                :class="{ error: errors.apiKey }"
                 placeholder="sk-ant-..."
               />
               <button class="reveal-btn" @click="showKey = !showKey" type="button">
                 {{ showKey ? 'Hide' : 'Show' }}
               </button>
             </div>
-            <p v-if="errors.apiKey" class="field-error">{{ errors.apiKey }}</p>
             <p class="field-hint">
-              Used only for the AI assistant. Stored in <code>~/.canonic/config.json</code>.
+              Enables the AI assistant. You can add this later in Settings.
+              Stored locally in <code>~/.canonic/config.json</code>.
             </p>
           </div>
 
@@ -145,6 +144,11 @@ const form = reactive({
   }
 })
 
+// Pre-fill defaults from config (which already defaults to hostname)
+window.canonic.config.read().then(cfg => {
+  if (cfg?.displayName) form.displayName = cfg.displayName
+})
+
 const scopeOptions = [
   { value: 'none', label: 'Nothing', desc: 'Sharing disabled by default' },
   { value: 'file', label: 'Current file', desc: 'Share only the open document (default)' },
@@ -158,7 +162,6 @@ window.canonic.workspace.getDefault().then(p => { form.defaultWorkspacePath = p 
 function nextStep() {
   errors.value = {}
   if (!form.displayName.trim()) errors.value.displayName = 'Display name is required'
-  if (!form.apiKey.trim()) errors.value.apiKey = 'API key is required'
   if (Object.keys(errors.value).length > 0) return
   step.value = 2
 }
@@ -239,6 +242,7 @@ async function save() {
 }
 
 .required { color: var(--accent); }
+.optional { color: var(--text-muted); font-weight: 400; font-size: 0.75rem; }
 
 .field-input {
   width: 100%;

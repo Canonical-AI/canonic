@@ -1,25 +1,38 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* HAL2001 theme — dark blue-black with warm beige text */
 :root {
-  --bg-base:      #0d0f14;
-  --bg-titlebar:  #111318;
-  --bg-sidebar:   #111318;
-  --bg-surface:   #181b23;
-  --bg-editor:    #0d0f14;
-  --bg-hover:     #1e2230;
-  --bg-active:    #1f2535;
+  /* Backgrounds — from HAL2001 surface hierarchy */
+  --bg-base:      #0C0E12;   /* background */
+  --bg-titlebar:  #111519;   /* just above base */
+  --bg-sidebar:   #1A1E25;   /* surface-variant */
+  --bg-surface:   #161A21;   /* surface */
+  --bg-editor:    #0C0E12;   /* background */
+  --bg-hover:     #282F3B;   /* surface-light */
+  --bg-active:    #1E242E;   /* surface-bright */
 
-  --border:       #262b38;
+  /* Borders — warm beige at low opacity on dark */
+  --border:       rgba(214, 207, 203, 0.12);
+  --border-mid:   rgba(214, 207, 203, 0.20);
 
-  --text-primary:   #e8eaf0;
-  --text-secondary: #9da3b4;
-  --text-muted:     #5c6278;
+  /* Text — warm beige tones, not cold gray */
+  --text-primary:   #D6CFCB;   /* on-surface-variant — warm off-white */
+  --text-secondary: #A899AD;   /* medium emphasis — muted lavender-beige */
+  --text-muted:     #5A5560;   /* low emphasis */
 
-  --accent:         #6c8cff;
-  --accent-muted:   #2a3560;
+  /* Accent — HAL2001 primary blue */
+  --accent:         #4A7A9B;
+  --accent-light:   #6A97B5;
+  --accent-muted:   rgba(74, 122, 155, 0.18);
 
-  --error:    #f87171;
-  --success:  #4ade80;
+  /* Secondary — warm beige-orange from HAL2001 secondary */
+  --secondary:      #D1A181;
+  --secondary-muted: rgba(209, 161, 129, 0.15);
+
+  /* Semantic */
+  --error:    #E74C3C;
+  --success:  #4B7D6F;
+  --warning:  #F39C12;
 }
 
 html, body, #app {
@@ -29,17 +42,20 @@ html, body, #app {
   background: var(--bg-base);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border); }
+::-webkit-scrollbar-thumb { background: rgba(214, 207, 203, 0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(214, 207, 203, 0.2); }
 
-::selection { background: var(--accent-muted); }
+/* Selection */
+::selection { background: rgba(74, 122, 155, 0.35); color: var(--text-primary); }
 
-/* Remove focus outline from all elements that aren't keyboard-focused */
+/* Remove click outline */
 button:focus:not(:focus-visible) { outline: none; }
 
-/* Ensure modals appear above everything */
+/* Modal stacking */
 .modal-backdrop { isolation: isolate; }

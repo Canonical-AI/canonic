@@ -22,7 +22,7 @@
         </div>
 
         <div class="field">
-          <label class="field-label">Anthropic API key</label>
+          <label class="field-label">Anthropic API key <span class="optional">(optional)</span></label>
           <div class="secret-input">
             <input v-model="form.apiKey" :type="showKey ? 'text' : 'password'" class="field-input" :class="{ error: errors.apiKey }" />
             <button class="reveal-btn" @click="showKey = !showKey" type="button">{{ showKey ? 'Hide' : 'Show' }}</button>
@@ -311,6 +311,8 @@ function switchWorkspace() {
 }
 
 .field-hint.warning { color: #f5a623; }
+
+.optional { color: var(--text-muted); font-weight: 400; font-size: 0.75rem; }
 
 .field-hint code {
   font-family: 'JetBrains Mono', monospace;

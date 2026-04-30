@@ -5,7 +5,7 @@ const os = require('os')
 const CONFIG_PATH = path.join(os.homedir(), '.canonic', 'config.json')
 
 const DEFAULTS = {
-  displayName: '',
+  displayName: os.hostname().replace(/\.local$/, ''),
   apiKey: '',
   model: 'claude-sonnet-4-6',
   defaultWorkspacePath: path.join(os.homedir(), 'canonic'),
@@ -39,7 +39,7 @@ function exists() {
 function validate(config) {
   const errors = {}
   if (!config.displayName?.trim()) errors.displayName = 'Display name is required'
-  if (!config.apiKey?.trim()) errors.apiKey = 'API key is required'
+  // API key is optional — AI features just won't work without it
   return { valid: Object.keys(errors).length === 0, errors }
 }
 

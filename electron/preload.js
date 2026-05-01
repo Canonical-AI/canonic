@@ -104,6 +104,13 @@ contextBridge.exposeInMainWorld("canonic", {
     openLink: (url) => ipcRenderer.invoke("share:open-link", url),
     openShared: (url, token) =>
       ipcRenderer.invoke("peers:open-shared", url, token),
+    getStats: (filePath) => ipcRenderer.invoke("share:stats", filePath),
+    onStats: (cb) => ipcRenderer.on("share:stats", (_, stats) => cb(stats)),
+    offStats: (cb) => ipcRenderer.removeListener("share:stats", cb),
+    onOpenPeer: (cb) => ipcRenderer.on("share:open-peer", (_, data) => cb(data)),
+    startWorkspace: (workspacePath) => ipcRenderer.invoke("share:start-workspace", workspacePath),
+    stopWorkspace: () => ipcRenderer.invoke("share:stop-workspace"),
+    getWorkspaceStats: () => ipcRenderer.invoke("share:workspace-stats"),
   },
 
   // Peers

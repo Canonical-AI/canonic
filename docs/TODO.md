@@ -19,6 +19,7 @@ when complete move stuff to complete. its just that easy
 ## Features
 
 - [ ] make it "hackable" like atom and zed
+- [ ] **Cross-platform support** — make the app usable for Linux and Windows (currently focused on macOS).
 - [ ] figure out how to prevent DDOS on your comp. 
 - [ ] **add a terminal** in the ui that lets you run cli commands for the workspace.
 - [ ] **[AI AGENT] kick off claude code** be able start/continue claude code session with the changes you made to the doucment. i.e. hey I changed this requirements can you update the app to reflect it? 

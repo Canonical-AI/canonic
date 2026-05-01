@@ -160,6 +160,7 @@ watch(() => store.currentContent, (val) => {
 function onContentUpdate(markdown) {
   localContent.value = markdown
   if (markdown !== store.currentContent) {
+    store.currentContent = markdown
     store.isDirty = true
   }
 }

@@ -65,7 +65,7 @@ Canonic is packaged and distributed using [electron-builder](https://www.electro
 1.  **Build**: Run `npm run build` to generate the production-ready assets and the Electron executable.
 2.  **Publish**: The CI/CD pipeline (or manual run) pushes the generated artifacts to **GitHub Releases** as defined in `package.json`.
     - Provider: `github`
-    - Repository: `johnazzinaro/canonic`
+    - Repository: `Canonical-AI/canonic`
 
 ### Update Mechanism
 

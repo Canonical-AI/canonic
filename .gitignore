@@ -6,3 +6,4 @@ dist-electron/
 .DS_Store
 .claude/
 docs/usage-logging/
+docs/REQUIREMENTS.md

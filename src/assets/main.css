@@ -37,7 +37,7 @@
 
 html, body, #app {
   height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Georgia', ui-serif, serif;
   font-size: 14px;
   background: var(--bg-base);
   color: var(--text-primary);

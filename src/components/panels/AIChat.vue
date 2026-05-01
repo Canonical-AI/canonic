@@ -389,7 +389,7 @@ onUnmounted(() => {
     padding: 8px 10px;
     color: var(--text-primary);
     font-size: 0.8375rem;
-    font-family: "Inter", sans-serif;
+    font-family: inherit;
     resize: none;
     outline: none;
     line-height: 1.5;

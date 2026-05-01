@@ -356,7 +356,7 @@ onMounted(() => {
   color: var(--accent);
   font-size: 0.72rem;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   transition: background 0.15s;
   white-space: nowrap;
 }
@@ -522,7 +522,7 @@ onMounted(() => {
   padding: 7px 9px;
   color: var(--text-primary);
   font-size: 0.8375rem;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   resize: none;
   outline: none;
   line-height: 1.5;
@@ -582,7 +582,7 @@ onMounted(() => {
 
 .milkdown .ProseMirror {
   outline: none;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Georgia', ui-serif, serif;
   font-size: 0.9375rem;
   line-height: 1.8;
   color: var(--text-primary);

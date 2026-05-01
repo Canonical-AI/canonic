@@ -52,7 +52,7 @@
     </div>
 
     <div class="editor-scroll">
-      <div class="editor-content" ref="editorContentEl" @mouseup="onMouseUp">
+      <div class="editor-content" ref="editorContentEl" @mouseup="onMouseUp" :style="{ '--editor-font-size': editorFontSize + 'px' }">
         <MilkdownProvider :key="store.currentFile">
           <MilkdownEditor
             :content="store.currentContent"
@@ -160,6 +160,7 @@ watch(() => store.currentContent, (val) => {
 function onContentUpdate(markdown) {
   localContent.value = markdown
   if (markdown !== store.currentContent) {
+    store.currentContent = markdown
     store.isDirty = true
   }
 }
@@ -245,11 +246,34 @@ async function doMerge() {
   }
 }
 
+const EDITOR_FONT_KEY = 'canonic:editorFontSize'
+const DEFAULT_FONT_SIZE = 15
+const editorFontSize = ref(parseInt(localStorage.getItem(EDITOR_FONT_KEY) || DEFAULT_FONT_SIZE))
+
+function editorHasFocus() {
+  return editorContentEl.value?.contains(document.activeElement)
+}
+
 onMounted(() => {
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
       e.preventDefault()
       if (store.isDirty) save()
+    }
+    if ((e.metaKey || e.ctrlKey) && editorHasFocus()) {
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault()
+        editorFontSize.value = Math.min(editorFontSize.value + 1, 28)
+        localStorage.setItem(EDITOR_FONT_KEY, editorFontSize.value)
+      } else if (e.key === '-') {
+        e.preventDefault()
+        editorFontSize.value = Math.max(editorFontSize.value - 1, 11)
+        localStorage.setItem(EDITOR_FONT_KEY, editorFontSize.value)
+      } else if (e.key === '0') {
+        e.preventDefault()
+        editorFontSize.value = DEFAULT_FONT_SIZE
+        localStorage.setItem(EDITOR_FONT_KEY, editorFontSize.value)
+      }
     }
   })
 })
@@ -356,7 +380,7 @@ onMounted(() => {
   color: var(--accent);
   font-size: 0.72rem;
   cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   transition: background 0.15s;
   white-space: nowrap;
 }
@@ -522,7 +546,7 @@ onMounted(() => {
   padding: 7px 9px;
   color: var(--text-primary);
   font-size: 0.8375rem;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   resize: none;
   outline: none;
   line-height: 1.5;
@@ -582,8 +606,8 @@ onMounted(() => {
 
 .milkdown .ProseMirror {
   outline: none;
-  font-family: 'Inter', -apple-system, sans-serif;
-  font-size: 0.9375rem;
+  font-family: inherit;
+  font-size: var(--editor-font-size, 15px);
   line-height: 1.8;
   color: var(--text-primary);
   caret-color: var(--accent);
@@ -699,6 +723,32 @@ onMounted(() => {
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Tables */
+.milkdown .ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+  font-size: 0.875rem;
+}
+
+.milkdown .ProseMirror th,
+.milkdown .ProseMirror td {
+  border: 1px solid var(--border-mid);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.milkdown .ProseMirror th {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.milkdown .ProseMirror tr:nth-child(even) td {
+  background: var(--bg-hover);
 }
 
 /* Comment highlights */

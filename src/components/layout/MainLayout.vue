@@ -9,6 +9,37 @@
                 >
             </div>
             <div class="titlebar-right">
+                <!-- Font toggle -->
+                <button
+                    class="icon-btn"
+                    :title="fontMode === 'serif' ? 'Switch to sans-serif' : 'Switch to serif'"
+                    @click="toggleFont"
+                >
+                    <Type :size="15" />
+                </button>
+
+                <!-- Theme picker -->
+                <div class="theme-picker-wrap" ref="themePickerRef">
+                    <button
+                        class="icon-btn"
+                        title="Change theme"
+                        @click="themeOpen = !themeOpen"
+                    >
+                        <Palette :size="15" />
+                    </button>
+                    <div v-if="themeOpen" class="theme-popover">
+                        <button
+                            v-for="t in allThemes"
+                            :key="t.name"
+                            class="theme-chip"
+                            :class="{ active: activeTheme === t.name }"
+                            @click="setTheme(t.name)"
+                        >
+                            {{ t.name }}
+                        </button>
+                    </div>
+                </div>
+
                 <button
                     class="icon-btn"
                     title="Settings"
@@ -25,14 +56,17 @@
         <!-- Main content -->
         <div class="content">
             <!-- Left sidebar -->
-            <aside class="sidebar">
+            <aside
+                class="sidebar"
+                :class="{ 'sidebar--collapsed': store.sidebarCollapsed }"
+            >
                 <div class="sidebar-tabs">
                     <button
                         :class="[
                             'tab',
                             store.sidebarTab === 'files' && 'active',
                         ]"
-                        @click="store.sidebarTab = 'files'"
+                        @click="handleTabClick('files')"
                         title="Files"
                     >
                         <Files :size="15" />
@@ -42,7 +76,7 @@
                             'tab',
                             store.sidebarTab === 'search' && 'active',
                         ]"
-                        @click="store.sidebarTab = 'search'"
+                        @click="handleTabClick('search')"
                         title="Search"
                     >
                         <Search :size="15" />
@@ -52,17 +86,34 @@
                             'tab',
                             store.sidebarTab === 'peers' && 'active',
                         ]"
-                        @click="store.sidebarTab = 'peers'"
+                        @click="handleTabClick('peers')"
                         title="Shared with me"
                         v-if="store.isDemoMode || store.demoPeers.length"
                     >
                         <Users :size="15" />
                     </button>
+                    <button
+                        class="tab sidebar-toggle"
+                        :title="
+                            store.sidebarCollapsed
+                                ? 'Expand sidebar'
+                                : 'Collapse sidebar'
+                        "
+                        @click="store.sidebarCollapsed = !store.sidebarCollapsed"
+                    >
+                        <PanelLeftClose
+                            v-if="!store.sidebarCollapsed"
+                            :size="15"
+                        />
+                        <PanelLeftOpen v-else :size="15" />
+                    </button>
                 </div>
 
-                <FileTree v-if="store.sidebarTab === 'files'" />
-                <SearchPanel v-else-if="store.sidebarTab === 'search'" />
-                <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
+                <template v-if="!store.sidebarCollapsed">
+                    <FileTree v-if="store.sidebarTab === 'files'" />
+                    <SearchPanel v-else-if="store.sidebarTab === 'search'" />
+                    <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
+                </template>
             </aside>
 
             <!-- Editor -->
@@ -77,49 +128,60 @@
             </main>
 
             <!-- Right panel -->
-            <aside class="right-panel" v-if="store.currentFile">
-                <div class="panel-tabs">
+            <aside
+                v-if="store.currentFile"
+                class="right-panel"
+                :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
+            >
+                <div class="panel-tabs" :class="{ 'panel-tabs--collapsed': store.rightPanelCollapsed }">
+                    <!-- Collapse toggle (leftmost when collapsed, topmost when open) -->
                     <button
-                        :class="[
-                            'tab',
-                            store.rightPanelTab === 'comments' && 'active',
-                        ]"
-                        @click="store.rightPanelTab = 'comments'"
+                        class="tab panel-toggle"
+                        :title="store.rightPanelCollapsed ? 'Expand panel' : 'Collapse panel'"
+                        @click="store.rightPanelCollapsed = !store.rightPanelCollapsed"
                     >
-                        Comments
+                        <PanelRightClose v-if="!store.rightPanelCollapsed" :size="15" />
+                        <PanelRightOpen v-else :size="15" />
                     </button>
                     <button
-                        :class="[
-                            'tab',
-                            store.rightPanelTab === 'ai' && 'active',
-                        ]"
-                        @click="store.rightPanelTab = 'ai'"
+                        :class="['tab', store.rightPanelTab === 'comments' && 'active']"
+                        @click="handleRightTabClick('comments')"
+                        title="Comments"
                     >
-                        AI
+                        <MessageSquare :size="15" />
+                        <span v-if="!store.rightPanelCollapsed" class="tab-label">Comments</span>
                     </button>
                     <button
-                        :class="[
-                            'tab',
-                            store.rightPanelTab === 'history' && 'active',
-                        ]"
-                        @click="store.rightPanelTab = 'history'"
+                        :class="['tab', store.rightPanelTab === 'ai' && 'active']"
+                        @click="handleRightTabClick('ai')"
+                        title="AI"
                     >
-                        History
+                        <Sparkles :size="15" />
+                        <span v-if="!store.rightPanelCollapsed" class="tab-label">AI</span>
                     </button>
                     <button
-                        :class="[
-                            'tab',
-                            store.rightPanelTab === 'share' && 'active',
-                        ]"
-                        @click="store.rightPanelTab = 'share'"
+                        :class="['tab', store.rightPanelTab === 'history' && 'active']"
+                        @click="handleRightTabClick('history')"
+                        title="History"
                     >
-                        Share
+                        <History :size="15" />
+                        <span v-if="!store.rightPanelCollapsed" class="tab-label">History</span>
+                    </button>
+                    <button
+                        :class="['tab', store.rightPanelTab === 'share' && 'active']"
+                        @click="handleRightTabClick('share')"
+                        title="Share"
+                    >
+                        <Share2 :size="15" />
+                        <span v-if="!store.rightPanelCollapsed" class="tab-label">Share</span>
                     </button>
                 </div>
-                <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
-                <AIChat v-else-if="store.rightPanelTab === 'ai'" />
-                <HistoryPanel v-else-if="store.rightPanelTab === 'history'" />
-                <SharePanel v-else-if="store.rightPanelTab === 'share'" />
+                <template v-if="!store.rightPanelCollapsed">
+                    <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
+                    <AIChat v-else-if="store.rightPanelTab === 'ai'" />
+                    <HistoryPanel v-else-if="store.rightPanelTab === 'history'" />
+                    <SharePanel v-else-if="store.rightPanelTab === 'share'" />
+                </template>
             </aside>
         </div>
 
@@ -164,10 +226,25 @@
 </template>
 
 <script setup>
-import { ref, provide, onMounted } from "vue";
+import { ref, computed, provide, onMounted, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
-import { Settings, Files, Search, Users } from "lucide-vue-next";
+import {
+    Settings,
+    Files,
+    Search,
+    Users,
+    PanelLeftClose,
+    PanelLeftOpen,
+    PanelRightClose,
+    PanelRightOpen,
+    Type,
+    Palette,
+    MessageSquare,
+    Sparkles,
+    History,
+    Share2,
+} from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
 import SearchPanel from "../sidebar/SearchPanel.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
@@ -183,8 +260,99 @@ import DemoBanner from "./DemoBanner.vue";
 const store = useAppStore();
 const router = useRouter();
 
+// ── Font toggle ──────────────────────────────────────────────────────────────
+const FONT_KEY = "canonic:fontMode";
+const fontMode = ref(localStorage.getItem(FONT_KEY) || "sans");
+
+function applyFont(mode) {
+    if (mode === "serif") {
+        document.documentElement.classList.add("font-serif");
+    } else {
+        document.documentElement.classList.remove("font-serif");
+    }
+}
+
+function toggleFont() {
+    fontMode.value = fontMode.value === "serif" ? "sans" : "serif";
+    localStorage.setItem(FONT_KEY, fontMode.value);
+    applyFont(fontMode.value);
+}
+
+// ── Theme switcher ───────────────────────────────────────────────────────────
+const THEME_KEY = "canonic:theme";
+const BUILTIN_THEMES = ["hal2001", "auteur", "paper"];
+
+const activeTheme = ref(localStorage.getItem(THEME_KEY) || "hal2001");
+const themeOpen = ref(false);
+const themePickerRef = ref(null);
+
+// Config-extensible custom themes injected as <style> tags
+const customThemeNames = ref([]);
+
+const allThemes = computed(() => {
+    const names = [...BUILTIN_THEMES, ...customThemeNames.value];
+    return names.map((name) => ({ name }));
+});
+
+function applyTheme(name) {
+    if (!name || name === "hal2001") {
+        document.documentElement.removeAttribute("data-theme");
+    } else {
+        document.documentElement.setAttribute("data-theme", name);
+    }
+}
+
+function setTheme(name) {
+    activeTheme.value = name;
+    localStorage.setItem(THEME_KEY, name);
+    applyTheme(name);
+    themeOpen.value = false;
+}
+
+function registerConfigThemes(themes) {
+    if (!Array.isArray(themes)) return;
+    for (const t of themes) {
+        if (!t.name || !t.vars) continue;
+        // Skip if already a built-in
+        if (BUILTIN_THEMES.includes(t.name)) continue;
+        // Inject CSS
+        const id = `theme-custom-${t.name}`;
+        if (!document.getElementById(id)) {
+            const declarations = Object.entries(t.vars)
+                .map(([k, v]) => `  ${k}: ${v};`)
+                .join("\n");
+            const style = document.createElement("style");
+            style.id = id;
+            style.textContent = `[data-theme="${t.name}"] {\n${declarations}\n}`;
+            document.head.appendChild(style);
+        }
+        if (!customThemeNames.value.includes(t.name)) {
+            customThemeNames.value.push(t.name);
+        }
+    }
+}
+
+// Close theme popover on outside click
+function onDocClick(e) {
+    if (themePickerRef.value && !themePickerRef.value.contains(e.target)) {
+        themeOpen.value = false;
+    }
+}
+
 // Restore workspace on page reload (hash URL preserves /workspace but Pinia store is fresh)
 onMounted(async () => {
+    // Apply persisted font & theme immediately
+    applyFont(fontMode.value);
+    applyTheme(activeTheme.value);
+
+    // Load config to register any custom themes
+    await store.loadConfig();
+    if (store.config?.themes) {
+        registerConfigThemes(store.config.themes);
+    }
+
+    document.addEventListener("click", onDocClick, true);
+
     if (!store.workspacePath) {
         const last = store.recentWorkspaces[0];
         if (last) {
@@ -198,6 +366,11 @@ onMounted(async () => {
         }
     }
 });
+
+onBeforeUnmount(() => {
+    document.removeEventListener("click", onDocClick, true);
+});
+
 const showNewDoc = ref(false);
 const showSettings = ref(false);
 const updateReady = ref(false);
@@ -249,6 +422,24 @@ function clearUpdate() {
 
 async function newDoc() {
     showNewDoc.value = true;
+}
+
+function handleTabClick(tab) {
+    if (store.sidebarCollapsed) {
+        store.sidebarCollapsed = false;
+        store.sidebarTab = tab;
+    } else {
+        store.sidebarTab = tab;
+    }
+}
+
+function handleRightTabClick(tab) {
+    if (store.rightPanelCollapsed) {
+        store.rightPanelCollapsed = false;
+        store.rightPanelTab = tab;
+    } else {
+        store.rightPanelTab = tab;
+    }
 }
 </script>
 
@@ -353,6 +544,11 @@ async function newDoc() {
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
     overflow: hidden;
+    transition: width 0.2s ease;
+}
+
+.sidebar--collapsed {
+    width: 40px;
 }
 
 .sidebar-tabs {
@@ -360,6 +556,21 @@ async function newDoc() {
     padding: 8px;
     gap: 4px;
     border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.sidebar--collapsed .sidebar-tabs {
+    flex-direction: column;
+    padding: 4px;
+    gap: 2px;
+}
+
+.sidebar-toggle {
+    margin-left: auto;
+}
+
+.sidebar--collapsed .sidebar-toggle {
+    margin-left: 0;
 }
 
 .tab {
@@ -427,6 +638,11 @@ async function newDoc() {
     border-left: 1px solid var(--border);
     background: var(--bg-sidebar);
     overflow: hidden;
+    transition: width 0.2s ease;
+}
+
+.right-panel--collapsed {
+    width: 40px;
 }
 
 .panel-tabs {
@@ -434,17 +650,47 @@ async function newDoc() {
     border-bottom: 1px solid var(--border);
 }
 
+.panel-tabs--collapsed {
+    flex-direction: column;
+    border-bottom: none;
+    border-right: none;
+    height: 100%;
+}
+
 .panel-tabs .tab {
     flex: 1;
     border-radius: 0;
     padding: 9px 0;
     font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.panel-tabs--collapsed .tab {
+    flex: 0 0 auto;
+    padding: 10px 0;
 }
 
 .panel-tabs .tab.active {
     background: transparent;
     color: var(--text-primary);
     border-bottom: 2px solid var(--accent);
+}
+
+.panel-tabs--collapsed .tab.active {
+    border-bottom: none;
+    border-left: 2px solid var(--accent);
+}
+
+.panel-toggle {
+    margin-left: auto;
+}
+
+.panel-tabs--collapsed .panel-toggle {
+    margin-left: 0;
+    order: -1;
 }
 
 .menu-backdrop {
@@ -511,5 +757,50 @@ async function newDoc() {
     height: 100%;
     background: var(--accent);
     transition: width 0.3s ease;
+}
+
+/* Theme picker */
+.theme-picker-wrap {
+    position: relative;
+}
+
+.theme-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-mid);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    z-index: 300;
+    min-width: 110px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.theme-chip {
+    padding: 6px 12px;
+    border-radius: 5px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+    white-space: nowrap;
+}
+
+.theme-chip:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.theme-chip.active {
+    background: var(--accent-muted);
+    color: var(--accent-light);
+    font-weight: 600;
 }
 </style>

@@ -61,6 +61,46 @@
             >
         </div>
 
+        <!-- Workspace index status -->
+        <div v-if="agentCaps.indexWorkspace && indexedDocCount > 0" class="index-bar">
+            <span class="index-stat">Indexed {{ indexedDocCount }} doc{{ indexedDocCount !== 1 ? 's' : '' }}</span>
+        </div>
+
+        <!-- Agent tools panel -->
+        <div class="agent-tools-panel">
+            <button class="agent-tools-header" @click="toggleAgentCapsOpen" :aria-expanded="agentCapsOpen">
+                <span class="agent-tools-label">Agent tools</span>
+                <ChevronDown :size="13" :class="['agent-tools-chevron', { open: agentCapsOpen }]" />
+            </button>
+            <div v-if="agentCapsOpen" class="agent-tools-body">
+                <label class="cap-row">
+                    <span class="cap-label">Index workspace</span>
+                    <span class="cap-desc">Pre-load all workspace docs into context</span>
+                    <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.indexWorkspace" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                </label>
+                <label class="cap-row">
+                    <span class="cap-label">Read docs on demand</span>
+                    <span class="cap-desc">Agent can request specific files mid-conversation</span>
+                    <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.readDocs" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                </label>
+                <label class="cap-row">
+                    <span class="cap-label">Web search</span>
+                    <span class="cap-desc">Agent can search the web</span>
+                    <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.webSearch" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                </label>
+                <label class="cap-row">
+                    <span class="cap-label">Post comments</span>
+                    <span class="cap-desc">Agent can add inline comments to the document</span>
+                    <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.postComments" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                </label>
+                <label class="cap-row">
+                    <span class="cap-label">Suggest edits</span>
+                    <span class="cap-desc">Agent can propose inline text changes</span>
+                    <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.suggestEdits" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                </label>
+            </div>
+        </div>
+
         <div class="chat-input-area">
             <textarea
                 v-model="userInput"
@@ -82,10 +122,10 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onUnmounted } from "vue";
+import { ref, reactive, nextTick, onUnmounted } from "vue";
 import { useAppStore } from "../../store";
 import { v4 as uuidv4 } from "uuid";
-import { Sparkles, SendHorizonal } from "lucide-vue-next";
+import { Sparkles, SendHorizonal, ChevronDown } from "lucide-vue-next";
 
 const store = useAppStore();
 const messagesEl = ref(null);
@@ -95,6 +135,24 @@ const streaming = ref(false);
 const streamBuffer = ref("");
 
 const sessionStats = ref({ messages: 0, approxTokens: 0 });
+const indexedDocCount = ref(0);
+
+// ── Agent capabilities ────────────────────────────────────────────────────────
+const CAPS_KEY = "canonic:agentCaps";
+const CAPS_OPEN_KEY = "canonic:agentCapsOpen";
+const DEFAULT_CAPS = { indexWorkspace: true, readDocs: false, webSearch: false, postComments: false, suggestEdits: false };
+
+function loadAgentCaps() {
+    try { const s = localStorage.getItem(CAPS_KEY); if (s) return { ...DEFAULT_CAPS, ...JSON.parse(s) }; } catch {}
+    return { ...DEFAULT_CAPS };
+}
+
+const agentCaps = reactive(loadAgentCaps());
+const agentCapsOpen = ref((() => { try { const s = localStorage.getItem(CAPS_OPEN_KEY); return s ? JSON.parse(s) : false; } catch { return false; } })());
+
+function saveAgentCaps() { localStorage.setItem(CAPS_KEY, JSON.stringify({ ...agentCaps })); }
+function toggleAgentCapsOpen() { agentCapsOpen.value = !agentCapsOpen.value; localStorage.setItem(CAPS_OPEN_KEY, JSON.stringify(agentCapsOpen.value)); }
+// ─────────────────────────────────────────────────────────────────────────────
 
 const getApiKey = () => store.config?.apiKey;
 const getModel = () => store.config?.model || "anthropic/claude-sonnet-4-5";
@@ -119,7 +177,52 @@ Your behaviors:
 Your constraints:
 - Never write paragraphs that could replace sections of the document
 - Never suggest "here's what you could write" — instead ask "what do you mean by X?"
-- If asked to write something, redirect: "I can help you think through it — what's the core thing you're trying to say?"`;
+- If asked to write something, redirect: "I can help you think through it — what's the core thing you're trying to say?"
+
+To leave an inline comment on a specific passage, include this anywhere in your response:
+<canonic:comment anchor="exact quoted text from the document">Your comment text here</canonic:comment>
+You can include multiple comment tags. They will be posted to the document's comment panel.`;
+
+const COMMENT_TAG_RE = /<canonic:comment\s+anchor="([^"]*)">([\s\S]*?)<\/canonic:comment>/g;
+
+function getAgentCaps() {
+    try {
+        return JSON.parse(localStorage.getItem("canonic:agentCaps") || "{}");
+    } catch {
+        return {};
+    }
+}
+
+function parseAndPostComments(responseText) {
+    const caps = getAgentCaps();
+    const canPost = caps.postComments === true;
+
+    let cleaned = responseText;
+    const matches = [...responseText.matchAll(COMMENT_TAG_RE)];
+
+    for (const match of matches) {
+        const anchor = match[1];
+        const body = match[2].trim();
+
+        if (canPost && store.currentFile) {
+            store.addComment({
+                id: uuidv4(),
+                anchor: { quotedText: anchor },
+                text: body,
+                author: "Claude",
+                isAgent: true,
+                resolved: false,
+                createdAt: new Date().toISOString(),
+            });
+            if (import.meta.env.DEV) console.log("[AIChat] Agent comment posted:", { anchor, body });
+        }
+
+        const indicator = canPost && store.currentFile ? "\n↳ comment posted" : "";
+        cleaned = cleaned.replace(match[0], indicator);
+    }
+
+    return cleaned.trim();
+}
 
 function renderMarkdown(text) {
     return text
@@ -137,6 +240,63 @@ function handleEnter(e) {
 function sendSuggestion(text) {
     userInput.value = text;
     sendMessage();
+}
+
+const MAX_WORKSPACE_CHARS = 80000;
+
+async function buildWorkspaceBlock() {
+    if (!agentCaps.indexWorkspace) return "";
+    const workspacePath = store.workspacePath;
+    if (!workspacePath) return "";
+
+    let allFiles;
+    try {
+        allFiles = await window.canonic.files.list(workspacePath);
+    } catch (e) {
+        if (import.meta.env.DEV) console.warn("[AIChat] Could not list workspace files:", e);
+        return "";
+    }
+
+    const mdFiles = (allFiles || []).filter((f) => {
+        const name = typeof f === "string" ? f : f.path || f.name || "";
+        return name.endsWith(".md");
+    });
+
+    indexedDocCount.value = mdFiles.length;
+    if (mdFiles.length === 0) return "";
+
+    let parts = [];
+    let totalChars = 0;
+    let truncated = false;
+
+    for (const f of mdFiles) {
+        const filePath = typeof f === "string" ? f : f.path || f.name || "";
+        if (!filePath) continue;
+
+        let content = "";
+        try {
+            content = await window.canonic.files.read(workspacePath, filePath);
+        } catch (e) {
+            if (import.meta.env.DEV) console.warn("[AIChat] Could not read file:", filePath, e);
+            continue;
+        }
+
+        const entry = `<document path="${filePath}">\n${content}\n</document>`;
+        if (totalChars + entry.length > MAX_WORKSPACE_CHARS) {
+            truncated = true;
+            break;
+        }
+        parts.push(entry);
+        totalChars += entry.length;
+    }
+
+    if (parts.length === 0) return "";
+
+    const truncatedNote = truncated
+        ? "\n<!-- Workspace context truncated at 80,000 characters. Some documents were omitted. -->"
+        : "";
+
+    return `\n\n<workspace>\n${parts.join("\n")}\n</workspace>${truncatedNote}`;
 }
 
 async function sendMessage() {
@@ -175,15 +335,16 @@ async function sendMessage() {
 
     window.canonic.ai.onDone(() => {
         if (import.meta.env.DEV) console.log("[AIChat] Stream complete");
-        const response = streamBuffer.value;
+        const rawResponse = streamBuffer.value;
+        const response = parseAndPostComments(rawResponse);
         messages.value.push({
             id: uuidv4(),
             role: "assistant",
             content: response,
         });
-        // Rough token estimate: 4 chars ≈ 1 token
+        // Rough token estimate: 4 chars ≈ 1 token (use raw response for accuracy)
         sessionStats.value.approxTokens += Math.ceil(
-            (content.length + response.length) / 4,
+            (content.length + rawResponse.length) / 4,
         );
         sessionStats.value.messages++;
         streamBuffer.value = "";
@@ -213,18 +374,21 @@ async function sendMessage() {
         ? `\n\n<document>\n${store.currentContent.slice(0, 4000)}\n</document>`
         : "";
 
+    const workspaceBlock = await buildWorkspaceBlock();
+
     if (import.meta.env.DEV) {
         console.log("[AIChat] Request params:", {
             model: getModel(),
             baseUrl: getBaseUrl(),
             messageCount: contextMessages.length,
             hasKey: !!apiKey,
+            indexedDocs: indexedDocCount.value,
         });
     }
 
     window.canonic.ai.chat({
         messages: contextMessages,
-        system: SYSTEM_PROMPT + docContext,
+        system: SYSTEM_PROMPT + workspaceBlock + docContext,
         model: getModel(),
         apiKey,
         baseUrl: getBaseUrl(),
@@ -373,6 +537,129 @@ onUnmounted(() => {
     margin-left: 2px;
 }
 
+.index-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    background: var(--bg-base);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.index-stat {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* Agent tools panel */
+.agent-tools-panel {
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--bg-base);
+}
+
+.agent-tools-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 5px 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+    font-family: inherit;
+    text-align: left;
+    transition: color 0.15s;
+}
+
+.agent-tools-header:hover { color: var(--text-secondary); }
+
+.agent-tools-label {
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 0.625rem;
+}
+
+.agent-tools-chevron {
+    transition: transform 0.2s ease;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+.agent-tools-chevron.open { transform: rotate(180deg); }
+
+.agent-tools-body {
+    padding: 4px 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cap-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 1px 8px;
+    cursor: pointer;
+    padding: 3px 0;
+}
+
+.cap-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    grid-column: 1;
+    grid-row: 1;
+    font-weight: 500;
+}
+
+.cap-desc {
+    font-size: 0.6375rem;
+    color: var(--text-muted);
+    grid-column: 1;
+    grid-row: 2;
+    line-height: 1.4;
+}
+
+/* CSS-only pill toggle */
+.toggle-switch {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.toggle-switch input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle-track {
+    display: block;
+    width: 28px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--border);
+    position: relative;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+.toggle-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.toggle-switch input[type="checkbox"]:checked + .toggle-track { background: var(--accent); }
+.toggle-switch input[type="checkbox"]:checked + .toggle-track::after { transform: translateX(12px); }
+
 .chat-input-area {
     display: flex;
     gap: 8px;
@@ -389,7 +676,7 @@ onUnmounted(() => {
     padding: 8px 10px;
     color: var(--text-primary);
     font-size: 0.8375rem;
-    font-family: "Inter", sans-serif;
+    font-family: inherit;
     resize: none;
     outline: none;
     line-height: 1.5;

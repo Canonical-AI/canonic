@@ -190,7 +190,9 @@ const fileInput = ref(null);
 const isDragOver = ref(false);
 
 const isDirty = computed(
-    () => store.currentFile === props.item.path && store.isDirty,
+    () =>
+        (store.currentFile === props.item.path && store.isDirty) ||
+        store.unsavedBuffer[props.item.path] !== undefined,
 );
 
 const currentDir = computed(() => {

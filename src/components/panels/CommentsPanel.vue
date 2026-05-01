@@ -12,11 +12,13 @@
       <div
         v-for="comment in visibleComments"
         :key="comment.id"
-        :class="['comment-card', comment.resolved && 'resolved']"
+        :class="['comment-card', comment.resolved && 'resolved', comment.isAgent && 'agent-comment']"
         @click="highlightAnchor(comment)"
       >
         <div class="comment-header">
-          <span class="comment-author">{{ comment.author }}</span>
+          <span :class="['comment-author', comment.isAgent && 'agent-author']">
+            {{ comment.isAgent ? 'Claude · suggestion' : comment.author }}
+          </span>
           <span class="comment-time">{{ formatTime(comment.createdAt) }}</span>
         </div>
 
@@ -202,4 +204,18 @@ function highlightAnchor(comment) {
 }
 
 .hint { font-size: 0.8rem; color: var(--text-muted); opacity: 0.7; }
+
+/* Agent (AI) comment styling */
+.comment-card.agent-comment {
+  border-left: 3px solid var(--accent);
+}
+
+.comment-card.agent-comment:hover {
+  border-color: var(--accent);
+}
+
+.agent-author {
+  color: var(--accent) !important;
+  font-style: italic;
+}
 </style>

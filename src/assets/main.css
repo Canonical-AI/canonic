@@ -1,6 +1,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* HAL2001 theme — dark blue-black with warm beige text */
+/* ── HAL2001 theme (default) — dark blue-black with warm beige text ── */
 :root {
   /* Backgrounds — from HAL2001 surface hierarchy */
   --bg-base:      #0C0E12;   /* background */
@@ -35,14 +35,69 @@
   --warning:  #F39C12;
 }
 
+/* ── Auteur theme — dark eggplant ── */
+[data-theme="auteur"] {
+  --bg-base:      #1A0F15;
+  --bg-titlebar:  #1F141A;
+  --bg-sidebar:   #2A2228;
+  --bg-surface:   #24232A;
+  --bg-editor:    #1A0F15;
+  --bg-hover:     #4A3B45;
+  --bg-active:    #35303A;
+  --border:       rgba(168, 153, 173, 0.12);
+  --border-mid:   rgba(168, 153, 173, 0.20);
+  --text-primary:   #C6B2B5;
+  --text-secondary: #9A8A8E;
+  --text-muted:     #5A4A50;
+  --accent:         #4A7A9B;
+  --accent-light:   #6A97B5;
+  --accent-muted:   rgba(74, 122, 155, 0.18);
+  --secondary:      #D1A181;
+  --secondary-muted: rgba(209, 161, 129, 0.15);
+  --error:    #E74C3C;
+  --success:  #4B7D6F;
+  --warning:  #F39C12;
+}
+
+/* ── Paper theme — light ── */
+[data-theme="paper"] {
+  --bg-base:      #F6F4F7;
+  --bg-titlebar:  #EDE9EF;
+  --bg-sidebar:   #DCD5DF;
+  --bg-surface:   #FFFFFF;
+  --bg-editor:    #F6F4F7;
+  --bg-hover:     #E6E1E8;
+  --bg-active:    #F0EDF2;
+  --border:       rgba(74, 58, 78, 0.12);
+  --border-mid:   rgba(74, 58, 78, 0.22);
+  --text-primary:   #2A1F2E;
+  --text-secondary: #4A3A4E;
+  --text-muted:     #8A7A8E;
+  --accent:         #5B7FA5;
+  --accent-light:   #7A9BBF;
+  --accent-muted:   rgba(91, 127, 165, 0.15);
+  --secondary:      #6BA396;
+  --secondary-muted: rgba(107, 163, 150, 0.15);
+  --error:    #D45D5D;
+  --success:  #6BA396;
+  --warning:  #D9A06F;
+}
+
 html, body, #app {
   height: 100%;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 14px;
   background: var(--bg-base);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Font mode override — applied via class on <html> */
+html.font-serif,
+html.font-serif body,
+html.font-serif #app {
+  font-family: 'Source Serif 4', Georgia, ui-serif, serif;
 }
 
 /* Scrollbar */

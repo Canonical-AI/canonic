@@ -7,6 +7,8 @@ import { watch } from 'vue'
 import { Milkdown, useEditor } from '@milkdown/vue'
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, prosePluginsCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
+import { gfm } from '@milkdown/preset-gfm'
+import { history } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { Plugin, PluginKey } from 'prosemirror-state'
 import { Decoration, DecorationSet } from 'prosemirror-view'
@@ -76,6 +78,8 @@ const { loading, get } = useEditor((root) =>
       ctx.update(prosePluginsCtx, (plugins) => [...plugins, highlightPlugin])
     })
     .use(commonmark)
+    .use(gfm)
+    .use(history)
     .use(listener)
 )
 

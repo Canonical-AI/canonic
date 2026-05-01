@@ -97,7 +97,7 @@ html, body, #app {
 html.font-serif,
 html.font-serif body,
 html.font-serif #app {
-  font-family: 'Georgia', ui-serif, serif;
+  font-family: 'Source Serif 4', Georgia, ui-serif, serif;
 }
 
 /* Scrollbar */

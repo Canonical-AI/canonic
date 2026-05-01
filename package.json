@@ -56,7 +56,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "johnazzinaro",
+      "owner": "Canonical-AI",
       "repo": "canonic"
     },
     "mac": {

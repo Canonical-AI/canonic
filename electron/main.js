@@ -86,6 +86,30 @@ function createWindow() {
   }
 }
 
+// Register canonic:// deep link protocol
+app.setAsDefaultProtocolClient('canonic')
+
+// macOS: handle canonic:// links when app is already open
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  handleDeepLink(url)
+})
+
+function handleDeepLink(url) {
+  try {
+    const u = new URL(url)
+    if (u.hostname === 'open') {
+      const docUrl = u.searchParams.get('url')
+      if (docUrl && mainWindow) {
+        mainWindow.focus()
+        mainWindow.webContents.send('share:open-peer', { url: docUrl })
+      }
+    }
+  } catch (e) {
+    console.error('[deep-link] parse error', e)
+  }
+}
+
 app.whenReady().then(() => {
   createWindow();
   setupIpcHandlers();
@@ -137,6 +161,11 @@ function setupIpcHandlers() {
   const searchService = require("./search");
   const shareService = require("./share");
 
+  // Forward share stats events to renderer
+  shareService.emitter.on('stats', (stats) => {
+    mainWindow?.webContents.send('share:stats', stats)
+  })
+
   // --- Workspace ---
   ipcMain.handle("workspace:open-dialog", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -178,6 +207,8 @@ function setupIpcHandlers() {
     const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(fullPath, content, "utf-8");
+    // Push live update to any connected WebSocket clients
+    shareService.pushUpdate(filePath, content);
     return true;
   });
 
@@ -405,12 +436,7 @@ function setupIpcHandlers() {
 
   // --- Sharing ---
   ipcMain.handle("share:start", async (_, workspacePath, filePath, options) => {
-    return shareService.startShare(
-      workspacePath,
-      filePath,
-      options,
-      mainWindow,
-    );
+    return shareService.startShare(workspacePath, filePath, options);
   });
 
   ipcMain.handle("share:stop", async (_, filePath) => {
@@ -419,6 +445,22 @@ function setupIpcHandlers() {
 
   ipcMain.handle("share:open-link", async (_, url) => {
     shell.openExternal(url);
+  });
+
+  ipcMain.handle("share:stats", async (_, filePath) => {
+    return shareService.getStats(filePath);
+  });
+
+  ipcMain.handle("share:start-workspace", async (_, workspacePath) => {
+    return shareService.startWorkspaceShare(workspacePath);
+  });
+
+  ipcMain.handle("share:stop-workspace", async () => {
+    return shareService.stopWorkspaceShare();
+  });
+
+  ipcMain.handle("share:workspace-stats", async () => {
+    return shareService.getStats(shareService.WORKSPACE_KEY);
   });
 
   // --- Peers ---

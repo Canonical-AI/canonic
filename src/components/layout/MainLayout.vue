@@ -262,13 +262,13 @@ const router = useRouter();
 
 // ── Font toggle ──────────────────────────────────────────────────────────────
 const FONT_KEY = "canonic:fontMode";
-const fontMode = ref(localStorage.getItem(FONT_KEY) || "serif");
+const fontMode = ref(localStorage.getItem(FONT_KEY) || "sans");
 
 function applyFont(mode) {
-    if (mode === "sans") {
-        document.documentElement.classList.add("font-sans");
+    if (mode === "serif") {
+        document.documentElement.classList.add("font-serif");
     } else {
-        document.documentElement.classList.remove("font-sans");
+        document.documentElement.classList.remove("font-serif");
     }
 }
 

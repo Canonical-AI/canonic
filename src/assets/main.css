@@ -85,7 +85,7 @@
 
 html, body, #app {
   height: 100%;
-  font-family: 'Georgia', ui-serif, serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   font-size: 14px;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -94,10 +94,10 @@ html, body, #app {
 }
 
 /* Font mode override — applied via class on <html> */
-html.font-sans,
-html.font-sans body,
-html.font-sans #app {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+html.font-serif,
+html.font-serif body,
+html.font-serif #app {
+  font-family: 'Georgia', ui-serif, serif;
 }
 
 /* Scrollbar */

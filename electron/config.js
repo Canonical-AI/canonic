@@ -56,6 +56,9 @@ function write(config) {
   };
 
   if (isDev) console.log("[Config] Writing config to:", CONFIG_PATH);
+  if (!fs.existsSync(CANONIC_DIR)) {
+    fs.mkdirSync(CANONIC_DIR, { recursive: true });
+  }
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");
   return merged;
 }

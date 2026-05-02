@@ -7,6 +7,7 @@
                     store.currentFile === item.path &&
                     'active',
                 isDragOver && 'drag-over',
+                item.type === 'directory' && isEmpty && 'empty',
             ]"
             :style="{ paddingLeft: `${12 + depth * 16}px` }"
             draggable="true"
@@ -175,7 +176,19 @@ import {
 const props = defineProps({ item: Object, depth: Number });
 
 const store = useAppStore();
-const open = ref(true);
+
+function hasMarkdownFiles(item) {
+    if (item.type === 'file') return true  // only .md files appear in the tree
+    if (!item.children?.length) return false
+    return item.children.some(child => hasMarkdownFiles(child))
+}
+
+const isEmpty = computed(() =>
+    props.item.type === 'directory' && !hasMarkdownFiles(props.item)
+)
+
+// Start empty folders collapsed
+const open = ref(props.item.type !== 'directory' || hasMarkdownFiles(props.item));
 const hovered = ref(false);
 const renaming = ref(false);
 const renameValue = ref("");
@@ -387,6 +400,12 @@ async function confirmNewFolder() {
 .tree-node.drag-over {
     background: var(--bg-active);
     box-shadow: inset 0 0 0 1px var(--accent);
+}
+.tree-node.empty {
+    opacity: 0.4;
+}
+.tree-node.empty:hover {
+    opacity: 0.65;
 }
 
 .chevron {

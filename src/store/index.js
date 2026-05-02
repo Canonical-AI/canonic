@@ -324,10 +324,19 @@ export const useAppStore = defineStore("app", () => {
     await logEvent("file:open");
   }
 
+  function normalizeMarkdown(md) {
+    return md
+      .replace(/\r\n/g, '\n')      // consistent line endings
+      .replace(/[ \t]+$/gm, '')    // strip trailing whitespace per line
+      .replace(/\n{3,}/g, '\n\n')  // max one blank line between blocks
+      .trimEnd() + '\n'            // single trailing newline
+  }
+
   async function saveFile(content) {
     if (!workspacePath.value || !currentFile.value) return;
-    await api.files.write(workspacePath.value, currentFile.value, content);
-    currentContent.value = content;
+    const normalized = normalizeMarkdown(content);
+    await api.files.write(workspacePath.value, currentFile.value, normalized);
+    currentContent.value = normalized;
     isDirty.value = false;
     clearUnsaved(currentFile.value);
     api.search.index(workspacePath.value, currentFile.value, content);

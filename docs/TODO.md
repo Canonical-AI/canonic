@@ -11,7 +11,7 @@ when complete move stuff to complete. its just that easy
 
 * \[ ] something funky in the saves...
 
-* \[ ] undo/redo doesnt seem to work
+* \[ ] undo/redo doesn't seem to work
 
   <br />
 
@@ -38,8 +38,6 @@ when complete move stuff to complete. its just that easy
 * [ ] **Collapsible sidebar** — toggle button collapses left sidebar to icon-only strip (~40px); persist state in localStorage. *(MainLayout + FileTree, UI only)*
 
 * [ ] **Shared / connected documents in browser** — peer docs section with display name, last-synced timestamp, online/offline indicator; clicking opens read-only from `~/.canonic/peers/`; refresh triggers `git fetch`. *(PeersPanel + peer sync in share.js + mDNS in main.js)*
-
-* [ ] **Shareed / connected doucments can be viewed in web browser** - generate a link
 
 * [ ] **Sharing version radio** — when sharing a doc or workspace, let the user choose what the recipient sees: *Current WIP* (live file on disk), *Last committed* (HEAD of current branch), or *Main only* (always the `main` branch). Stored in `sharingDefaults` config and overridable per-share in ShareModal. *(ShareModal + share.js + config)*
 
@@ -78,40 +76,10 @@ when complete move stuff to complete. its just that easy
 * \[ ] switch from arial to serif font (ala claude code)
 
 * \[ ] animations? mascot?
-- [ ] make it "hackable" like atom and zed
-- [ ] **Cross-platform support** — make the app usable for Linux and Windows (currently focused on macOS).
-- [ ] figure out how to prevent DDOS on your comp. 
-- [ ] **add a terminal** in the ui that lets you run cli commands for the workspace.
-- [ ] **[AI AGENT] kick off claude code** be able start/continue claude code session with the changes you made to the doucment. i.e. hey I changed this requirements can you update the app to reflect it? 
-- [ ] **Usage logging** — explicitly turned off by default; user prompted at setup to opt-in/out. Track key interactions to improve UX.
-- [ ] **Collapsible sidebar** — toggle button collapses left sidebar to icon-only strip (~40px); persist state in localStorage. *(MainLayout + FileTree, UI only)*
-- [ ] **Shared / connected documents in browser** — peer docs section with display name, last-synced timestamp, online/offline indicator; clicking opens read-only from `~/.canonic/peers/`; refresh triggers `git fetch`. *(PeersPanel + peer sync in share.js + mDNS in main.js)*
-- [ ] **Shareed / connected doucments can be viewed in web browser** - generate a link
-- [ ] **Sharing version radio** — when sharing a doc or workspace, let the user choose what the recipient sees: *Current WIP* (live file on disk), *Last committed* (HEAD of current branch), or *Main only* (always the `main` branch). Stored in `sharingDefaults` config and overridable per-share in ShareModal. *(ShareModal + share.js + config)*
-- [ ] **Pre-index workspace docs on every AI call** — gather full text of every `.md` file, pass as `<workspace>` XML block in system prompt (~500 tokens/file, cap ~80k total). *(AIChat.vue — expand `docContext`)*
-- [ ] **Agent reads docs on demand (tool use)** — expose `read_document` tool; input `{ "path": "..." }`; result fetched via `files:read` IPC. *(AIChat.vue tool-use loop)*
-- [ ] **Agent web search** — `web_search` tool calling Brave/Tavily from main process; results quoted with source URLs; per-session toggle for privacy. *(electron/main.js + AIChat.vue tool-use loop)*
-- [ ] **Agent inline insertions** — structured suggestion `{ type: "insert", afterLine: N, content: "..." }` rendered as ghost diff line; accept/dismiss. *(AIChat.vue + Editor.vue + store)*
-- [ ] **Agent line change suggestions** — `{ type: "change", line: N, original: "...", suggested: "..." }` shown as inline diff; accept replaces line. *(AIChat.vue + Editor.vue diff overlay)*
-- [ ] **Agent comments** — agent posts `{ type: "comment", anchor: { quotedText: "..." }, text: "..." }` into CommentsPanel attributed as "Claude · suggestion"; resolvable; not re-suggested once resolved. *(AIChat.vue + store.addComment() + CommentsPanel)*
-- [ ] **Agent usage stats** — message count + token estimate (chars/4) in compact bar; warn near 80k; use real `usage` field from `message_stop` event long-term. *(AIChat.vue — partially done)*
-- [ ] **Agent abilities UI** — "Agent tools" section in AI panel; toggle switches per capability; "Indexed N documents" status indicator. *(AIChat.vue + store)*
-- [ ] **security and ops** - need to be able to notify users with a big banner saying their version has a vulnerability and either update or roll back versions
-- [ ] idk if this is natively handled, but need to be able to cmd + and change text size rendering
-- [ ] we're going to need some kind of centralized infrastructure for admin of above and logging. i wonder if github or brew or wherever we host this as a downloadable will do some of that for us? 
-- [ ] if you're making lists when you hit enter auto fils the next line with another list (again might natively be handled)
-- [ ] P1 - security and vulenerability. 
-- [ ] theme switching
-- [ ] ok wild idea. what if we could at the top of a doc have an "inports" where you can import context from other docs. and reference specific sections?
-- [ ] **TODO FEATURE** keep track of //todo: that get sprinkled through documents
-- [ ] switch from arial to serif font (ala claude code)
-- [ ] animations? mascot? 
-
-* \[ ] create askill for claude that auto opens canonical when you have a markdown file
-
-* \[ ] need to add in all the old stuff I built for the editor
 
 ## Completed
+
+* [ ] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
 
 * \[x] Basic workspace setup + git backend (isomorphic-git)
 
@@ -129,7 +97,7 @@ when complete move stuff to complete. its just that easy
 
 * \[x] Auto-update via electron-updater (production builds)
 
-* \[x] GitHub repo at https://github.com/johnjazzi/canonic
+* [x] GitHub repo at <https://github.com/johnjazzi/canonic>
 
 * \[x] Canonical logo in UI
 
@@ -141,7 +109,7 @@ when complete move stuff to complete. its just that easy
 
 * \[x] Comprehensive test suite (unit + integration, 60 tests)
 
-* [X] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
+* [x] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
 
 * [x] **Create directories** — "New folder" in FileTree header + inline in TreeNode; rename/delete/move all work on directory nodes. Soft-delete trash bin with restore + permanent delete.
 

@@ -12,6 +12,7 @@ export const useAppStore = defineStore("app", () => {
   const currentContent = ref("");
   const branches = ref([]);
   const currentBranch = ref("main");
+  const isExternalRepo = ref(false);
   const commitLog = ref([]);
   const comments = ref([]);
   const isDirty = ref(false);
@@ -122,6 +123,7 @@ export const useAppStore = defineStore("app", () => {
       const result = await api.workspace.init(chosenPath, template);
       if (result.error) throw new Error(result.error);
       workspacePath.value = result.path;
+      isExternalRepo.value = result.isExternal === true;
       workspaceName.value = chosenPath.split("/").pop();
       const recent = recentWorkspaces.value.filter(
         (w) => w.path !== chosenPath,
@@ -448,6 +450,22 @@ export const useAppStore = defineStore("app", () => {
     return result;
   }
 
+  async function switchWorkspaceBranch(name) {
+    if (!workspacePath.value) return;
+    const result = await api.git.checkout(workspacePath.value, name);
+    if (result.success) {
+      currentBranch.value = name;
+      await refreshFiles();
+      if (currentFile.value) {
+        const content = await api.files.read(workspacePath.value, currentFile.value);
+        currentContent.value = content || "";
+        isDirty.value = false;
+        await loadCommitLog();
+      }
+    }
+    return result;
+  }
+
   async function mergeBranch(fromBranch, message) {
     if (!workspacePath.value) return;
     const result = await api.git.merge(
@@ -723,6 +741,7 @@ export const useAppStore = defineStore("app", () => {
     currentContent,
     branches,
     currentBranch,
+    isExternalRepo,
     commitLog,
     comments,
     isDirty,
@@ -767,6 +786,7 @@ export const useAppStore = defineStore("app", () => {
     refreshBranches,
     createBranch,
     checkoutBranch,
+    switchWorkspaceBranch,
     mergeBranch,
     loadCommitLog,
     checkFileStatus,

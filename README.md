@@ -126,6 +126,17 @@ Updates are handled automatically via [electron-updater](https://www.electronjs.
 
 * Git commands are executed transparently via `isomorphic-git`, meaning no terminal interaction is required for typical version control workflows.
 
+## Opening existing git repos
+
+If you open a folder that already has a `.git` directory — for example, a GitHub repo you've cloned to edit its markdown documentation — Canonic automatically detects this and adapts:
+
+- **No re-initialization.** Canonic skips `git init` and uses the existing repo as-is.
+- **Real history.** The History panel shows commits from the actual repo log, not just Canonic-created ones.
+- **Workspace branch in sidebar.** The current git branch is shown between the file list header and your documents. Click it to switch branches.
+- **Per-document branching is hidden.** Canonic's fork/merge per-doc workflow is hidden to avoid confusion with the repo's own branch model.
+- **Commits land in the real repo.** Checkpoints you save from Canonic appear in `git log` alongside commits from other tools.
+- **No accidental bundling.** Canonic commits only stage the markdown file being saved — pre-staged changes from outside Canonic are preserved but not included.
+
 ## Documentation
 
 For a detailed breakdown of product requirements, architecture, and testing strategy, refer to [docs/REQUIREMENTS.md](./docs/REQUIREMENTS.md).

@@ -461,6 +461,7 @@ export const useAppStore = defineStore("app", () => {
         currentContent.value = content || "";
         isDirty.value = false;
         await loadCommitLog();
+        await loadDocVersions();
       }
     }
     return result;

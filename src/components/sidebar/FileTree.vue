@@ -19,6 +19,25 @@
                 </button>
             </div>
         </div>
+        <!-- External git repo branch indicator -->
+        <div v-if="store.isExternalRepo" class="ext-branch-row" @click="branchOpen = !branchOpen">
+            <GitBranch :size="12" />
+            <span class="ext-branch-name">{{ store.currentBranch }}</span>
+            <ChevronDown :size="12" class="ext-branch-chevron" :class="{ open: branchOpen }" />
+        </div>
+        <div v-if="store.isExternalRepo && branchOpen" class="ext-branch-list">
+            <button
+                v-for="branch in store.branches"
+                :key="branch"
+                class="ext-branch-item"
+                :class="{ active: branch === store.currentBranch }"
+                @click.stop="selectBranch(branch)"
+            >
+                <Check v-if="branch === store.currentBranch" :size="11" />
+                <span v-else style="width: 11px; display: inline-block;" />
+                {{ branch }}
+            </button>
+        </div>
         <!-- New root folder input -->
         <div v-if="creatingFolder" class="new-folder-row">
             <input
@@ -57,7 +76,7 @@ import { ref, nextTick, inject, watch } from "vue";
 import { useAppStore } from "../../store";
 import TreeNode from "./TreeNode.vue";
 import TrashBin from "./TrashBin.vue";
-import { FilePlus, FolderPlus } from "lucide-vue-next";
+import { GitBranch, ChevronDown, Check, FilePlus, FolderPlus } from "lucide-vue-next";
 
 const store = useAppStore();
 const showNewDoc = inject("showNewDoc");
@@ -66,6 +85,13 @@ const creatingFolder = ref(false);
 const folderName = ref("");
 const folderInput = ref(null);
 const isDragOver = ref(false);
+const branchOpen = ref(false);
+
+async function selectBranch(branch) {
+  if (branch === store.currentBranch) { branchOpen.value = false; return; }
+  await store.switchWorkspaceBranch(branch);
+  branchOpen.value = false;
+}
 
 watch(creatingFolder, async (val) => {
     if (val) {
@@ -186,4 +212,58 @@ async function confirmNewFolder() {
     color: var(--text-muted);
     line-height: 1.5;
 }
+
+.ext-branch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 0.775rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+    transition: background 0.1s;
+}
+
+.ext-branch-row:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.ext-branch-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.ext-branch-chevron {
+    transition: transform 0.15s;
+}
+
+.ext-branch-chevron.open {
+    transform: rotate(180deg);
+}
+
+.ext-branch-list {
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-base);
+}
+
+.ext-branch-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.775rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.ext-branch-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ext-branch-item.active { color: var(--text-primary); font-weight: 500; }
 </style>

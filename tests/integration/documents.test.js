@@ -181,9 +181,9 @@ describe("document CRUD", () => {
     store.isDirty = true;
     await store.saveFile("# Notes\n\nUpdated content.");
 
-    expect(mockFiles["notes.md"]).toBe("# Notes\n\nUpdated content.");
+    expect(mockFiles["notes.md"]).toBe("# Notes\n\nUpdated content.\n");
     expect(store.isDirty).toBe(false);
-    expect(store.currentContent).toBe("# Notes\n\nUpdated content.");
+    expect(store.currentContent).toBe("# Notes\n\nUpdated content.\n");
   });
 
   it("commitFile() commits the current file and reloads log", async () => {

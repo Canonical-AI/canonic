@@ -11,15 +11,11 @@ when complete move stuff to complete. its just that easy
 
 * \[ ] something funky in the saves...
 
-* \[ ] undo/redo doesn't seem to work
-
   <br />
 
 ***
 
 ## Features
-
-* [ ] **sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
 * \[ ] should work with existing git repos. and shouldnt blow stuff up
 
@@ -79,6 +75,10 @@ when complete move stuff to complete. its just that easy
 
 ## Completed
 
+* \[X] should work with existing git repos. and shouldnt blow stuff up
+
+* [ ] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
+
 * [ ] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
 
 * \[x] Basic workspace setup + git backend (isomorphic-git)
@@ -136,6 +136,8 @@ when complete move stuff to complete. its just that easy
 * [x] [bug] **cant move files from directory to directory**
 
 * \[x] \[bug] cant delete documents
+
+* \[X ] \[ bug] undo/redo doesn't seem to work
 
 * [x] [bug] **can't create directory**
 

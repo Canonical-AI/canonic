@@ -442,6 +442,15 @@ function buildTree(flatList) {
 
 async function commit(workspacePath, filePath, message) {
   try {
+    const matrix = await git.statusMatrix({ fs, dir: workspacePath })
+    const externallyStaged = matrix
+      .filter(([f, head, , stage]) => f !== filePath && stage !== head)
+      .map(([f, , workdir]) => ({ f, deleted: workdir === 0 }))
+
+    for (const { f } of externallyStaged) {
+      await git.resetIndex({ fs, dir: workspacePath, filepath: f })
+    }
+
     await git.add({ fs, dir: workspacePath, filepath: filePath })
     const oid = await git.commit({
       fs,
@@ -449,6 +458,15 @@ async function commit(workspacePath, filePath, message) {
       message: message || 'Update document',
       author: getAuthor()
     })
+
+    for (const { f, deleted } of externallyStaged) {
+      if (deleted) {
+        await git.remove({ fs, dir: workspacePath, filepath: f })
+      } else {
+        await git.add({ fs, dir: workspacePath, filepath: f })
+      }
+    }
+
     return { success: true, oid }
   } catch (err) {
     return { success: false, error: err.message }

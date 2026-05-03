@@ -29,7 +29,7 @@ async function initWorkspace(workspacePath, template = 'blank') {
   // Check if already a git repo
   const gitDir = path.join(workspacePath, '.git')
   if (fs.existsSync(gitDir)) {
-    return { path: workspacePath, alreadyExists: true }
+    return { path: workspacePath, alreadyExists: true, isExternal: true }
   }
 
   await git.init({ fs, dir: workspacePath, defaultBranch: 'main' })

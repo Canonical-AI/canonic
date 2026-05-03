@@ -55,6 +55,7 @@ const mockApi = {
     stop: vi.fn(),
     openLink: vi.fn(),
     openShared: vi.fn(),
+    onStats: vi.fn(),
   },
   peers: { list: vi.fn().mockResolvedValue([]) },
   cleanup: {

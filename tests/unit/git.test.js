@@ -73,4 +73,26 @@ describe('git service', () => {
     const { current } = await git.branches(tmpDir)
     expect(current).toBe('feature-x')
   })
+
+  it('initWorkspace() returns isExternal when .git already exists', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+    const result = await git.initWorkspace(tmpDir, 'blank')
+    expect(result.isExternal).toBe(true)
+    expect(result.alreadyExists).toBe(true)
+  })
+
+  it('commit() does not bundle pre-staged external files', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+
+    const isogit = await import('isomorphic-git')
+    fs.writeFileSync(path.join(tmpDir, 'external.py'), 'print("hello")')
+    await isogit.default.add({ fs, dir: tmpDir, filepath: 'external.py' })
+
+    fs.writeFileSync(path.join(tmpDir, 'notes.md'), '# Notes')
+    const result = await git.commit(tmpDir, 'notes.md', 'Add notes')
+    expect(result.success).toBe(true)
+
+    const externalLog = await git.log(tmpDir, 'external.py')
+    expect(externalLog.length).toBe(0)
+  })
 })

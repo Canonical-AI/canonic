@@ -14,7 +14,7 @@ const mockApi = {
     save: vi.fn(async (docId, data) => { mockComments[docId] = data })
   },
   search: { query: vi.fn().mockResolvedValue([]), index: vi.fn() },
-  share: { start: vi.fn(), stop: vi.fn(), openLink: vi.fn(), openShared: vi.fn() },
+  share: { start: vi.fn(), stop: vi.fn(), openLink: vi.fn(), openShared: vi.fn(), onStats: vi.fn() },
   peers: { list: vi.fn().mockResolvedValue([]) },
   cleanup: { resetConfig: vi.fn(), deleteWorkspace: vi.fn(), getPaths: vi.fn() },
   update: { check: vi.fn(), install: vi.fn(), onAvailable: vi.fn(), onDownloaded: vi.fn() },

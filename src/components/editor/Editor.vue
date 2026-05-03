@@ -15,7 +15,7 @@
         <span v-if="store.isDirty" class="unsaved-label">Unsaved</span>
         <button class="action-btn" @click="save" :disabled="!store.isDirty">Save</button>
         <div class="topbar-divider" />
-        <div v-if="store.currentDocBranch !== 'main'" class="branch-pill">
+        <div v-if="!store.isExternalRepo && store.currentDocBranch !== 'main'" class="branch-pill">
           <GitBranch :size="11" />
           <span>{{ store.currentDocBranch }}</span>
           <button class="merge-inline-btn" @click="showMergeConfirm = true" title="Merge into main">Merge → main</button>
@@ -24,7 +24,7 @@
           <Tag :size="13" />
           Version
         </button>
-        <button class="action-btn icon-label" @click="showForkModal = true" title="Fork to new branch draft">
+        <button v-if="!store.isExternalRepo" class="action-btn icon-label" @click="showForkModal = true" title="Fork to new branch draft">
           <GitFork :size="13" />
           {{ store.currentDocBranch !== 'main' ? 'New Draft' : 'Fork' }}
         </button>
@@ -35,7 +35,7 @@
     <SaveVersionModal v-if="showVersionModal" @close="showVersionModal = false" />
 
     <!-- Merge confirm overlay -->
-    <div v-if="showMergeConfirm" class="merge-confirm-overlay" @click.self="showMergeConfirm = false">
+    <div v-if="showMergeConfirm && !store.isExternalRepo" class="merge-confirm-overlay" @click.self="showMergeConfirm = false">
       <div class="merge-confirm-box">
         <p class="merge-confirm-title">Merge into main?</p>
         <p class="merge-confirm-body">

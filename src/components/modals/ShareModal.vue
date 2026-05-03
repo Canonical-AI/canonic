@@ -3,61 +3,50 @@
     <div class="modal">
       <h3 class="modal-title">Share document</h3>
       <p class="modal-subtitle">
-        Share <strong>{{ store.currentFile }}</strong> with others.
-        Recipients can view and comment. Your file stays on your machine.
+        Served directly from your machine over your local network.
+        Anyone on the same network with the link can view it.
       </p>
 
       <div v-if="!store.shareInfo">
         <div class="info-box">
           <Info :size="14" style="flex-shrink:0" />
           <span>
-            When you share, a secure link is generated. The document is served directly
-            from your machine while this app is open. Anyone with the link and permission token can view it.
+            No cloud, no relay. Your doc is served straight from this machine
+            on your local network — like a local web app. Stop sharing any time.
           </span>
         </div>
 
         <div class="modal-actions" style="margin-top: 20px">
           <button class="btn-ghost" @click="$emit('close')">Cancel</button>
           <button class="btn-primary" @click="startShare" :disabled="loading">
-            {{ loading ? 'Starting…' : 'Generate share link' }}
+            {{ loading ? 'Starting…' : 'Start sharing' }}
           </button>
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="error" class="error-msg">{{ error }}</p>
       </div>
 
       <div v-else class="share-result">
-        <div class="link-row" v-if="store.shareInfo.tunnelUrl">
-          <label class="link-label">Public link (internet)</label>
-          <div class="link-box">
-            <span class="link-text">{{ store.shareInfo.tunnelUrl }}</span>
-            <button class="copy-btn" @click="copy(store.shareInfo.tunnelUrl)">
-              {{ copied === 'tunnel' ? '✓' : 'Copy' }}
-            </button>
-          </div>
-        </div>
-
         <div class="link-row">
-          <label class="link-label">Local network link</label>
+          <label class="link-label">Network link</label>
           <div class="link-box">
             <span class="link-text">{{ store.shareInfo.localUrl }}</span>
-            <button class="copy-btn" @click="copy(store.shareInfo.localUrl)">
-              {{ copied === 'local' ? '✓' : 'Copy' }}
+            <button class="copy-btn" :class="copied && 'copied'" @click="copy(store.shareInfo.localUrl)">
+              {{ copied ? '✓ Copied' : 'Copy' }}
             </button>
           </div>
-        </div>
-
-        <div v-if="!store.shareInfo.tunnelUrl" class="tunnel-hint">
-          <TriangleAlert :size="13" style="flex-shrink:0" />
-          Public tunnel not available. Install cloudflared for internet sharing:
-          <code>brew install cloudflared</code>
+          <p class="link-hint">
+            Anyone on your network can open this in a browser or in Canonic.
+          </p>
         </div>
 
         <div class="share-status">
-          <span class="status-dot" /> Sharing active — close this modal to keep sharing
+          <span class="status-dot" />
+          Serving on port {{ store.shareInfo.port }} · auto-stops if traffic spikes
         </div>
 
         <div class="modal-actions" style="margin-top: 16px">
           <button class="btn-danger" @click="stopShare">Stop sharing</button>
+          <button class="btn-ghost" @click="openInBrowser">Open in browser</button>
           <button class="btn-ghost" @click="$emit('close')">Done</button>
         </div>
       </div>
@@ -68,13 +57,13 @@
 <script setup>
 import { ref } from 'vue'
 import { useAppStore } from '../../store'
-import { Info, TriangleAlert } from 'lucide-vue-next'
+import { Info } from 'lucide-vue-next'
 
 const emit = defineEmits(['close'])
 const store = useAppStore()
 const loading = ref(false)
 const error = ref('')
-const copied = ref('')
+const copied = ref(false)
 
 async function startShare() {
   loading.value = true
@@ -93,8 +82,14 @@ async function stopShare() {
 
 async function copy(text) {
   await navigator.clipboard.writeText(text)
-  copied.value = text.includes('localhost') ? 'local' : 'tunnel'
-  setTimeout(() => { copied.value = '' }, 2000)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2000)
+}
+
+function openInBrowser() {
+  if (store.shareInfo?.localUrl) {
+    window.canonic.share.openLink(store.shareInfo.localUrl)
+  }
 }
 </script>
 
@@ -159,7 +154,6 @@ async function copy(text) {
   font-size: 0.875rem;
   cursor: pointer;
 }
-
 .btn-ghost:hover { background: var(--bg-hover); }
 
 .btn-primary {
@@ -172,7 +166,6 @@ async function copy(text) {
   font-weight: 500;
   cursor: pointer;
 }
-
 .btn-primary:hover:not(:disabled) { opacity: 0.85; }
 .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -185,10 +178,9 @@ async function copy(text) {
   font-size: 0.875rem;
   cursor: pointer;
 }
-
 .btn-danger:hover { opacity: 0.85; }
 
-.error { color: var(--error); font-size: 0.8rem; margin-top: 10px; }
+.error-msg { color: var(--error); font-size: 0.8rem; margin-top: 10px; }
 
 .share-result { display: flex; flex-direction: column; gap: 14px; }
 
@@ -222,6 +214,12 @@ async function copy(text) {
   white-space: nowrap;
 }
 
+.link-hint {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .copy-btn {
   flex-shrink: 0;
   padding: 4px 10px;
@@ -231,29 +229,10 @@ async function copy(text) {
   color: var(--text-muted);
   font-size: 0.75rem;
   cursor: pointer;
+  transition: background 0.1s, color 0.1s;
 }
-
 .copy-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-
-.tunnel-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.775rem;
-  color: var(--text-muted);
-  flex-wrap: wrap;
-}
-
-.tunnel-hint code {
-  font-family: 'JetBrains Mono', monospace;
-  background: var(--bg-hover);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
+.copy-btn.copied { color: var(--success); border-color: var(--success); }
 
 .share-status {
   display: flex;
@@ -268,6 +247,7 @@ async function copy(text) {
   height: 7px;
   border-radius: 50%;
   background: var(--success);
+  flex-shrink: 0;
   animation: pulse 2s infinite;
 }
 

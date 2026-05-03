@@ -18,7 +18,16 @@ export const useAppStore = defineStore("app", () => {
   const unsavedBuffer = reactive({});
   const fileIsUncommitted = ref(false);
   const isLoading = ref(false);
-  const shareInfo = ref(null);
+  // Per-file share state — persists across doc switches
+  const sharesByFile = reactive({});    // filePath -> shareInfo object
+  const shareStatsByFile = reactive({}); // filePath -> { reads, connected }
+  const shareInfo = computed(() => sharesByFile[currentFile.value] || null);
+  const shareStats = computed(() => shareStatsByFile[currentFile.value] || { reads: 0, connected: 0 });
+
+  // Workspace-level share (separate from per-doc)
+  const WORKSPACE_KEY = '__workspace__';
+  const workspaceShareInfo = computed(() => sharesByFile[WORKSPACE_KEY] || null);
+  const workspaceShareStats = computed(() => shareStatsByFile[WORKSPACE_KEY] || { reads: 0, connected: 0 });
   const searchResults = ref([]);
   const config = ref(null);
   const sidebarTab = ref("files");
@@ -45,6 +54,11 @@ export const useAppStore = defineStore("app", () => {
   const _demoComments = ref({});
 
   const api = window.canonic;
+
+  // Wire share stats listener once — updates whichever file is being shared
+  api.share.onStats((stats) => {
+    shareStatsByFile[stats.filePath] = { reads: stats.reads, connected: stats.connected };
+  });
 
   // Active branch for the current document (defaults to 'main' if not in map)
   const currentDocBranch = computed(() => {
@@ -657,7 +671,8 @@ export const useAppStore = defineStore("app", () => {
       options,
     );
     if (result.success) {
-      shareInfo.value = result;
+      sharesByFile[currentFile.value] = result;
+      shareStatsByFile[currentFile.value] = { reads: result.reads ?? 0, connected: 0 };
       await logEvent("share:start", { scope: options.scope });
     }
     return result;
@@ -666,7 +681,24 @@ export const useAppStore = defineStore("app", () => {
   async function stopShare() {
     if (!currentFile.value) return;
     await api.share.stop(currentFile.value);
-    shareInfo.value = null;
+    delete sharesByFile[currentFile.value];
+    delete shareStatsByFile[currentFile.value];
+  }
+
+  async function startWorkspaceShare() {
+    if (!workspacePath.value) return;
+    const result = await api.share.startWorkspace(workspacePath.value);
+    if (result.success) {
+      sharesByFile[WORKSPACE_KEY] = result;
+      shareStatsByFile[WORKSPACE_KEY] = { reads: result.reads ?? 0, connected: 0 };
+    }
+    return result;
+  }
+
+  async function stopWorkspaceShare() {
+    await api.share.stopWorkspace();
+    delete sharesByFile[WORKSPACE_KEY];
+    delete shareStatsByFile[WORKSPACE_KEY];
   }
 
   async function searchDocs(query) {
@@ -698,6 +730,11 @@ export const useAppStore = defineStore("app", () => {
     fileIsUncommitted,
     isLoading,
     shareInfo,
+    shareStats,
+    workspaceShareInfo,
+    workspaceShareStats,
+    startWorkspaceShare,
+    stopWorkspaceShare,
     searchResults,
     config,
     sidebarTab,

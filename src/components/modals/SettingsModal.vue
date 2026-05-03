@@ -289,29 +289,67 @@
             <!-- Workspace tab -->
             <div v-if="activeTab === 'workspace'" class="tab-content">
                 <div class="field">
-                    <label class="field-label"
-                        >Default workspace location</label
-                    >
+                    <label class="field-label">Default workspace location</label>
                     <div class="path-input">
-                        <input
-                            v-model="form.defaultWorkspacePath"
-                            class="field-input"
-                        />
-                        <button class="browse-btn" @click="browsePath">
-                            Browse
-                        </button>
+                        <input v-model="form.defaultWorkspacePath" class="field-input" />
+                        <button class="browse-btn" @click="browsePath">Browse</button>
                     </div>
-                    <p class="field-hint">
-                        New workspaces will be created here by default.
-                    </p>
+                    <p class="field-hint">New workspaces will be created here by default.</p>
                 </div>
 
                 <div v-if="store.workspacePath" class="workspace-info">
                     <p class="info-label">Current workspace</p>
                     <p class="info-path">{{ store.workspacePath }}</p>
-                    <button class="switch-btn" @click="switchWorkspace">
-                        Switch workspace
-                    </button>
+                    <button class="switch-btn" @click="switchWorkspace">Switch workspace</button>
+                </div>
+
+                <!-- Workspace sharing -->
+                <div class="ws-share-section" v-if="store.workspacePath">
+                    <div class="ws-share-header">
+                        <div>
+                            <p class="field-label" style="margin:0 0 2px">Share workspace</p>
+                            <p class="field-hint" style="margin:0">
+                                Serve your entire workspace over the local network.
+                                Anyone with the link can browse and read all docs.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Not sharing -->
+                    <div v-if="!store.workspaceShareInfo">
+                        <button class="ws-share-btn" @click="startWsShare" :disabled="wsShareLoading">
+                            {{ wsShareLoading ? 'Starting…' : 'Start workspace sharing' }}
+                        </button>
+                        <p v-if="wsShareError" class="field-error">{{ wsShareError }}</p>
+                    </div>
+
+                    <!-- Active -->
+                    <div v-else class="ws-share-active">
+                        <div class="ws-stat-bar">
+                            <div class="ws-status-live">
+                                <span class="status-dot" />
+                                <span>Sharing live</span>
+                            </div>
+                            <div class="ws-pills">
+                                <span class="ws-pill" :class="store.workspaceShareStats.connected > 0 && 'ws-pill--on'">
+                                    {{ store.workspaceShareStats.connected }} viewing
+                                </span>
+                                <span class="ws-pill">
+                                    {{ store.workspaceShareStats.reads }} reads
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ws-link-row">
+                            <span class="ws-link-text">{{ store.workspaceShareInfo.localUrl }}</span>
+                            <button class="ws-copy-btn" :class="wsShareCopied && 'copied'" @click="copyWsLink">
+                                {{ wsShareCopied ? '✓' : 'Copy' }}
+                            </button>
+                        </div>
+                        <div class="ws-actions">
+                            <button class="ws-open-btn" @click="openWsInBrowser">Preview in browser</button>
+                            <button class="ws-stop-btn" @click="stopWsShare">Stop sharing</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -398,6 +436,9 @@ const cleanupPaths = ref(null);
 const copiedUninstall = ref(false);
 const checkingUpdates = ref(false);
 const updateStatus = ref("");
+const wsShareLoading = ref(false);
+const wsShareError = ref("");
+const wsShareCopied = ref(false);
 
 window.canonic.cleanup.getPaths().then((p) => {
     cleanupPaths.value = p;
@@ -574,6 +615,30 @@ async function confirmDeleteWorkspace() {
         router.push("/");
     } else {
         dangerError.value = result.error;
+    }
+}
+
+async function startWsShare() {
+    wsShareLoading.value = true;
+    wsShareError.value = "";
+    const result = await store.startWorkspaceShare();
+    wsShareLoading.value = false;
+    if (!result?.success) wsShareError.value = result?.error || "Failed to start";
+}
+
+async function stopWsShare() {
+    await store.stopWorkspaceShare();
+}
+
+async function copyWsLink() {
+    await navigator.clipboard.writeText(store.workspaceShareInfo.localUrl);
+    wsShareCopied.value = true;
+    setTimeout(() => { wsShareCopied.value = false; }, 2000);
+}
+
+function openWsInBrowser() {
+    if (store.workspaceShareInfo?.localUrl) {
+        window.canonic.share.openLink(store.workspaceShareInfo.localUrl);
     }
 }
 
@@ -1160,4 +1225,156 @@ async function copyUninstall() {
     color: var(--success);
     margin-top: 10px;
 }
+
+/* ── Workspace sharing ── */
+.ws-share-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ws-share-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ws-share-btn {
+    width: 100%;
+    padding: 8px 0;
+    border-radius: 7px;
+    border: none;
+    background: var(--accent);
+    color: white;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.ws-share-btn:hover:not(:disabled) { opacity: 0.85; }
+.ws-share-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ws-share-active {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ws-stat-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ws-status-live {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--success);
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.ws-pills {
+    display: flex;
+    gap: 5px;
+}
+
+.ws-pill {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    background: var(--bg-base);
+}
+
+.ws-pill--on {
+    border-color: var(--success);
+    color: var(--success);
+    background: rgba(75, 125, 111, 0.08);
+}
+
+.ws-link-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 10px;
+}
+
+.ws-link-text {
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-copy-btn {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: color 0.1s, border-color 0.1s;
+}
+.ws-copy-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ws-copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+.ws-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.ws-open-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.775rem;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.ws-open-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.ws-stop-btn {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.775rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.ws-stop-btn:hover { background: rgba(239,68,68,0.1); color: #f87171; border-color: rgba(239,68,68,0.3); }
 </style>

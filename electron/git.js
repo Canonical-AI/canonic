@@ -29,7 +29,7 @@ async function initWorkspace(workspacePath, template = 'blank') {
   // Check if already a git repo
   const gitDir = path.join(workspacePath, '.git')
   if (fs.existsSync(gitDir)) {
-    return { path: workspacePath, alreadyExists: true }
+    return { path: workspacePath, alreadyExists: true, isExternal: true }
   }
 
   await git.init({ fs, dir: workspacePath, defaultBranch: 'main' })
@@ -442,6 +442,17 @@ function buildTree(flatList) {
 
 async function commit(workspacePath, filePath, message) {
   try {
+    // Save state of any files already staged (head !== stage) that aren't our target.
+    // We'll restore them after committing so we don't bundle external staged changes.
+    const matrix = await git.statusMatrix({ fs, dir: workspacePath })
+    const externallyStaged = matrix
+      .filter(([f, head, , stage]) => f !== filePath && stage !== head)
+      .map(([f]) => f)
+
+    for (const f of externallyStaged) {
+      await git.resetIndex({ fs, dir: workspacePath, filepath: f })
+    }
+
     await git.add({ fs, dir: workspacePath, filepath: filePath })
     const oid = await git.commit({
       fs,
@@ -449,6 +460,12 @@ async function commit(workspacePath, filePath, message) {
       message: message || 'Update document',
       author: getAuthor()
     })
+
+    // Re-stage what we temporarily unstaged
+    for (const f of externallyStaged) {
+      await git.add({ fs, dir: workspacePath, filepath: f })
+    }
+
     return { success: true, oid }
   } catch (err) {
     return { success: false, error: err.message }

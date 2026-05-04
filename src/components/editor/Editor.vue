@@ -103,6 +103,7 @@
         <button class="comment-submit-btn" @click="submitComment" :disabled="!commentInput.text.trim()">Comment</button>
       </div>
     </div>
+    <AgentSessionPill />
   </div>
 </template>
 
@@ -115,6 +116,7 @@ import { MessageSquarePlus, Tag, GitFork, GitBranch } from 'lucide-vue-next'
 import MilkdownEditor from './MilkdownEditor.vue'
 import ForkDocModal from '../modals/ForkDocModal.vue'
 import SaveVersionModal from '../modals/SaveVersionModal.vue'
+import AgentSessionPill from '../layout/AgentSessionPill.vue'
 
 const store = useAppStore()
 const editorContentEl = ref(null)

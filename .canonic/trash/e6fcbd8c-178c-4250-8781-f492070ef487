@@ -1,0 +1,765 @@
+# External Git Repo Support Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** When a user opens a folder that already has a `.git` directory, Canonic detects it, uses that repo's history, shows the workspace branch in the sidebar, and hides per-doc branching UI to avoid confusion.
+
+**Architecture:** A boolean `isExternalRepo` flag is set at workspace open time by inspecting the `initWorkspace` return value. This flag gates all UI changes — the FileTree branch indicator and the per-doc branching elements in Editor.vue. A scoped commit helper in `electron/git.js` ensures Canonic commits never bundle pre-staged non-target files.
+
+**Tech Stack:** Vue 3 (Composition API), Pinia, isomorphic-git 1.37.6, Lucide icons, Electron IPC
+
+---
+
+## File Map
+
+| File | What changes |
+|---|---|
+| `docs/TODO.md` | Add scoped commit entry |
+| `electron/git.js` | `commit()` — save/restore staged state around a scoped commit |
+| `src/store/index.js` | Add `isExternalRepo` ref; set in `openWorkspace`; new `switchWorkspaceBranch` action |
+| `src/components/sidebar/FileTree.vue` | Branch indicator row + inline branch switcher (external mode only) |
+| `src/components/editor/Editor.vue` | Wrap per-doc branch pill, Fork button, merge confirm with `v-if="!store.isExternalRepo"` |
+| `README.md` | Add "Opening existing git repos" section |
+| `docs/HOWTO.md` | Create comprehensive usage doc |
+| `tests/unit/git.test.js` | Add scoped commit test |
+
+---
+
+### Task 1: Add scoped commit entry to TODO and implement in git.js
+
+The current `commit()` does `git.add(filepath)` then `git.commit()`. If the user has pre-staged files from outside Canonic, those get bundled in. The fix: save which other files are staged, unstage them, commit our file, re-stage them.
+
+**Files:**
+- Modify: `docs/TODO.md`
+- Modify: `electron/git.js:443-456`
+- Modify: `tests/unit/git.test.js`
+
+- [ ] **Step 1: Add to TODO.md**
+
+Open `docs/TODO.md` and add under the Features section:
+
+```markdown
+* [x] **Scoped commit** — `commit()` in `electron/git.js` saves and restores pre-staged files around each Canonic commit so external staged changes are never bundled in
+```
+
+Mark it `[x]` because we're implementing it now.
+
+- [ ] **Step 2: Write the failing test**
+
+Open `tests/unit/git.test.js` and add two tests at the end of the `describe` block (before the closing `}`):
+
+```js
+it('initWorkspace() returns isExternal when .git already exists', async () => {
+  await git.initWorkspace(tmpDir, 'blank')
+  // Call initWorkspace again on the same dir — should detect existing .git
+  const result = await git.initWorkspace(tmpDir, 'blank')
+  expect(result.isExternal).toBe(true)
+  expect(result.alreadyExists).toBe(true)
+})
+
+it('commit() does not bundle pre-staged external files', async () => {
+  await git.initWorkspace(tmpDir, 'blank')
+
+  // Stage an external file (simulates `git add external.py` run in terminal)
+  const isogit = await import('isomorphic-git')
+  fs.writeFileSync(path.join(tmpDir, 'external.py'), 'print("hello")')
+  await isogit.default.add({ fs, dir: tmpDir, filepath: 'external.py' })
+
+  // Commit only the markdown file via Canonic
+  fs.writeFileSync(path.join(tmpDir, 'notes.md'), '# Notes')
+  const result = await git.commit(tmpDir, 'notes.md', 'Add notes')
+  expect(result.success).toBe(true)
+
+  // external.py should have zero commit history — it was never committed
+  const externalLog = await git.log(tmpDir, 'external.py')
+  expect(externalLog.length).toBe(0)
+})
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npx vitest run tests/unit/git.test.js --reporter=verbose 2>&1 | tail -20
+```
+
+Expected: test fails (current commit bundles all staged files).
+
+- [ ] **Step 4: Implement scoped commit in electron/git.js**
+
+Replace the `commit` function (lines 443–456) with:
+
+```js
+async function commit(workspacePath, filePath, message) {
+  try {
+    // Save state of any files already staged (head !== stage) that aren't our target.
+    // We'll restore them after committing so we don't bundle external staged changes.
+    const matrix = await git.statusMatrix({ fs, dir: workspacePath })
+    const externallyStaged = matrix
+      .filter(([f, head, , stage]) => f !== filePath && stage !== head)
+      .map(([f]) => f)
+
+    for (const f of externallyStaged) {
+      await git.resetIndex({ fs, dir: workspacePath, filepath: f })
+    }
+
+    await git.add({ fs, dir: workspacePath, filepath: filePath })
+    const oid = await git.commit({
+      fs,
+      dir: workspacePath,
+      message: message || 'Update document',
+      author: getAuthor()
+    })
+
+    // Re-stage what we temporarily unstaged
+    for (const f of externallyStaged) {
+      await git.add({ fs, dir: workspacePath, filepath: f })
+    }
+
+    return { success: true, oid }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+}
+```
+
+- [ ] **Step 5: Run test to verify it passes**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npx vitest run tests/unit/git.test.js --reporter=verbose 2>&1 | tail -20
+```
+
+Expected: all tests pass including the new scoped commit test.
+
+- [ ] **Step 6: Run full suite to check for regressions**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npm test 2>&1 | tail -10
+```
+
+Expected: 62 tests pass (60 existing + 2 new).
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && git add electron/git.js tests/unit/git.test.js docs/TODO.md && git commit -m "fix: scope commits to target file, preserving external staged changes"
+```
+
+---
+
+### Task 2: Detection — isExternal flag in store
+
+`initWorkspace` in `git.js` already skips `git.init` when `.git` exists and returns `{ path, alreadyExists: true }`. We need to also return `isExternal: true` and surface that in the store.
+
+**Files:**
+- Modify: `electron/git.js:31-33`
+- Modify: `src/store/index.js` (state declaration ~line 14, openWorkspace ~line 105)
+
+- [ ] **Step 1: Update initWorkspace return value**
+
+In `electron/git.js`, find the early-return block (lines 30–33):
+
+```js
+const gitDir = path.join(workspacePath, '.git')
+if (fs.existsSync(gitDir)) {
+  return { path: workspacePath, alreadyExists: true }
+}
+```
+
+Change to:
+
+```js
+const gitDir = path.join(workspacePath, '.git')
+if (fs.existsSync(gitDir)) {
+  return { path: workspacePath, alreadyExists: true, isExternal: true }
+}
+```
+
+- [ ] **Step 2: Add isExternalRepo state to store**
+
+In `src/store/index.js`, after line 14 (`const currentBranch = ref("main");`), add:
+
+```js
+const isExternalRepo = ref(false);
+```
+
+- [ ] **Step 3: Set isExternalRepo in openWorkspace**
+
+In `src/store/index.js`, inside `openWorkspace` (around line 108), after `workspacePath.value = result.path;`, add:
+
+```js
+isExternalRepo.value = result.isExternal === true;
+```
+
+So the block reads:
+
+```js
+const result = await api.workspace.init(chosenPath, template);
+if (result.error) throw new Error(result.error);
+workspacePath.value = result.path;
+isExternalRepo.value = result.isExternal === true;
+```
+
+- [ ] **Step 4: Expose isExternalRepo in the store return**
+
+Find the `return {` at the bottom of the store (search for `openWorkspace,` in the return object). Add `isExternalRepo` to the returned object alongside the other refs:
+
+```js
+isExternalRepo,
+```
+
+- [ ] **Step 5: Add switchWorkspaceBranch action**
+
+In `src/store/index.js`, add a new action after `checkoutBranch` (around line 435):
+
+```js
+async function switchWorkspaceBranch(name) {
+  if (!workspacePath.value) return;
+  const result = await api.git.checkout(workspacePath.value, name);
+  if (result.success) {
+    currentBranch.value = name;
+    await refreshFiles();
+    if (currentFile.value) {
+      const content = await api.files.read(workspacePath.value, currentFile.value);
+      currentContent.value = content || "";
+      isDirty.value = false;
+      await loadCommitLog();
+    }
+  }
+  return result;
+}
+```
+
+Also expose it in the store return object:
+
+```js
+switchWorkspaceBranch,
+```
+
+- [ ] **Step 6: Run tests**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npm test 2>&1 | tail -10
+```
+
+Expected: 62 tests pass (no regressions — store changes are additive).
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && git add electron/git.js src/store/index.js && git commit -m "feat: detect external git repos and expose isExternalRepo flag in store"
+```
+
+---
+
+### Task 3: Branch indicator in FileTree (external mode)
+
+Add a slim row between the "Documents" header and the file list that shows the current workspace branch. Clicking it expands an inline branch list. Only visible when `store.isExternalRepo`.
+
+**Files:**
+- Modify: `src/components/sidebar/FileTree.vue`
+
+- [ ] **Step 1: Add branch indicator template**
+
+In `src/components/sidebar/FileTree.vue`, find the `<div class="tree-header">` block (line 3). Add the branch indicator immediately after the closing `</div>` of `tree-header` and before `<div v-if="creatingFolder"...`:
+
+```html
+<!-- External git repo branch indicator -->
+<div v-if="store.isExternalRepo" class="ext-branch-row" @click="branchOpen = !branchOpen">
+    <GitBranch :size="12" />
+    <span class="ext-branch-name">{{ store.currentBranch }}</span>
+    <ChevronDown :size="12" class="ext-branch-chevron" :class="{ open: branchOpen }" />
+</div>
+<div v-if="store.isExternalRepo && branchOpen" class="ext-branch-list">
+    <button
+        v-for="branch in store.branches"
+        :key="branch"
+        class="ext-branch-item"
+        :class="{ active: branch === store.currentBranch }"
+        @click.stop="selectBranch(branch)"
+    >
+        <Check v-if="branch === store.currentBranch" :size="11" />
+        <span v-else style="width: 11px; display: inline-block;" />
+        {{ branch }}
+    </button>
+</div>
+```
+
+- [ ] **Step 2: Add branchOpen ref and selectBranch method to script**
+
+In the `<script setup>` block of `FileTree.vue`, add after the existing `ref` imports:
+
+```js
+import { GitBranch, ChevronDown, Check, FilePlus, FolderPlus } from "lucide-vue-next";
+```
+
+(Replace the existing Lucide import line — add `GitBranch`, `ChevronDown`, `Check` to whatever is already imported.)
+
+Add after the existing refs:
+
+```js
+const branchOpen = ref(false);
+
+async function selectBranch(branch) {
+  if (branch === store.currentBranch) { branchOpen.value = false; return; }
+  await store.switchWorkspaceBranch(branch);
+  branchOpen.value = false;
+}
+```
+
+- [ ] **Step 3: Add styles**
+
+At the bottom of the `<style scoped>` block in `FileTree.vue`, add:
+
+```css
+.ext-branch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 0.775rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+    transition: background 0.1s;
+}
+
+.ext-branch-row:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.ext-branch-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.ext-branch-chevron {
+    transition: transform 0.15s;
+}
+
+.ext-branch-chevron.open {
+    transform: rotate(180deg);
+}
+
+.ext-branch-list {
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-base);
+}
+
+.ext-branch-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 5px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.775rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+
+.ext-branch-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ext-branch-item.active { color: var(--text-primary); font-weight: 500; }
+```
+
+- [ ] **Step 4: Verify app renders correctly**
+
+The app should already be running (`npm run dev`). Open a folder that has a `.git` directory. The sidebar should show the branch row between the header and file list. Clicking it should expand the branch list. Selecting a branch should switch it and close the list.
+
+If the app isn't running:
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npm run dev
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && git add src/components/sidebar/FileTree.vue && git commit -m "feat: show workspace branch indicator in sidebar for external git repos"
+```
+
+---
+
+### Task 4: Hide per-doc branching in external mode
+
+When `isExternalRepo` is true, the branch pill, Fork button, and merge-into-main controls in `Editor.vue` should be hidden.
+
+**Files:**
+- Modify: `src/components/editor/Editor.vue`
+
+- [ ] **Step 1: Wrap branch pill with v-if**
+
+In `Editor.vue`, find line 18:
+
+```html
+<div v-if="store.currentDocBranch !== 'main'" class="branch-pill">
+```
+
+Change to:
+
+```html
+<div v-if="!store.isExternalRepo && store.currentDocBranch !== 'main'" class="branch-pill">
+```
+
+- [ ] **Step 2: Wrap Fork button with v-if**
+
+Find line 27:
+
+```html
+<button class="action-btn icon-label" @click="showForkModal = true" title="Fork to new branch draft">
+```
+
+Change to:
+
+```html
+<button v-if="!store.isExternalRepo" class="action-btn icon-label" @click="showForkModal = true" title="Fork to new branch draft">
+```
+
+- [ ] **Step 3: Wrap merge confirm overlay with v-if**
+
+Find line 38:
+
+```html
+<div v-if="showMergeConfirm" class="merge-confirm-overlay" @click.self="showMergeConfirm = false">
+```
+
+Change to:
+
+```html
+<div v-if="showMergeConfirm && !store.isExternalRepo" class="merge-confirm-overlay" @click.self="showMergeConfirm = false">
+```
+
+- [ ] **Step 4: Run tests**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npm test 2>&1 | tail -10
+```
+
+Expected: 61 tests pass.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && git add src/components/editor/Editor.vue && git commit -m "feat: hide per-doc branching UI when workspace is an external git repo"
+```
+
+---
+
+### Task 5: Update README
+
+**Files:**
+- Modify: `README.md`
+
+- [ ] **Step 1: Add external repo section to README**
+
+Open `README.md`. Find the end of the main content and add a new section before any final footer/license content:
+
+```markdown
+## Opening existing git repos
+
+If you open a folder that already has a `.git` directory — for example, a GitHub repo you've cloned to edit its markdown documentation — Canonic automatically detects this and adapts:
+
+- **No re-initialization.** Canonic skips `git init` and uses the existing repo as-is.
+- **Real history.** The History panel shows commits from the actual repo log, not just Canonic-created ones.
+- **Workspace branch in sidebar.** The current git branch is shown between the file list header and your documents. Click it to switch branches.
+- **Per-document branching is hidden.** Canonic's fork/merge per-doc workflow is hidden to avoid confusion with the repo's own branch model.
+- **Commits land in the real repo.** Checkpoints you save from Canonic appear in `git log` alongside commits from other tools.
+- **No accidental bundling.** Canonic commits only stage the markdown file being saved — pre-staged changes from outside Canonic are preserved but not included.
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && git add README.md && git commit -m "docs: add external git repo behavior to README"
+```
+
+---
+
+### Task 6: Create HOWTO.md
+
+**Files:**
+- Create: `docs/HOWTO.md`
+
+- [ ] **Step 1: Create the file**
+
+Create `docs/HOWTO.md` with the following content:
+
+```markdown
+# Canonic — How To Use It
+
+This is the complete usage guide for Canonic. If you're new, start at the top. If you're looking for something specific, jump to the relevant section.
+
+---
+
+## Getting Started
+
+### First Launch
+
+On first launch, Canonic shows a setup screen. Fill in:
+
+- **Display name** — appears on your commits and comments
+- **API key** — your key for the AI provider (default: OpenRouter)
+- **Default workspace path** — where new workspaces are created
+
+Your settings are saved to `~/.canonic/config.json`. You can change them anytime via the gear icon in the top-right.
+
+### Opening the App Again
+
+Canonic remembers your recent workspaces. On launch, pick one from the list or open a new folder.
+
+---
+
+## Workspaces
+
+### Creating a New Workspace
+
+Click **New Workspace** and choose a folder. You'll be asked to pick a template:
+
+- **Blank** — just a README, ready for whatever you need
+- **PM Framework** — a structured set of directories and starter documents for product teams (Vision, Strategy, Planning, Discovery, Implementation, Monitoring)
+
+Canonic runs `git init` in the folder and makes an initial commit.
+
+### Opening an Existing Folder
+
+You can open any folder as a workspace — including folders that already have a `.git` directory (e.g. a cloned GitHub repo). When Canonic detects an existing git repo, it switches to **External Git Mode**:
+
+- The workspace's current branch is shown in the sidebar below the file list header
+- Click the branch name to expand a list of all branches — click any to switch
+- Per-document branching (Fork/Merge) is hidden to avoid confusion with the repo's own branch model
+- Commits you make in Canonic appear in `git log` alongside commits from other tools
+
+---
+
+## Editing Documents
+
+### The Editor
+
+Canonic uses a WYSIWYG markdown editor. You can:
+
+- Use markdown syntax directly (`**bold**`, `## heading`, `- list item`) or use the toolbar
+- Double-click a document title to rename it
+- Drag files and folders in the sidebar to reorganize
+
+### Saving
+
+Press **Cmd+S** (or click **Save**) to write changes to disk. Saving does **not** create a git commit — it just persists the file.
+
+**Auto-save** kicks in automatically after 30 seconds of unsaved changes.
+
+If you switch to another document while unsaved, your changes are held in a buffer and restored when you come back.
+
+---
+
+## Committing Checkpoints
+
+A **commit** (called a checkpoint in Canonic) is a snapshot you can return to. To commit:
+
+1. Save your document first
+2. Click the **Commit** button (or press **Cmd+Shift+S**)
+3. Enter a message describing what you changed
+4. Click **Save checkpoint**
+
+Commits are **per-document** in Canonic-managed workspaces — only the current file is staged and committed. In external git repos, commits follow the same scoped behavior.
+
+---
+
+## Branching (Canonic-Managed Workspaces Only)
+
+> This section applies when Canonic created the workspace. If you opened an existing git repo, branching is handled by the repo's own branch model — see the sidebar branch indicator.
+
+### Fork a Document
+
+Click **Fork** in the editor toolbar to create a draft branch of the current document. Give it a name. You're now working on a branch — changes here don't affect `main`.
+
+### Switching Between Branches
+
+The branch selector in the editor topbar shows the current document's branch. Click it to switch to another branch for that document.
+
+### Merging Back to Main
+
+When you're happy with a draft, click **Merge → main** in the editor topbar (only visible when you're on a non-main branch). This merges your changes back into `main` and deletes the draft branch.
+
+---
+
+## Version History & Diffs
+
+The **History** tab in the right panel shows all commits for the current document, most recent first.
+
+- Click any commit to see a diff — added lines in green, removed lines in red
+- The diff shows only changed lines for a clean view
+
+**Named versions** let you tag a specific commit with a meaningful name (e.g. "Approved by stakeholders"). Click **Version** in the editor toolbar to save one. Named versions appear in the History panel alongside regular commits.
+
+---
+
+## Inline Comments
+
+### Adding a Comment
+
+Select any text in the document and release the mouse. A popover appears — click **Add comment** to attach a comment to that selection.
+
+Comments appear in the **Comments** tab in the right panel.
+
+### Comment Highlights
+
+Selected text that has a comment is highlighted in the editor. Click the highlight to jump to the comment in the panel. Click the comment to scroll the editor to its anchor.
+
+### Resolving Comments
+
+Click **Resolve** on a comment to mark it done. Resolved comments are hidden by default. Toggle the "Show resolved" option in the Comments panel to see them.
+
+---
+
+## AI Assistant
+
+The AI panel (right side, **AI** tab) is a thinking partner — it challenges assumptions and asks questions, but won't write your documents for you.
+
+### Setup
+
+Configure the AI in **Settings**:
+
+- **Base URL** — any OpenAI-compatible endpoint (default: OpenRouter at `https://openrouter.ai/api/v1`)
+- **API key** — your key for that provider
+- **Model** — the model to use (e.g. `anthropic/claude-sonnet-4-6`)
+
+Works with OpenRouter, OpenAI, Mistral, DeepSeek, Groq, Ollama, or any OpenAI-compatible API.
+
+### Using the AI
+
+Type a message in the AI panel. The current document is always included as context. The AI will respond with questions and challenges — not rewrites.
+
+Chat history is session-only and resets on app restart.
+
+---
+
+## Sharing
+
+### Starting a Share Session
+
+Click the **Share** button in the titlebar. A modal appears letting you configure:
+
+- **Scope** — what to share:
+  - `file` — only the current document
+  - `directory` — all documents in the same folder
+  - `workspace` — all documents in the workspace
+- **Access level**:
+  - `read` — recipients can view content and comments
+  - `comment` — recipients can also leave comments (synced back to you)
+
+Click **Start sharing** to generate a link. The link uses a Cloudflare Tunnel — no server setup required.
+
+### Stopping a Share Session
+
+Click **Stop sharing**. The link becomes invalid immediately.
+
+### Excluding Directories
+
+Create a `.canonicignore` file in your workspace root (same syntax as `.gitignore`) to exclude specific directories from sharing.
+
+### Default Sharing Preferences
+
+In **Settings > Sharing**, set your default scope and access level so you don't have to configure it each time.
+
+---
+
+## Search
+
+Click the **Search** tab in the left sidebar (magnifying glass icon). Type to search across all documents in your workspace. Results show the matching document and a snippet of context. Click a result to open the document.
+
+Search is indexed in-memory and re-indexed when you open or save a document.
+
+---
+
+## Settings
+
+Access settings via the **gear icon** in the top-right.
+
+### Profile
+
+- Change display name (used in commits and comments)
+- Change API key and model
+- Check for updates manually
+
+### Sharing Defaults
+
+- Set default share scope (none / file / directory / workspace)
+- Set default access level (read / comment)
+
+### Danger Zone
+
+- **Uninstall** — removes `~/.canonic/` config and data
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Cmd+S` | Save document |
+| `Cmd+Shift+S` | Commit checkpoint |
+| `Cmd++` / `Cmd+-` | Increase / decrease font size |
+| `Cmd+F` | Focus search |
+
+---
+
+## Troubleshooting
+
+**AI isn't responding**
+- Check your API key in Settings
+- Make sure your provider's Base URL is correct
+- Verify your model name matches what the provider expects
+
+**History panel is empty**
+- The document must have at least one commit. Save and commit the file first.
+
+**Share link isn't working**
+- Make sure the share session is still active (Share button shows "Stop sharing")
+- The link uses Cloudflare Tunnel — requires an internet connection
+
+**App won't open a folder**
+- Check that the folder exists and you have read/write permissions
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && git add docs/HOWTO.md && git commit -m "docs: add comprehensive HOWTO.md usage guide"
+```
+
+---
+
+### Task 7: Final verification
+
+- [ ] **Step 1: Run the full test suite**
+
+```bash
+cd /Users/johnazzinaro/Coding/canonic-local && npm test 2>&1 | tail -15
+```
+
+Expected: 62 tests pass, 0 failures.
+
+- [ ] **Step 2: Manual smoke test — Canonic workspace**
+
+Open the app. Create a new workspace (or open an existing Canonic one). Verify:
+- No branch indicator appears in the sidebar below "Documents"
+- Fork button is visible in editor toolbar
+- Branch pill appears when on a non-main branch
+
+- [ ] **Step 3: Manual smoke test — external git repo**
+
+Open an existing git repo folder (e.g. clone any GitHub repo with markdown files). Verify:
+- Branch indicator appears between "Documents" header and file list
+- Clicking it expands a branch list
+- Clicking another branch switches it (file tree reloads)
+- Fork button is NOT visible in editor toolbar
+- Commits made in Canonic appear correctly in History panel
+
+- [ ] **Step 4: Manual smoke test — scoped commit**
+
+In an external repo, stage a non-markdown file in the terminal (`git add somefile.py`), then commit a markdown file from Canonic. Verify:
+- The Canonic commit contains only the markdown file
+- `somefile.py` is still staged after the commit (`git status` shows it)

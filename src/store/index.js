@@ -54,7 +54,18 @@ export const useAppStore = defineStore("app", () => {
   const demoPeers = ref([]);
   const _demoComments = ref({});
 
+  const agentSession = ref(null);   // null | { sessionId, agentName, file, startedAt }
+  const actionPickerOpen = ref(false);
+
   const api = window.canonic;
+
+  // Register agent session IPC listeners once
+  if (api.agentSession) {
+    api.agentSession.onSessionStart((data) => startAgentSession(data))
+    api.agentSession.onComment((data) => addAgentComment(data))
+    api.agentSession.onSessionDone(() => { agentSession.value = null })
+    api.agentSession.onSessionCancel(() => { agentSession.value = null })
+  }
 
   // Wire share stats listener once — updates whichever file is being shared
   api.share.onStats((stats) => {
@@ -733,6 +744,49 @@ export const useAppStore = defineStore("app", () => {
     }
   }
 
+  async function startAgentSession({ sessionId, file, agentName, workspacePath: wsParam }) {
+    agentSession.value = { sessionId, agentName, file, startedAt: Date.now() }
+    const ws = wsParam || workspacePath.value
+    if (file && ws) {
+      await openFile(file)
+    }
+  }
+
+  async function cancelAgentSession() {
+    if (!agentSession.value) return
+    const { sessionId } = agentSession.value
+    agentSession.value = null
+    actionPickerOpen.value = false
+    await api.agentSession.cancel(sessionId)
+  }
+
+  async function submitAgentAction(prompt) {
+    if (!agentSession.value) return
+    const { sessionId } = agentSession.value
+    await api.agentSession.submit({ sessionId, prompt, content: currentContent.value })
+    agentSession.value = null
+    actionPickerOpen.value = false
+  }
+
+  async function addAgentComment({ commentId, file, anchor, text, agentName }) {
+    if (file !== currentFile.value) return
+    const comment = {
+      id: commentId,
+      isAgent: true,
+      agentName,
+      author: agentName,
+      anchor,
+      text,
+      resolved: false,
+      createdAt: new Date().toISOString(),
+    }
+    comments.value.push(comment)
+    await persistComments()
+  }
+
+  function openActionPicker() { actionPickerOpen.value = true }
+  function closeActionPicker() { actionPickerOpen.value = false }
+
   return {
     workspacePath,
     workspaceName,
@@ -809,5 +863,13 @@ export const useAppStore = defineStore("app", () => {
     enableDemoMode,
     disableDemoMode,
     logEvent,
+    agentSession,
+    actionPickerOpen,
+    startAgentSession,
+    cancelAgentSession,
+    submitAgentAction,
+    addAgentComment,
+    openActionPicker,
+    closeActionPicker,
   };
 });

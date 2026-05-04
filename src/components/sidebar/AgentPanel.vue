@@ -14,19 +14,31 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useAppStore } from '../../store'
 import { Zap } from 'lucide-vue-next'
 
 const store = useAppStore()
 const now = ref(Date.now())
-let timer
+let timer = null
 
-onMounted(() => { timer = setInterval(() => { now.value = Date.now() }, 1000) })
+watch(
+  () => store.agentSession,
+  (session) => {
+    if (session) {
+      timer = setInterval(() => { now.value = Date.now() }, 1000)
+    } else {
+      clearInterval(timer)
+      timer = null
+    }
+  },
+  { immediate: true }
+)
+
 onUnmounted(() => clearInterval(timer))
 
 const elapsed = computed(() => {
-  if (!store.agentSession) return ''
+  if (!store.agentSession?.startedAt) return ''
   const secs = Math.floor((now.value - store.agentSession.startedAt) / 1000)
   if (secs < 60) return `${secs}s`
   return `${Math.floor(secs / 60)}m ${secs % 60}s`

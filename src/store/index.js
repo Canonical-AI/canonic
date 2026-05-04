@@ -53,8 +53,8 @@ export const useAppStore = defineStore("app", () => {
   if (api.agentSession) {
     api.agentSession.onSessionStart((data) => startAgentSession(data))
     api.agentSession.onComment((data) => addAgentComment(data))
-    api.agentSession.onSessionDone(() => { agentSession.value = null })
-    api.agentSession.onSessionCancel(() => { agentSession.value = null })
+    api.agentSession.onSessionDone(() => { agentSession.value = null; actionPickerOpen.value = false })
+    api.agentSession.onSessionCancel(() => { agentSession.value = null; actionPickerOpen.value = false })
   }
 
   // Active branch for the current document (defaults to 'main' if not in map)

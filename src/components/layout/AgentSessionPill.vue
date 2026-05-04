@@ -1,17 +1,17 @@
 <template>
   <div v-if="store.agentSession" class="agent-pill-wrapper">
     <!-- Floating pill button -->
-    <button class="agent-pill" @click="store.openActionPicker()">
-      <Zap :size="13" />
+    <button class="agent-pill" @click="store.openActionPicker()" aria-haspopup="dialog" :aria-expanded="store.actionPickerOpen">
+      <Zap :size="13" aria-hidden="true" />
       <span>{{ store.agentSession.agentName }} is waiting</span>
     </button>
 
     <!-- Action picker modal overlay -->
     <Teleport to="body">
-      <div v-if="store.actionPickerOpen" class="action-picker-overlay" @click.self="store.closeActionPicker()">
+      <div v-if="store.actionPickerOpen" class="action-picker-overlay" @click.self="store.closeActionPicker()" @keydown.esc="store.closeActionPicker()" role="dialog" aria-modal="true">
         <div class="action-picker">
           <div class="picker-header">
-            <Zap :size="14" />
+            <Zap :size="14" aria-hidden="true" />
             <span>Send back to {{ store.agentSession.agentName }}</span>
           </div>
 
@@ -20,6 +20,7 @@
               v-for="p in presets"
               :key="p"
               class="prompt-chip"
+              :disabled="isSubmitting"
               @click="submit(p)"
             >
               {{ p }}
@@ -33,7 +34,7 @@
               placeholder="Or type a custom prompt…"
               @keydown.enter="submitCustom"
             />
-            <button class="send-btn" :disabled="!customPrompt.trim()" @click="submitCustom">
+            <button class="send-btn" :disabled="!customPrompt.trim() || isSubmitting" @click="submitCustom">
               Send
             </button>
           </div>
@@ -52,6 +53,7 @@ import { Zap } from 'lucide-vue-next'
 
 const store = useAppStore()
 const customPrompt = ref('')
+const isSubmitting = ref(false)
 
 const presets = [
   'Implement this',
@@ -62,13 +64,26 @@ const presets = [
 ]
 
 async function submit(prompt) {
-  await store.submitAgentAction(prompt)
+  if (isSubmitting.value) return
+  customPrompt.value = ''
+  isSubmitting.value = true
+  try {
+    await store.submitAgentAction(prompt)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 async function submitCustom() {
-  if (!customPrompt.value.trim()) return
-  await store.submitAgentAction(customPrompt.value.trim())
+  if (!customPrompt.value.trim() || isSubmitting.value) return
+  const prompt = customPrompt.value.trim()
   customPrompt.value = ''
+  isSubmitting.value = true
+  try {
+    await store.submitAgentAction(prompt)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 async function cancelSession() {
@@ -199,5 +214,9 @@ async function cancelSession() {
   cursor: pointer;
   text-align: center;
   text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-pill { animation: none; }
 }
 </style>

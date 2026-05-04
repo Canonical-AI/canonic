@@ -17,7 +17,7 @@
       >
         <div class="comment-header">
           <span :class="['comment-author', comment.isAgent && 'agent-author']">
-            {{ comment.isAgent ? 'Claude · suggestion' : comment.author }}
+            {{ comment.isAgent ? `${comment.agentName || 'Agent'} · suggestion` : comment.author }}
           </span>
           <span class="comment-time">{{ formatTime(comment.createdAt) }}</span>
         </div>

@@ -97,6 +97,8 @@ app.whenReady().then(async () => {
       if (process.platform === 'darwin') app.focus({ steal: true })
     }
     mainWindow?.webContents.send(`agent:${event.type}`, event.data)
+  }).catch((err) => {
+    console.error('[api-server] failed to start:', err)
   })
 
   app.on("activate", () => {

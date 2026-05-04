@@ -5,6 +5,7 @@ const os = require("os");
 const configService = require("./config");
 const versionsService = require("./versions");
 const { autoUpdater } = require("electron-updater");
+const apiServer = require("./api-server");
 
 // Suppress harmless Chrome DevTools autofill protocol errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
@@ -86,10 +87,17 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
   setupIpcHandlers();
   setupAutoUpdater();
+  await apiServer.start((event) => {
+    if (event.type === 'session-start') {
+      mainWindow?.focus()
+      if (process.platform === 'darwin') app.focus({ steal: true })
+    }
+    mainWindow?.webContents.send(`agent:${event.type}`, event.data)
+  })
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -129,6 +137,7 @@ function setupAutoUpdater() {
 }
 
 app.on("window-all-closed", () => {
+  apiServer.stop()
   if (process.platform !== "darwin") app.quit();
 });
 
@@ -654,4 +663,13 @@ function setupIpcHandlers() {
       }
     },
   );
+
+  // --- Agent session ---
+  ipcMain.handle('agent:submit', async (_, { sessionId, prompt, content }) => {
+    return await apiServer.submitAction(sessionId, prompt, content)
+  })
+
+  ipcMain.handle('agent:cancel', async (_, sessionId) => {
+    return apiServer.cancelSession(sessionId)
+  })
 }

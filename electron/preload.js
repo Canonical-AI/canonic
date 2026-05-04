@@ -175,4 +175,20 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.removeAllListeners("ai:error");
     },
   },
+
+  // Agent session bridge
+  agentSession: {
+    onSessionStart: (cb) => ipcRenderer.on('agent:session-start', (_, data) => cb(data)),
+    onComment: (cb) => ipcRenderer.on('agent:comment', (_, data) => cb(data)),
+    onSessionCancel: (cb) => ipcRenderer.on('agent:session-cancel', (_, data) => cb(data)),
+    onSessionDone: (cb) => ipcRenderer.on('agent:session-done', (_, data) => cb(data)),
+    submit: (params) => ipcRenderer.invoke('agent:submit', params),
+    cancel: (sessionId) => ipcRenderer.invoke('agent:cancel', sessionId),
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('agent:session-start')
+      ipcRenderer.removeAllListeners('agent:comment')
+      ipcRenderer.removeAllListeners('agent:session-cancel')
+      ipcRenderer.removeAllListeners('agent:session-done')
+    },
+  },
 });

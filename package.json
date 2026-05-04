@@ -53,7 +53,7 @@
     "appId": "ai.canonic.app",
     "productName": "Canonic",
     "icon": "build/icons/icon.png",
-    "asar": false,
+    "asar": true,
     "afterPack": "./afterPack.js",
     "directories": {
       "output": "dist-electron"

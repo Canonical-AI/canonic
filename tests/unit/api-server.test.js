@@ -123,4 +123,24 @@ describe('api-server', () => {
     const res = await request('GET', '/nonexistent', null, false)
     expect(res.status).toBe(404)
   })
+
+  it('GET /session/start returns 405 method not allowed', async () => {
+    const res = await request('GET', '/session/start', null)
+    expect(res.status).toBe(405)
+    expect(res.body.error).toBe('method not allowed')
+  })
+
+  it('submitAction returns error when callbackUrl is unreachable', async () => {
+    const startRes = await request('POST', '/session/start', {
+      file: 'spec.md',
+      agentName: 'TestAgent',
+      callbackUrl: 'http://127.0.0.1:1/done',
+    })
+    expect(startRes.status).toBe(200)
+    const { sessionId } = startRes.body
+
+    const result = await apiServer.submitAction(sessionId, 'Implement this', '# content')
+    expect(typeof result.error).toBe('string')
+    expect(result.error.length).toBeGreaterThan(0)
+  })
 })

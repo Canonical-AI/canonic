@@ -116,6 +116,8 @@ async function handleRequest(req, res) {
     })
     return sendJson(res, 200, { ok: true, commentId })
   }
+
+  sendJson(res, 405, { error: 'method not allowed' })
 }
 
 async function submitAction(sessionId, prompt, content) {

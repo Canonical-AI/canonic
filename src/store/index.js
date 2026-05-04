@@ -712,9 +712,12 @@ export const useAppStore = defineStore("app", () => {
   async function submitAgentAction(prompt) {
     if (!agentSession.value) return
     const { sessionId } = agentSession.value
-    await api.agentSession.submit({ sessionId, prompt, content: currentContent.value })
-    agentSession.value = null
-    actionPickerOpen.value = false
+    try {
+      await api.agentSession.submit({ sessionId, prompt, content: currentContent.value })
+    } finally {
+      agentSession.value = null
+      actionPickerOpen.value = false
+    }
   }
 
   async function addAgentComment({ commentId, file, anchor, text, agentName }) {

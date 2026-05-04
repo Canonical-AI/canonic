@@ -94,7 +94,7 @@ async function cancelSession() {
 
 <style scoped>
 .agent-pill-wrapper {
-  position: absolute;
+  position: fixed;
   bottom: 24px;
   right: 24px;
   z-index: 50;

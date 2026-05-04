@@ -222,6 +222,8 @@
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
         <SettingsModal v-if="showSettings" @close="showSettings = false" />
+
+        <AgentSessionPill />
     </div>
 </template>
 
@@ -256,6 +258,7 @@ import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
 import DemoBanner from "./DemoBanner.vue";
+import AgentSessionPill from "./AgentSessionPill.vue";
 
 const store = useAppStore();
 const router = useRouter();

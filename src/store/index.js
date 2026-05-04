@@ -696,6 +696,9 @@ export const useAppStore = defineStore("app", () => {
   async function startAgentSession({ sessionId, file, agentName, workspacePath: wsParam }) {
     agentSession.value = { sessionId, agentName, file, startedAt: Date.now() }
     const ws = wsParam || workspacePath.value
+    if (ws && ws !== workspacePath.value) {
+      await openWorkspace(ws)
+    }
     if (file && ws) {
       await openFile(file)
     }

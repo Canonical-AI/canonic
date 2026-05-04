@@ -118,4 +118,47 @@ describe('agent session store', () => {
     store.closeActionPicker()
     expect(store.actionPickerOpen).toBe(false)
   })
+
+  it('onSessionDone callback clears agentSession', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    expect(store.agentSession).not.toBeNull()
+    sessionDoneCb()
+    expect(store.agentSession).toBeNull()
+  })
+
+  it('onSessionCancel callback clears agentSession', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    sessionCancelCb()
+    expect(store.agentSession).toBeNull()
+  })
+
+  it('addAgentComment() ignores comments for non-current file', async () => {
+    await store.addAgentComment({
+      commentId: 'cid1',
+      file: 'other.md',
+      anchor: { quotedText: 'text' },
+      text: 'Ignored',
+      agentName: 'Claude Code',
+    })
+    expect(store.comments).toHaveLength(0)
+  })
+
+  it('cancelAgentSession() also resets actionPickerOpen', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    store.openActionPicker()
+    await store.cancelAgentSession()
+    expect(store.actionPickerOpen).toBe(false)
+  })
+
+  it('submitAgentAction() resets actionPickerOpen', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    store.openActionPicker()
+    await store.submitAgentAction('Implement this')
+    expect(store.actionPickerOpen).toBe(false)
+  })
+
+  it('cancelAgentSession() does nothing when no session active', async () => {
+    await expect(store.cancelAgentSession()).resolves.not.toThrow()
+    expect(store.agentSession).toBeNull()
+  })
 })

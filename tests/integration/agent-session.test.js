@@ -121,15 +121,18 @@ describe('agent session store', () => {
 
   it('onSessionDone callback clears agentSession', async () => {
     await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
-    expect(store.agentSession).not.toBeNull()
+    store.openActionPicker()
     sessionDoneCb()
     expect(store.agentSession).toBeNull()
+    expect(store.actionPickerOpen).toBe(false)
   })
 
   it('onSessionCancel callback clears agentSession', async () => {
     await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    store.openActionPicker()
     sessionCancelCb()
     expect(store.agentSession).toBeNull()
+    expect(store.actionPickerOpen).toBe(false)
   })
 
   it('addAgentComment() ignores comments for non-current file', async () => {

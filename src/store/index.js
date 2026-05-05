@@ -668,7 +668,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function enableDemoMode() {
-    const cfg = await fetch("/demo/config.json").then((r) => r.json());
+    const cfg = await fetch("demo/config.json").then((r) => r.json());
     const defaultPath = await api.workspace.getDefault();
     const parent = defaultPath.replace(/\/[^/]+$/, "");
     const demoPath = `${parent}/${cfg.workspaceName}`;

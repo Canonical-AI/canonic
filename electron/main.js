@@ -12,6 +12,24 @@ app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
 
 const isDev = !app.isPackaged;
 const CANONIC_DIR = path.join(os.homedir(), ".canonic");
+
+// File-based logging — readable at ~/Library/Logs/Canonic/main.log (mac)
+// or at app.getPath('logs')/main.log on all platforms.
+const LOG_FILE = path.join(CANONIC_DIR, "main.log");
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ")}\n`;
+  try {
+    fs.appendFileSync(LOG_FILE, line);
+  } catch {}
+  console.log(...args);
+}
+function logError(...args) {
+  const line = `[${new Date().toISOString()}] ERROR ${args.map((a) => (a instanceof Error ? a.stack : typeof a === "object" ? JSON.stringify(a) : String(a))).join(" ")}\n`;
+  try {
+    fs.appendFileSync(LOG_FILE, line);
+  } catch {}
+  console.error(...args);
+}
 const PEERS_FILE = path.join(CANONIC_DIR, "peers.json");
 const USAGE_LOG_PATH = path.join(CANONIC_DIR, "usage.log");
 
@@ -88,42 +106,50 @@ function createWindow() {
 }
 
 // Register canonic:// deep link protocol
-app.setAsDefaultProtocolClient('canonic')
+app.setAsDefaultProtocolClient("canonic");
 
 // macOS: handle canonic:// links when app is already open
-app.on('open-url', (event, url) => {
-  event.preventDefault()
-  handleDeepLink(url)
-})
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
 
 function handleDeepLink(url) {
   try {
-    const u = new URL(url)
-    if (u.hostname === 'open') {
-      const docUrl = u.searchParams.get('url')
+    const u = new URL(url);
+    if (u.hostname === "open") {
+      const docUrl = u.searchParams.get("url");
       if (docUrl && mainWindow) {
-        mainWindow.focus()
-        mainWindow.webContents.send('share:open-peer', { url: docUrl })
+        mainWindow.focus();
+        mainWindow.webContents.send("share:open-peer", { url: docUrl });
       }
     }
   } catch (e) {
-    console.error('[deep-link] parse error', e)
+    console.error("[deep-link] parse error", e);
   }
 }
 
 app.whenReady().then(async () => {
+  log("[main] app ready");
+  try {
+    setupIpcHandlers();
+    log("[main] IPC handlers registered");
+  } catch (err) {
+    logError("[main] setupIpcHandlers FAILED:", err);
+  }
   createWindow();
-  setupIpcHandlers();
   setupAutoUpdater();
-  await apiServer.start((event) => {
-    if (event.type === 'session-start') {
-      mainWindow?.focus()
-      if (process.platform === 'darwin') app.focus({ steal: true })
-    }
-    mainWindow?.webContents.send(`agent:${event.type}`, event.data)
-  }).catch((err) => {
-    console.error('[api-server] failed to start:', err)
-  })
+  await apiServer
+    .start((event) => {
+      if (event.type === "session-start") {
+        mainWindow?.focus();
+        if (process.platform === "darwin") app.focus({ steal: true });
+      }
+      mainWindow?.webContents.send(`agent:${event.type}`, event.data);
+    })
+    .catch((err) => {
+      console.error("[api-server] failed to start:", err);
+    });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -163,19 +189,23 @@ function setupAutoUpdater() {
 }
 
 app.on("window-all-closed", () => {
-  apiServer.stop()
+  apiServer.stop();
   if (process.platform !== "darwin") app.quit();
 });
 
 function setupIpcHandlers() {
+  log("[ipc] loading git service");
   const gitService = require("./git");
+  log("[ipc] loading search service");
   const searchService = require("./search");
+  log("[ipc] loading share service");
   const shareService = require("./share");
+  log("[ipc] all services loaded");
 
   // Forward share stats events to renderer
-  shareService.emitter.on('stats', (stats) => {
-    mainWindow?.webContents.send('share:stats', stats)
-  })
+  shareService.emitter.on("stats", (stats) => {
+    mainWindow?.webContents.send("share:stats", stats);
+  });
 
   // --- Workspace ---
   ipcMain.handle("workspace:open-dialog", async () => {
@@ -709,11 +739,11 @@ function setupIpcHandlers() {
   );
 
   // --- Agent session ---
-  ipcMain.handle('agent:submit', async (_, { sessionId, prompt, content }) => {
-    return await apiServer.submitAction(sessionId, prompt, content)
-  })
+  ipcMain.handle("agent:submit", async (_, { sessionId, prompt, content }) => {
+    return await apiServer.submitAction(sessionId, prompt, content);
+  });
 
-  ipcMain.handle('agent:cancel', async (_, sessionId) => {
-    return apiServer.cancelSession(sessionId)
-  })
+  ipcMain.handle("agent:cancel", async (_, sessionId) => {
+    return apiServer.cancelSession(sessionId);
+  });
 }

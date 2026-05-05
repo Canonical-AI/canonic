@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, reactive, computed, watch } from "vue";
+import demoConfig from "../../public/demo/config.json";
 
 export const useAppStore = defineStore("app", () => {
   const workspacePath = ref(null);
@@ -668,7 +669,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function enableDemoMode() {
-    const cfg = await fetch("demo/config.json").then((r) => r.json());
+    const cfg = demoConfig;
     const defaultPath = await api.workspace.getDefault();
     const parent = defaultPath.replace(/\/[^/]+$/, "");
     const demoPath = `${parent}/${cfg.workspaceName}`;

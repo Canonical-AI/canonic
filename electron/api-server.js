@@ -60,11 +60,24 @@ function isLocalhost(url) {
   } catch { return false }
 }
 
+function getAppVersion() {
+  try {
+    return require('../package.json').version
+  } catch {
+    try {
+      // Fallback for some production builds
+      return require('./package.json').version
+    } catch {
+      return '0.1.0'
+    }
+  }
+}
+
 async function handleRequest(req, res) {
   const { pathname } = new URL(req.url, 'http://127.0.0.1')
 
   if (req.method === 'GET' && pathname === '/ping') {
-    return sendJson(res, 200, { ok: true, version: require('../package.json').version })
+    return sendJson(res, 200, { ok: true, version: getAppVersion() })
   }
 
   const knownRoutes = ['/session/start', '/session/cancel', '/comments']

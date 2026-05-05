@@ -1,6 +1,6 @@
 {
   "name": "canonic",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "description": "Local-first markdown document editor with git versioning",
   "author": "John Azzinaro",
   "main": "electron/main.js",
@@ -94,7 +94,9 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -102,7 +104,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

@@ -68,6 +68,7 @@
             </div>
         </div>
         <TrashBin />
+        <AgentPanel />
     </div>
 </template>
 
@@ -76,6 +77,7 @@ import { ref, nextTick, inject, watch } from "vue";
 import { useAppStore } from "../../store";
 import TreeNode from "./TreeNode.vue";
 import TrashBin from "./TrashBin.vue";
+import AgentPanel from "./AgentPanel.vue";
 import { GitBranch, ChevronDown, Check, FilePlus, FolderPlus } from "lucide-vue-next";
 
 const store = useAppStore();

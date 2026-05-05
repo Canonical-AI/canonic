@@ -63,14 +63,15 @@ export const useAppStore = defineStore("app", () => {
   if (api.agentSession) {
     api.agentSession.onSessionStart((data) => startAgentSession(data))
     api.agentSession.onComment((data) => addAgentComment(data))
-    api.agentSession.onSessionDone(() => { agentSession.value = null })
-    api.agentSession.onSessionCancel(() => { agentSession.value = null })
+    api.agentSession.onSessionDone(() => { agentSession.value = null; actionPickerOpen.value = false })
+    api.agentSession.onSessionCancel(() => { agentSession.value = null; actionPickerOpen.value = false })
   }
 
   // Wire share stats listener once — updates whichever file is being shared
   api.share.onStats((stats) => {
     shareStatsByFile[stats.filePath] = { reads: stats.reads, connected: stats.connected };
   });
+
 
   // Active branch for the current document (defaults to 'main' if not in map)
   const currentDocBranch = computed(() => {
@@ -747,6 +748,9 @@ export const useAppStore = defineStore("app", () => {
   async function startAgentSession({ sessionId, file, agentName, workspacePath: wsParam }) {
     agentSession.value = { sessionId, agentName, file, startedAt: Date.now() }
     const ws = wsParam || workspacePath.value
+    if (ws && ws !== workspacePath.value) {
+      await openWorkspace(ws)
+    }
     if (file && ws) {
       await openFile(file)
     }
@@ -763,9 +767,12 @@ export const useAppStore = defineStore("app", () => {
   async function submitAgentAction(prompt) {
     if (!agentSession.value) return
     const { sessionId } = agentSession.value
-    await api.agentSession.submit({ sessionId, prompt, content: currentContent.value })
-    agentSession.value = null
-    actionPickerOpen.value = false
+    try {
+      await api.agentSession.submit({ sessionId, prompt, content: currentContent.value })
+    } finally {
+      agentSession.value = null
+      actionPickerOpen.value = false
+    }
   }
 
   async function addAgentComment({ commentId, file, anchor, text, agentName }) {

@@ -1,24 +1,25 @@
 const fs = require('fs')
 const path = require('path')
 
+// electron-builder nests call-bind-apply-helpers inside call-bind/ in the ASAR
+// rather than at the top level. Modules inside the ASAR that require it can't find
+// it because ASAR require() resolution only walks up within the ASAR. Resolution
+// DOES cross the ASAR boundary into the real filesystem, so placing modules at
+// Contents/Resources/node_modules/ makes them findable from any code inside the ASAR.
+// We copy the full transitive dep tree: call-bind-apply-helpers + es-errors + function-bind.
+const MODULES_TO_COPY = ['call-bind-apply-helpers', 'es-errors', 'function-bind']
+
 exports.default = async function ({ appOutDir, packager }) {
-  const src = path.join(__dirname, 'node_modules', 'call-bind-apply-helpers')
   const productName = packager.appInfo.productName
+  const resourcesDir = path.join(appOutDir, `${productName}.app`, 'Contents', 'Resources')
 
-  // appOutDir contains Canonic.app on mac — navigate into the bundle
-  const dest = path.join(
-    appOutDir,
-    `${productName}.app`,
-    'Contents',
-    'Resources',
-    'app',
-    'node_modules',
-    'call-bind-apply-helpers'
-  )
-
-  if (!fs.existsSync(dest)) {
-    copyDirSync(src, dest)
-    console.log('[afterPack] copied call-bind-apply-helpers to', dest)
+  for (const mod of MODULES_TO_COPY) {
+    const src = path.join(__dirname, 'node_modules', mod)
+    const dest = path.join(resourcesDir, 'node_modules', mod)
+    if (!fs.existsSync(dest)) {
+      copyDirSync(src, dest)
+      console.log('[afterPack] copied', mod, '→', dest)
+    }
   }
 }
 

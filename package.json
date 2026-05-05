@@ -24,9 +24,13 @@
     "@vueuse/core": "^10.11.0",
     "bonjour-service": "^1.2.1",
     "call-bind-apply-helpers": "^1.0.2",
+    "call-bound": "^1.0.4",
+    "dunder-proto": "^1.0.1",
     "electron-updater": "^6.8.3",
     "express": "^4.21.2",
     "flexsearch": "^0.8.212",
+    "get-intrinsic": "^1.3.0",
+    "get-proto": "^1.0.1",
     "isomorphic-git": "^1.27.2",
     "lucide-vue-next": "^1.0.0",
     "marked": "^15.0.12",
@@ -55,6 +59,11 @@
     "icon": "build/icons/icon.png",
     "asar": true,
     "afterPack": "./afterPack.js",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "public/**/*"
+    ],
     "directories": {
       "output": "dist-electron"
     },
@@ -81,10 +90,13 @@
     "linux": {
       "target": "AppImage"
     },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "public/**/*"
+    "asarUnpack": [
+      "**/node_modules/isomorphic-git/**/*",
+      "**/node_modules/call-bind-apply-helpers/**/*",
+      "**/node_modules/call-bound/**/*",
+      "**/node_modules/dunder-proto/**/*",
+      "**/node_modules/get-intrinsic/**/*",
+      "**/node_modules/get-proto/**/*"
     ],
     "extraResources": [
       {

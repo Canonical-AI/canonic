@@ -2,23 +2,79 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { autoUpdater } = require("electron-updater");
+const crypto = require("crypto");
+
 const configService = require("./config");
 const versionsService = require("./versions");
-const { autoUpdater } = require("electron-updater");
 const apiServer = require("./api-server");
+
+// Services loaded lazily in setupIpcHandlers to ensure logger is ready
+let gitService;
+let searchService;
+let shareService;
 
 // Suppress harmless Chrome DevTools autofill protocol errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
 
 const isDev = !app.isPackaged;
 const CANONIC_DIR = path.join(os.homedir(), ".canonic");
+
+// File-based logging — readable at ~/Library/Logs/Canonic/main.log (mac)
+// or at app.getPath('logs')/main.log on all platforms.
+const LOG_FILE = path.join(CANONIC_DIR, "main.log");
+
+function log(...args) {
+  const line = `[${new Date().toISOString()}] ${args
+    .map((a) => {
+      try {
+        return typeof a === "object" ? JSON.stringify(a) : String(a);
+      } catch {
+        return "[Unstringifiable Object]";
+      }
+    })
+    .join(" ")}\n`;
+  try {
+    if (!fs.existsSync(CANONIC_DIR))
+      fs.mkdirSync(CANONIC_DIR, { recursive: true });
+    fs.appendFileSync(LOG_FILE, line);
+  } catch {}
+  console.log(...args);
+}
+
+function logError(...args) {
+  const line = `[${new Date().toISOString()}] ERROR ${args
+    .map((a) => {
+      try {
+        return a instanceof Error
+          ? a.stack
+          : typeof a === "object"
+            ? JSON.stringify(a)
+            : String(a);
+      } catch {
+        return "[Unstringifiable Object]";
+      }
+    })
+    .join(" ")}\n`;
+  try {
+    if (!fs.existsSync(CANONIC_DIR))
+      fs.mkdirSync(CANONIC_DIR, { recursive: true });
+    fs.appendFileSync(LOG_FILE, line);
+  } catch {}
+  console.error(...args);
+}
+
 const PEERS_FILE = path.join(CANONIC_DIR, "peers.json");
 const USAGE_LOG_PATH = path.join(CANONIC_DIR, "usage.log");
 
 // Ensure ~/.canonic exists
 if (!fs.existsSync(CANONIC_DIR)) {
   fs.mkdirSync(CANONIC_DIR, { recursive: true });
+}
+if (!fs.existsSync(path.join(CANONIC_DIR, "peers"))) {
   fs.mkdirSync(path.join(CANONIC_DIR, "peers"), { recursive: true });
+}
+if (!fs.existsSync(path.join(CANONIC_DIR, "comments"))) {
   fs.mkdirSync(path.join(CANONIC_DIR, "comments"), { recursive: true });
 }
 
@@ -88,42 +144,52 @@ function createWindow() {
 }
 
 // Register canonic:// deep link protocol
-app.setAsDefaultProtocolClient('canonic')
+app.setAsDefaultProtocolClient("canonic");
 
 // macOS: handle canonic:// links when app is already open
-app.on('open-url', (event, url) => {
-  event.preventDefault()
-  handleDeepLink(url)
-})
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
 
 function handleDeepLink(url) {
   try {
-    const u = new URL(url)
-    if (u.hostname === 'open') {
-      const docUrl = u.searchParams.get('url')
+    const u = new URL(url);
+    if (u.hostname === "open") {
+      const docUrl = u.searchParams.get("url");
       if (docUrl && mainWindow) {
-        mainWindow.focus()
-        mainWindow.webContents.send('share:open-peer', { url: docUrl })
+        mainWindow.focus();
+        mainWindow.webContents.send("share:open-peer", { url: docUrl });
       }
     }
   } catch (e) {
-    console.error('[deep-link] parse error', e)
+    console.error("[deep-link] parse error", e);
   }
 }
 
 app.whenReady().then(async () => {
+  log("[main] app ready");
+  try {
+    setupIpcHandlers();
+    log("[main] IPC handlers registered");
+  } catch (err) {
+    logError("[main] setupIpcHandlers failed:", err);
+  }
+  
   createWindow();
-  setupIpcHandlers();
   setupAutoUpdater();
-  await apiServer.start((event) => {
-    if (event.type === 'session-start') {
-      mainWindow?.focus()
-      if (process.platform === 'darwin') app.focus({ steal: true })
-    }
-    mainWindow?.webContents.send(`agent:${event.type}`, event.data)
-  }).catch((err) => {
-    console.error('[api-server] failed to start:', err)
-  })
+  
+  await apiServer
+    .start((event) => {
+      if (event.type === "session-start") {
+        mainWindow?.focus();
+        if (process.platform === "darwin") app.focus({ steal: true });
+      }
+      mainWindow?.webContents.send(`agent:${event.type}`, event.data);
+    })
+    .catch((err) => {
+      logError("[api-server] failed to start:", err);
+    });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -163,19 +229,28 @@ function setupAutoUpdater() {
 }
 
 app.on("window-all-closed", () => {
-  apiServer.stop()
+  apiServer.stop();
   if (process.platform !== "darwin") app.quit();
 });
 
 function setupIpcHandlers() {
-  const gitService = require("./git");
-  const searchService = require("./search");
-  const shareService = require("./share");
+  try {
+    log("[ipc] loading git service");
+    gitService = require("./git");
+    log("[ipc] loading search service");
+    searchService = require("./search");
+    log("[ipc] loading share service");
+    shareService = require("./share");
+    log("[ipc] all services loaded");
+  } catch (err) {
+    logError("[ipc] failed to load services:", err);
+    throw err;
+  }
 
   // Forward share stats events to renderer
-  shareService.emitter.on('stats', (stats) => {
-    mainWindow?.webContents.send('share:stats', stats)
-  })
+  shareService.emitter.on("stats", (stats) => {
+    mainWindow?.webContents.send("share:stats", stats);
+  });
 
   // --- Workspace ---
   ipcMain.handle("workspace:open-dialog", async () => {
@@ -270,7 +345,7 @@ function setupIpcHandlers() {
     "files:trash",
     async (_, workspacePath, itemPath, isDirectory) => {
       const trashDir = getTrashDir(workspacePath);
-      const id = require("crypto").randomUUID();
+      const id = crypto.randomUUID();
       const src = path.join(workspacePath, itemPath);
       if (!fs.existsSync(src))
         return { success: false, error: "File not found" };
@@ -505,7 +580,6 @@ function setupIpcHandlers() {
     }
     const saved = configService.write(config);
     // Hot-reload author in git service
-    const gitService = require("./git");
     gitService.setAuthor({
       name: saved.displayName,
       email: `${saved.displayName.replace(/\s+/g, ".")}@canonic.local`,
@@ -709,11 +783,14 @@ function setupIpcHandlers() {
   );
 
   // --- Agent session ---
-  ipcMain.handle('agent:submit', async (_, { sessionId, prompt, content }) => {
-    return await apiServer.submitAction(sessionId, prompt, content)
-  })
+  ipcMain.handle("agent:submit", async (_, { sessionId, prompt, content }) => {
+    return await apiServer.submitAction(sessionId, prompt, content);
+  });
 
-  ipcMain.handle('agent:cancel', async (_, sessionId) => {
-    return apiServer.cancelSession(sessionId)
-  })
+  ipcMain.handle("agent:cancel", async (_, sessionId) => {
+    return apiServer.cancelSession(sessionId);
+  });
+
+  log("[ipc] all handlers registered successfully");
 }
+

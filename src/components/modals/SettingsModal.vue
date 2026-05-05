@@ -397,6 +397,7 @@
             <div class="modal-footer">
                 <p v-if="saveSuccess" class="save-success">✓ Saved</p>
                 <p v-if="saveError" class="save-error">{{ saveError }}</p>
+                <p class="build-info">{{ buildInfo }}</p>
                 <div class="footer-actions">
                     <button class="btn-ghost" @click="$emit('close')">
                         Cancel
@@ -422,6 +423,8 @@ import { useAppStore } from "../../store";
 const emit = defineEmits(["close"]);
 const router = useRouter();
 const store = useAppStore();
+
+const buildInfo = `build ${__BUILD_COMMIT__} · ${__BUILD_BRANCH__} · ${__BUILD_DATE__}`
 
 const activeTab = ref("profile");
 const showKey = ref(false);
@@ -972,6 +975,15 @@ async function copyUninstall() {
     justify-content: flex-end;
     gap: 12px;
     flex-shrink: 0;
+}
+
+.build-info {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin-right: auto;
+    font-family: monospace;
+    user-select: text;
 }
 
 .save-success {

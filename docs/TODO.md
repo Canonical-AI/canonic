@@ -11,6 +11,8 @@ when complete move stuff to complete. its just that easy
 
 * \[ ] something funky in the saves...
 
+* the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
+
   <br />
 
 ***
@@ -25,7 +27,7 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-* \[ ] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
+* [ ] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
 
 * \[ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
 

@@ -65,6 +65,7 @@ export const useAppStore = defineStore("app", () => {
     discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
   );
   const peerFileContent = ref(null); // { peer, relPath, content } | null
+  const networkChanged = ref(false);
 
   const api = window.canonic;
 
@@ -92,6 +93,10 @@ export const useAppStore = defineStore("app", () => {
       const idx = discoveredPeers.value.findIndex((p) => p.id === id);
       if (idx >= 0) discoveredPeers.value.splice(idx, 1);
     });
+  }
+
+  if (api.share.onNetworkChanged) {
+    api.share.onNetworkChanged(() => { networkChanged.value = true });
   }
 
 
@@ -931,6 +936,7 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds,
     favoritedPeers,
     peerFileContent,
+    networkChanged,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,

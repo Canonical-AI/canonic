@@ -14,8 +14,8 @@ const DEFAULTS = {
   defaultWorkspacePath: path.join(os.homedir(), "canonic"),
   telemetryEnabled: false,
   sharingDefaults: {
-    scope: "file", // none | file | directory | workspace
-    accessLevel: "read", // read | comment
+    scope: "file",        // file | directory | workspace
+    permission: "view",   // view | comment | copy
   },
 };
 

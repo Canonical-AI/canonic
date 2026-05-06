@@ -16,6 +16,23 @@
           </span>
         </div>
 
+        <div class="permission-row">
+          <label class="section-label">Permission</label>
+          <div class="permission-options">
+            <button
+              v-for="opt in permissionOptions"
+              :key="opt.value"
+              class="perm-btn"
+              :class="{ active: permission === opt.value }"
+              @click="permission = opt.value"
+            >
+              <component :is="opt.icon" :size="14" />
+              {{ opt.label }}
+            </button>
+          </div>
+          <p class="perm-hint">{{ currentPermissionHint }}</p>
+        </div>
+
         <div class="modal-actions" style="margin-top: 20px">
           <button class="btn-ghost" @click="$emit('close')">Cancel</button>
           <button class="btn-primary" @click="startShare" :disabled="loading">
@@ -39,6 +56,13 @@
           </p>
         </div>
 
+        <div class="share-meta">
+          <span class="meta-badge">
+            <component :is="activePermissionIcon" :size="12" />
+            {{ activePermissionLabel }}
+          </span>
+        </div>
+
         <div class="share-status">
           <span class="status-dot" />
           Serving on port {{ store.shareInfo.port }} · auto-stops if traffic spikes
@@ -55,20 +79,39 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAppStore } from '../../store'
-import { Info } from 'lucide-vue-next'
+import { Info, Eye, MessageSquare, Copy } from 'lucide-vue-next'
 
 const emit = defineEmits(['close'])
 const store = useAppStore()
 const loading = ref(false)
 const error = ref('')
 const copied = ref(false)
+const permission = ref(store.config?.sharingDefaults?.permission || 'view')
+
+const permissionOptions = [
+  { value: 'view',    label: 'View',    icon: Eye,           hint: 'Others can read the document.' },
+  { value: 'comment', label: 'Comment', icon: MessageSquare, hint: 'Others can read and leave comments.' },
+  { value: 'copy',    label: 'Copy',    icon: Copy,          hint: 'Others can read, comment, and copy the document to their workspace.' },
+]
+
+const currentPermissionHint = computed(() =>
+  permissionOptions.find(o => o.value === permission.value)?.hint ?? ''
+)
+
+const activePermissionIcon = computed(() =>
+  permissionOptions.find(o => o.value === store.shareInfo?.permission)?.icon ?? Eye
+)
+
+const activePermissionLabel = computed(() =>
+  permissionOptions.find(o => o.value === store.shareInfo?.permission)?.label ?? 'View'
+)
 
 async function startShare() {
   loading.value = true
   error.value = ''
-  const result = await store.startShare({})
+  const result = await store.startShare({ permission: permission.value })
   loading.value = false
   if (!result.success) {
     error.value = result.error || 'Failed to start sharing'
@@ -137,6 +180,52 @@ function openInBrowser() {
   font-size: 0.8125rem;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.permission-row {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.permission-options {
+  display: flex;
+  gap: 8px;
+}
+
+.perm-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.perm-btn:hover { background: var(--bg-hover); }
+.perm-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.perm-hint {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 .modal-actions {
@@ -233,6 +322,23 @@ function openInBrowser() {
 }
 .copy-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+.share-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
 
 .share-status {
   display: flex;

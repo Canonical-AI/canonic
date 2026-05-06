@@ -17,6 +17,12 @@ when complete move stuff to complete. its just that easy
 
 ## Features
 
+* [ ] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
+
+* [ ] **PR / review workflow** — after copying a peer's file and making changes, "Propose changes" diffs against peer's HEAD and POSTs to their share server; owner reviews in a new Review panel (accept/request changes/reject).
+
+* [ ] **Network safety setting** — toggle in Settings > Sharing: "Pause sharing when network changes" (on by default); protects against accidentally sharing on public networks like coffee shops.
+
 * [ ] **sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
 * \[ ] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.

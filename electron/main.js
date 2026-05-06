@@ -13,6 +13,100 @@ const apiServer = require("./api-server");
 let gitService;
 let searchService;
 let shareService;
+const discoveryService = require("./discovery");
+
+// In-memory list of currently discovered (online) peers
+const discoveredPeers = [];
+
+// ── Network watcher ────────────────────────────────────────────────────────
+let networkWatcherInterval = null;
+let lastNetworkInterface = null;
+
+function getActiveInterface() {
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === "IPv4" && !iface.internal) return name;
+    }
+  }
+  return null;
+}
+
+function startNetworkWatcher() {
+  if (networkWatcherInterval) return;
+  lastNetworkInterface = getActiveInterface();
+  networkWatcherInterval = setInterval(() => {
+    const current = getActiveInterface();
+    if (current !== lastNetworkInterface) {
+      lastNetworkInterface = current;
+      const stoppedPorts = shareService.stopAllShares();
+      stoppedPorts.forEach((port) => discoveryService.unpublishShare(port));
+      discoveredPeers.length = 0;
+      clearInterval(networkWatcherInterval);
+      networkWatcherInterval = null;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("share:network-changed");
+      }
+    }
+  }, 30000);
+}
+
+// ── Comment sync queue ─────────────────────────────────────────────────────
+const PEER_COMMENTS_DIR = path.join(os.homedir(), ".canonic", "comments", "peers");
+
+async function flushPeerComments() {
+  if (!fs.existsSync(PEER_COMMENTS_DIR)) return;
+  let fetch;
+  try {
+    fetch = (await import("node-fetch")).default;
+  } catch {
+    return;
+  }
+  const authorDirs = fs.readdirSync(PEER_COMMENTS_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+  for (const author of authorDirs) {
+    const peer = discoveredPeers.find((p) => p.name === author);
+    if (!peer) continue;
+
+    const authorDir = path.join(PEER_COMMENTS_DIR, author);
+    const files = fs.readdirSync(authorDir).filter((f) => f.endsWith(".json"));
+
+    for (const file of files) {
+      const filePath = path.join(authorDir, file);
+      let comments;
+      try {
+        comments = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      } catch {
+        continue;
+      }
+      const unsynced = comments.filter((c) => !c.synced);
+      if (!unsynced.length) continue;
+
+      const relPath = file.replace(/_/g, "/").replace(/\.json$/, "");
+      try {
+        const res = await fetch(
+          `http://${peer.host}:${peer.port}/comments?token=${peer.token}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filePath: relPath, comments: unsynced }),
+            timeout: 5000,
+          }
+        );
+        if (res.ok) {
+          const updated = comments.map((c) =>
+            unsynced.find((u) => u.id === c.id) ? { ...c, synced: true } : c
+          );
+          fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
+        }
+      } catch {
+        // retry next cycle
+      }
+    }
+  }
+}
 
 // Suppress harmless Chrome DevTools autofill protocol errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
@@ -167,6 +261,11 @@ function handleDeepLink(url) {
   }
 }
 
+app.on("will-quit", () => {
+  if (networkWatcherInterval) clearInterval(networkWatcherInterval);
+  discoveryService.stopDiscovery();
+});
+
 app.whenReady().then(async () => {
   log("[main] app ready");
   try {
@@ -251,6 +350,40 @@ function setupIpcHandlers() {
   shareService.emitter.on("stats", (stats) => {
     mainWindow?.webContents.send("share:stats", stats);
   });
+
+  // Forward incoming peer comments to renderer
+  shareService.emitter.on("comments:received", ({ filePath, comments }) => {
+    mainWindow?.webContents.send("comments:received", { filePath, comments });
+  });
+
+  // Start mDNS discovery and wire peer events
+  discoveryService.startDiscovery();
+
+  discoveryService.emitter.on("peer:found", (peer) => {
+    const idx = discoveredPeers.findIndex((p) => p.id === peer.id);
+    if (idx >= 0) discoveredPeers[idx] = peer;
+    else discoveredPeers.push(peer);
+
+    // Upsert to peers.json
+    const peers = fs.existsSync(PEERS_FILE)
+      ? JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"))
+      : [];
+    const pidx = peers.findIndex((p) => p.id === peer.id);
+    if (pidx >= 0) peers[pidx] = { ...peers[pidx], ...peer, lastSeen: Date.now() };
+    else peers.push({ ...peer, favorited: false, lastSeen: Date.now() });
+    fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
+
+    mainWindow?.webContents.send("peers:found", peer);
+  });
+
+  discoveryService.emitter.on("peer:lost", ({ id }) => {
+    const idx = discoveredPeers.findIndex((p) => p.id === id);
+    if (idx >= 0) discoveredPeers.splice(idx, 1);
+    mainWindow?.webContents.send("peers:lost", { id });
+  });
+
+  // Start 60s comment sync interval
+  setInterval(flushPeerComments, 60000);
 
   // --- Workspace ---
   ipcMain.handle("workspace:open-dialog", async () => {
@@ -522,11 +655,26 @@ function setupIpcHandlers() {
 
   // --- Sharing ---
   ipcMain.handle("share:start", async (_, workspacePath, filePath, options) => {
-    return shareService.startShare(workspacePath, filePath, options);
+    const result = await shareService.startShare(workspacePath, filePath, options);
+    if (result.success) {
+      const cfg = configService.read();
+      const author = cfg?.displayName || os.userInfo().username;
+      discoveryService.announceShare({
+        port: result.port,
+        token: result.token,
+        scope: options?.scope || "file",
+        permission: result.permission,
+        author,
+      });
+      startNetworkWatcher();
+    }
+    return result;
   });
 
   ipcMain.handle("share:stop", async (_, filePath) => {
-    return shareService.stopShare(filePath);
+    const result = shareService.stopShare(filePath);
+    if (result.success) discoveryService.unpublishShare(result.port);
+    return result;
   });
 
   ipcMain.handle("share:open-link", async (_, url) => {
@@ -537,12 +685,27 @@ function setupIpcHandlers() {
     return shareService.getStats(filePath);
   });
 
-  ipcMain.handle("share:start-workspace", async (_, workspacePath) => {
-    return shareService.startWorkspaceShare(workspacePath);
+  ipcMain.handle("share:start-workspace", async (_, workspacePath, options) => {
+    const result = await shareService.startWorkspaceShare(workspacePath, options);
+    if (result.success) {
+      const cfg = configService.read();
+      const author = cfg?.displayName || os.userInfo().username;
+      discoveryService.announceShare({
+        port: result.port,
+        token: result.token,
+        scope: "workspace",
+        permission: result.permission,
+        author,
+      });
+      startNetworkWatcher();
+    }
+    return result;
   });
 
   ipcMain.handle("share:stop-workspace", async () => {
-    return shareService.stopWorkspaceShare();
+    const result = shareService.stopWorkspaceShare();
+    if (result.success) discoveryService.unpublishShare(result.port);
+    return result;
   });
 
   ipcMain.handle("share:workspace-stats", async () => {
@@ -553,6 +716,62 @@ function setupIpcHandlers() {
   ipcMain.handle("peers:list", async () => {
     if (!fs.existsSync(PEERS_FILE)) return [];
     return JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"));
+  });
+
+  ipcMain.handle("peers:list-discovered", async () => {
+    return discoveredPeers;
+  });
+
+  ipcMain.handle("peers:favorite", async (_, peerId) => {
+    const peers = fs.existsSync(PEERS_FILE)
+      ? JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"))
+      : [];
+    const idx = peers.findIndex((p) => p.id === peerId);
+    if (idx >= 0) peers[idx].favorited = true;
+    fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
+    return { success: true };
+  });
+
+  ipcMain.handle("peers:unfavorite", async (_, peerId) => {
+    const peers = fs.existsSync(PEERS_FILE)
+      ? JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"))
+      : [];
+    const idx = peers.findIndex((p) => p.id === peerId);
+    if (idx >= 0) peers[idx].favorited = false;
+    fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
+    return { success: true };
+  });
+
+  ipcMain.handle("peers:fetch-manifest", async (_, peerId) => {
+    const peer = discoveredPeers.find((p) => p.id === peerId);
+    if (!peer) return { success: false, error: "Peer not online" };
+    try {
+      const { default: fetch } = await import("node-fetch");
+      const res = await fetch(
+        `http://${peer.host}:${peer.port}/manifest?token=${peer.token}`,
+        { timeout: 5000 }
+      );
+      if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+      return { success: true, ...(await res.json()) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("peers:open-peer-file", async (_, peerId, relPath) => {
+    const peer = discoveredPeers.find((p) => p.id === peerId);
+    if (!peer) return { success: false, error: "Peer not online" };
+    try {
+      const { default: fetch } = await import("node-fetch");
+      const res = await fetch(
+        `http://${peer.host}:${peer.port}/file?path=${encodeURIComponent(relPath)}&token=${peer.token}`,
+        { timeout: 8000, headers: { Accept: "application/json" } }
+      );
+      if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+      return { success: true, ...(await res.json()) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   });
 
   ipcMain.handle("peers:open-shared", async (_, url, token) => {

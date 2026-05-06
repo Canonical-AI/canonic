@@ -172,6 +172,9 @@ export const useAppStore = defineStore("app", () => {
     const cleanName = newName.endsWith(".md") ? newName : `${newName}.md`;
     const newPath = dir ? `${dir}/${cleanName}` : cleanName;
     await api.files.move(workspacePath.value, oldPath, newPath);
+    const oldDocId = oldPath.replace(/\//g, "_");
+    const newDocId = newPath.replace(/\//g, "_");
+    await api.comments.move(oldDocId, newDocId);
     if (currentFile.value === oldPath) {
       currentFile.value = newPath;
       if (docBranchMap.value[oldPath]) {

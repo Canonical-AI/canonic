@@ -108,14 +108,31 @@ contextBridge.exposeInMainWorld("canonic", {
     onStats: (cb) => ipcRenderer.on("share:stats", (_, stats) => cb(stats)),
     offStats: (cb) => ipcRenderer.removeListener("share:stats", cb),
     onOpenPeer: (cb) => ipcRenderer.on("share:open-peer", (_, data) => cb(data)),
-    startWorkspace: (workspacePath) => ipcRenderer.invoke("share:start-workspace", workspacePath),
+    startWorkspace: (workspacePath, options) => ipcRenderer.invoke("share:start-workspace", workspacePath, options),
     stopWorkspace: () => ipcRenderer.invoke("share:stop-workspace"),
     getWorkspaceStats: () => ipcRenderer.invoke("share:workspace-stats"),
+    onNetworkChanged: (cb) => ipcRenderer.on("share:network-changed", () => cb()),
+    offNetworkChanged: (cb) => ipcRenderer.removeListener("share:network-changed", cb),
   },
 
   // Peers
   peers: {
     list: () => ipcRenderer.invoke("peers:list"),
+    listDiscovered: () => ipcRenderer.invoke("peers:list-discovered"),
+    favorite: (id) => ipcRenderer.invoke("peers:favorite", id),
+    unfavorite: (id) => ipcRenderer.invoke("peers:unfavorite", id),
+    fetchManifest: (id) => ipcRenderer.invoke("peers:fetch-manifest", id),
+    openFile: (id, relPath) => ipcRenderer.invoke("peers:open-peer-file", id, relPath),
+    onFound: (cb) => ipcRenderer.on("peers:found", (_, peer) => cb(peer)),
+    offFound: (cb) => ipcRenderer.removeListener("peers:found", cb),
+    onLost: (cb) => ipcRenderer.on("peers:lost", (_, data) => cb(data)),
+    offLost: (cb) => ipcRenderer.removeListener("peers:lost", cb),
+  },
+
+  // Peer comments
+  peerComments: {
+    onReceived: (cb) => ipcRenderer.on("comments:received", (_, data) => cb(data)),
+    offReceived: (cb) => ipcRenderer.removeListener("comments:received", cb),
   },
 
   // Cleanup / Uninstall

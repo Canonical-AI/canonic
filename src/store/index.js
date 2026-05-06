@@ -58,6 +58,14 @@ export const useAppStore = defineStore("app", () => {
   const agentSession = ref(null);   // null | { sessionId, agentName, file, startedAt }
   const actionPickerOpen = ref(false);
 
+  // Peer discovery state
+  const discoveredPeers = ref([]);
+  const favoritedPeerIds = reactive(new Set());
+  const favoritedPeers = computed(() =>
+    discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
+  );
+  const peerFileContent = ref(null); // { peer, relPath, content } | null
+
   const api = window.canonic;
 
   // Register agent session IPC listeners once
@@ -72,6 +80,19 @@ export const useAppStore = defineStore("app", () => {
   api.share.onStats((stats) => {
     shareStatsByFile[stats.filePath] = { reads: stats.reads, connected: stats.connected };
   });
+
+  // Wire peer discovery IPC listeners
+  if (api.peers.onFound) {
+    api.peers.onFound((peer) => {
+      const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
+      if (idx >= 0) discoveredPeers.value[idx] = peer;
+      else discoveredPeers.value.push(peer);
+    });
+    api.peers.onLost(({ id }) => {
+      const idx = discoveredPeers.value.findIndex((p) => p.id === id);
+      if (idx >= 0) discoveredPeers.value.splice(idx, 1);
+    });
+  }
 
 
   // Active branch for the current document (defaults to 'main' if not in map)
@@ -158,6 +179,10 @@ export const useAppStore = defineStore("app", () => {
       await refreshBranches();
       await loadDocBranchMap();
       await loadTrash();
+      if (api.peers?.list) {
+        const persistedPeers = await api.peers.list()
+        persistedPeers.forEach(p => { if (p.favorited) favoritedPeerIds.add(p.id) })
+      }
       await logEvent("workspace:open", { template });
     } finally {
       isLoading.value = false;
@@ -798,6 +823,26 @@ export const useAppStore = defineStore("app", () => {
   function openActionPicker() { actionPickerOpen.value = true }
   function closeActionPicker() { actionPickerOpen.value = false }
 
+  async function favoritePeer(id) {
+    await api.peers.favorite(id);
+    favoritedPeerIds.add(id);
+  }
+
+  async function unfavoritePeer(id) {
+    await api.peers.unfavorite(id);
+    favoritedPeerIds.delete(id);
+  }
+
+  function openPeerFile({ peer, relPath, content }) {
+    peerFileContent.value = { peer, relPath, content };
+  }
+
+  async function copyPeerFileToWorkspace({ relPath, content }) {
+    if (!workspacePath.value) return;
+    await api.files.write(workspacePath.value, relPath, content);
+    await refreshFiles();
+  }
+
   return {
     workspacePath,
     workspaceName,
@@ -882,5 +927,13 @@ export const useAppStore = defineStore("app", () => {
     addAgentComment,
     openActionPicker,
     closeActionPicker,
+    discoveredPeers,
+    favoritedPeerIds,
+    favoritedPeers,
+    peerFileContent,
+    favoritePeer,
+    unfavoritePeer,
+    openPeerFile,
+    copyPeerFileToWorkspace,
   };
 });

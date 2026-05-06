@@ -1,142 +1,157 @@
+<div align="center">
+
+<img src="build/icons/icon.png" alt="Canonic" width="80" height="80" />
+
 # Canonic
 
-A local-first markdown document editor with Git versioning, built for seamless documentation. Canonic features a built-in AI assistant to help you think through requirements and ideas, without writing them for you. designed for people who want to do their own thinking first before building. inspire by the beauty of git, the tactileness of Zed and Atom before it, the sharing p2p sharing of local send.
+**Local-first document editor for product teams — powered by Git.**
+
+[Download](#installation) · [Docs](docs/) · [Report a Bug](https://github.com/Canonical-AI/canonic/issues)
+
+---
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.0.2--alpha-orange.svg)](package.json)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#installation)
+
+</div>
+
+---
+
+> **Write first. Build second.**  
+> Canonic is a markdown editor that keeps your product artifacts organized, versioned, and always on your machine — with an AI assistant designed to help you *think*, not to think for you.
+
+---
+
+<div align="center">
+
+![Canonic Editor](docs/screenshot.png)
+
+</div>
+
+---
+
+## Why Canonic
+
+Product work lives in too many places. Strategy docs in Notion, specs in Confluence, decisions in Slack threads, and history nowhere. Canonic brings it together in one local-first workspace — backed by Git so nothing is ever lost.
+
+| Without Canonic | With Canonic |
+|---|---|
+| Scattered artifacts across tools | Everything in one workspace |
+| No version history on decisions | Full Git history on every document |
+| AI that writes for you | AI that helps you think |
+| Lock-in to cloud providers | Your files, on your machine |
+| "Final\_v2\_FINAL.doc" chaos | Clean branches and checkpoints |
+
+---
 
 ## Features
 
-* **Local-first Architecture**: All your files stay on your machine.
+### Local-First, Always Yours
+All documents live on your machine as plain markdown files. No sync issues, no subscriptions required, no vendor lock-in. Open your workspace in any text editor — Canonic just makes it better.
 
-* **Git Version Control**: Document versioning built-in. Every workspace is a Git repository, allowing branching, history, and conflict resolution directly within the app.
+### Git-Powered Versioning
+Every workspace is a Git repository. Save checkpoints, branch per document, view full history, and resolve conflicts — without ever touching a terminal. Drop Canonic on an existing repo and it adapts automatically.
 
-* **AI Assistant**: Context-aware AI assistant designed to help you brainstorm and review, configurable with different models (requires an LLM API key).
+### AI That Respects Your Thinking
+The built-in assistant is configured to *brainstorm and review*, not to write for you. It asks questions, surfaces gaps, and helps you sharpen ideas — designed for people who want to do their own thinking before they build.
 
-* **Workspace Templates**: Start with a blank canvas or jumpstart your projects with structured templates like the PM Framework.
+### Structured for Product Work
+Start from a blank canvas or use the **PM Framework** template — structured around the documents that actually matter: vision, personas, features, decisions, retros, and GTM.
 
-* **Sharing Scope & Permissions**: Share securely via token-secured links with granular access controls (file, directory, or workspace level).
+### Inline Comments & Collaboration
+Anchor comments to specific text selections. Share workspaces via token-secured links with granular access controls at the file, directory, or workspace level.
 
-* **Inline Comments**: Anchor comments to specific document selections to collaborate effectively.
+### Works With Your Existing Repos
+Open any folder with a `.git` directory — Canonic detects it, skips re-initialization, shows real commit history, and commits alongside your other tools without interfering.
 
-* **Featurefull editor**: allows for refs, tags, tracking, and other fun stuff help you keep track of interdependencies
-
-## Tech Stack
-
-* **Framework:** [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/)
-
-* **Desktop Environment:** [Electron](https://www.electronjs.org/)
-
-* **Editor:** [Milkdown](https://milkdown.dev/)
-
-* **Version Control:** [isomorphic-git](https://isomorphic-git.org/)
-
-* **State Management:** [Pinia](https://pinia.vuejs.org/)
-
-* **Search:** [FlexSearch](https://github.com/nextapps-de/flexsearch)
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-* [Node.js](https://nodejs.org/) (v16+)
+- [Node.js](https://nodejs.org/) v16+
+- npm
 
-* npm or yarn
+### Run Locally
 
-### Installation
+```bash
+git clone https://github.com/Canonical-AI/canonic.git
+cd canonic
+npm install
+npm run dev
+```
 
-1. Clone the repository
-
-   ```bash
-   git clone <repository-url>
-   cd canonic-local
-   ```
-
-2. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-3. Run the application in development mode
-
-   ```bash
-   npm run dev
-   ```
-
-   This will start both the Vite development server and the Electron application concurrently.
+This starts both the Vite dev server and the Electron window.
 
 ### Build for Production
-
-To create a production-ready application executable:
 
 ```bash
 npm run build
 ```
 
-The output will be placed in the `dist-electron` directory.
+Output goes to `dist-electron/`. Canonic uses [electron-builder](https://www.electron.build/) and distributes via GitHub Releases with automatic background updates.
 
-## Deployment & Updates
+---
 
-Canonic is packaged and distributed using [electron-builder](https://www.electronjs.org/docs/latest/tutorial/deployment).
+## Tech Stack
 
-### Deployment Flow
+| Layer | Technology |
+|---|---|
+| UI Framework | [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/) |
+| Desktop Shell | [Electron](https://www.electronjs.org/) |
+| Editor | [Milkdown](https://milkdown.dev/) |
+| Version Control | [isomorphic-git](https://isomorphic-git.org/) |
+| State Management | [Pinia](https://pinia.vuejs.org/) |
+| Search | [FlexSearch](https://github.com/nextapps-de/flexsearch) |
+| AI | OpenRouter (OpenAI-compatible, multi-model) |
 
-1. **Build**: Run `npm run build` to generate the production-ready assets and the Electron executable.
-2. **Publish**: The CI/CD pipeline (or manual run) pushes the generated artifacts to **GitHub Releases** as defined in `package.json`.
+---
 
-   * Provider: `github`
+## Architecture
 
-   * Repository: `Canonical-AI/canonic`
+```
+canonic/
+├── electron/          # Main process, IPC handlers, git operations
+├── src/               # Vue 3 frontend (renderer process)
+│   ├── components/    # UI components
+│   ├── stores/        # Pinia state management
+│   └── composables/   # Shared logic
+├── docs/              # Project documentation and specs
+└── public/            # Static assets
+```
 
-### Update Mechanism
+**Key design decisions:**
+- Two-process Electron architecture — renderer never touches the filesystem directly
+- Per-document Git branching — each doc lives on its own branch, merged back on save
+- Sidecar storage — comments and config live in `~/.canonic/`, separate from workspace files
+- IPC-first — all file, git, and AI operations go through typed IPC handlers
 
-Updates are handled automatically via [electron-updater](https://www.electronjs.org/docs/latest/tutorial/updates).
+---
 
-* **Check on Launch**: Every time the app starts, it checks for a new version on GitHub.
+## Configuration
 
-* **User Notification**: If a new version is found and downloaded, a banner appears at the bottom of the screen prompting the user to "Restart & Update."
+User preferences and AI API keys are stored in `~/.canonic/config.json`. Canonic supports any OpenAI-compatible provider via [OpenRouter](https://openrouter.ai/).
 
-* **Silent Backgrounding**: Downloads happen in the background to avoid interrupting the user's flow.
+Set your API key in **Settings → AI** within the app.
 
-### Planned Improvements
+---
 
-* **Interactive Check on Open**: Instead of just silent checks, explicitly prompt the user if an update is found immediately after launch.
+## Contributing
 
-* **Periodic Checks**: Regularly check for updates while the app is open (e.g., every 4 hours).
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, branching conventions, and PR guidelines.
 
-* **Ask Before Close**: If an update is ready but hasn't been installed, prompt the user to "Update and Close" when they try to exit the app.
+---
 
-* **Manual Check**: Add a "Check for Updates" button in the Settings menu.
+## License
 
-* **Download Progress**: Show a progress bar for background downloads to keep the user informed.
+MIT — see [LICENSE](LICENSE).
 
-## Project Structure
+---
 
-* `src/` - Vue frontend source code
+<div align="center">
 
-* `electron/` - Electron main process and IPC handlers
+Built with care for people who think before they build.
 
-* `docs/` - Project documentation and requirements (e.g., `REQUIREMENTS.md`)
-
-* `public/` - Static assets
-
-## Architecture Notes
-
-* Configuration, such as user preferences and API keys, is stored locally in `~/.canonic/config.json`.
-
-* Comments are persisted locally at `~/.canonic/comments/`.
-
-* Git commands are executed transparently via `isomorphic-git`, meaning no terminal interaction is required for typical version control workflows.
-
-## Opening existing git repos
-
-If you open a folder that already has a `.git` directory — for example, a GitHub repo you've cloned to edit its markdown documentation — Canonic automatically detects this and adapts:
-
-- **No re-initialization.** Canonic skips `git init` and uses the existing repo as-is.
-- **Real history.** The History panel shows commits from the actual repo log, not just Canonic-created ones.
-- **Workspace branch in sidebar.** The current git branch is shown between the file list header and your documents. Click it to switch branches.
-- **Per-document branching is hidden.** Canonic's fork/merge per-doc workflow is hidden to avoid confusion with the repo's own branch model.
-- **Commits land in the real repo.** Checkpoints you save from Canonic appear in `git log` alongside commits from other tools.
-- **No accidental bundling.** Canonic commits only stage the markdown file being saved — pre-staged changes from outside Canonic are preserved but not included.
-
-## Documentation
-
-For a detailed breakdown of product requirements, architecture, and testing strategy, refer to [docs/REQUIREMENTS.md](./docs/REQUIREMENTS.md).
+</div>

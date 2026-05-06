@@ -52,7 +52,7 @@ txt: {
 
 ### `main.js` wiring
 
-On `peer:found`: persist to `peers.json` (upsert by `author+host` key), then push `peers:found` IPC event to renderer with the full peer object.
+On `peer:found`: persist to `peers.json` (upsert by `author+host` key), then push `peers:found` IPC event to renderer with the full peer object. If the same author has multiple simultaneous active shares (e.g. a workspace share and a file share), their service records are all stored but grouped under one peer card in the UI by `author+host`. The most recently seen token is used for manifest fetches; all active share ports are tracked so `unpublishShare` only removes the peer card when all their records are gone.
 
 On `peer:lost`: push `peers:lost` IPC event with `{ id }` so the renderer marks the peer offline.
 

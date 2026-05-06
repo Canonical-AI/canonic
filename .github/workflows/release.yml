@@ -11,7 +11,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  release:
+  release-mac:
     permissions:
       contents: write
     runs-on: macos-latest
@@ -32,8 +32,8 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build and Publish
-        run: npm run build -- --publish always
+      - name: Build and Publish (mac)
+        run: npm run build:mac -- --publish always
         env:
           DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -42,3 +42,57 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+  release-win:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build and Publish (win)
+        run: npm run build:win -- --publish always
+        env:
+          DEBUG: "electron-builder"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-linux:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build and Publish (linux)
+        run: npm run build:linux -- --publish always
+        env:
+          DEBUG: "electron-builder"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

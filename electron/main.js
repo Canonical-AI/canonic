@@ -8,6 +8,7 @@ const crypto = require("crypto");
 const configService = require("./config");
 const versionsService = require("./versions");
 const apiServer = require("./api-server");
+const { startWatcher, stopWatcher, getIndex } = require("./fileIndex");
 
 // Services loaded lazily in setupIpcHandlers to ensure logger is ready
 let gitService;
@@ -212,6 +213,7 @@ function handleDeepLink(url) {
 app.on("will-quit", () => {
   if (networkWatcherInterval) clearInterval(networkWatcherInterval);
   discoveryService.stopDiscovery();
+  stopWatcher();
 });
 
 app.whenReady().then(async () => {
@@ -346,7 +348,11 @@ function setupIpcHandlers() {
     "workspace:init",
     async (_, workspacePath, template = "blank") => {
       try {
-        return await gitService.initWorkspace(workspacePath, template);
+        const result = await gitService.initWorkspace(workspacePath, template);
+        startWatcher(workspacePath, (index) => {
+          mainWindow?.webContents.send('files:index-update', index)
+        })
+        return result;
       } catch (err) {
         return { error: err.message, path: workspacePath };
       }
@@ -359,6 +365,8 @@ function setupIpcHandlers() {
   });
 
   // --- Files ---
+  ipcMain.handle("files:index", () => getIndex())
+
   ipcMain.handle("files:list", async (_, workspacePath) => {
     return gitService.listFiles(workspacePath);
   });

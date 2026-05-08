@@ -17,7 +17,8 @@
           comment.resolved && 'resolved',
           comment.isAgent && 'agent-comment',
           comment.pending && 'pending-comment',
-          comment.isOwn && 'own-comment'
+          comment.isOwn && 'own-comment',
+          comment.private && 'private-comment'
         ]"
       >
         <div class="comment-header">
@@ -25,7 +26,8 @@
             {{ comment.isAgent ? `${comment.agentName || 'Agent'} · suggestion` : comment.author }}
           </span>
           <span class="comment-meta">
-            <span v-if="comment.pending" class="sync-status pending">⏳ pending</span>
+            <span v-if="comment.private" class="sync-status private">🔒 private</span>
+            <span v-else-if="comment.pending" class="sync-status pending">⏳ pending</span>
             <span v-else-if="comment.synced === false" class="sync-status pending">⏳ pending</span>
             <span v-else-if="comment.synced === true" class="sync-status sent">✓ sent</span>
             <span v-else class="comment-time">{{ formatTime(comment.createdAt) }}</span>
@@ -150,6 +152,11 @@ function truncate(text, len) {
   border-left: 3px solid var(--accent);
 }
 
+.comment-card.private-comment {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-surface));
+}
+
 .comment-card.pending-comment {
   opacity: 0.7;
 }
@@ -182,6 +189,7 @@ function truncate(text, len) {
 }
 .sync-status.pending { color: var(--text-muted); }
 .sync-status.sent { color: var(--success, #22c55e); }
+.sync-status.private { color: var(--accent); }
 
 .quoted-text {
   font-size: 0.8rem;

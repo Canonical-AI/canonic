@@ -138,6 +138,30 @@ describe('flushPeerComments — only syncs when peer is online', () => {
     expect(saved[0].synced).toBe(false)
   })
 
+  it('skips private comments even when peer is online', async () => {
+    const share = await shareService.startShare(workspaceDir, 'notes.md', { permission: 'comment' })
+    const author = share.author ?? 'private-author'
+
+    writeComments(peerCommentsDir, author, 'notes.md.json', [
+      { id: 'c1', text: 'Private note', synced: false, private: true, anchor: {} },
+      { id: 'c2', text: 'Public comment', synced: false, anchor: {} }
+    ])
+
+    const onlinePeers = [{
+      name: author,
+      host: '127.0.0.1',
+      port: share.port,
+      token: share.token
+    }]
+
+    await flushPeerComments(onlinePeers, peerCommentsDir)
+    shareService.stopShare('notes.md')
+
+    const saved = readComments(peerCommentsDir, author, 'notes.md.json')
+    expect(saved.find(c => c.id === 'c1').synced).toBe(false)  // private — never synced
+    expect(saved.find(c => c.id === 'c2').synced).toBe(true)   // public — synced
+  })
+
   it('only POSTs the unsynced subset — not already-synced comments', async () => {
     const share = await shareService.startShare(workspaceDir, 'notes.md', { permission: 'comment' })
     const author = share.author ?? 'mixed-author'

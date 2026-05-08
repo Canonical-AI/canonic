@@ -50,7 +50,7 @@ async function flushPeerComments(onlinePeers, commentsDir) {
         continue
       }
 
-      const unsynced = comments.filter(c => !c.synced)
+      const unsynced = comments.filter(c => !c.synced && !c.private)
       if (!unsynced.length) continue
 
       const relPath = file.replace(/_/g, '/').replace(/\.json$/, '')

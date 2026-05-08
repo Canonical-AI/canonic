@@ -64,6 +64,17 @@
   "comments": {
     "Vision/product-vision.md": [
       {
+        "id": "demo-own-private-1",
+        "author": "You",
+        "isOwn": true,
+        "private": true,
+        "text": "Ask Priya whether 200-person company is really the right upper bound — feels high for the solo PM story.",
+        "anchor": { "quotedText": "B2B product managers at 20–200 person companies who ship software" },
+        "createdAt": "2026-05-06T10:15:00.000Z",
+        "synced": null,
+        "isDemo": true
+      },
+      {
         "id": "demo-priya-1",
         "author": "Priya Nair",
         "authorInitials": "PN",

@@ -56,7 +56,7 @@
         ref="commentTextareaEl"
         v-model="commentInput.text"
         class="comment-textarea"
-        :placeholder="`Comment for ${peer.name}…`"
+        :placeholder="commentInput.isPrivate ? 'Private note (only visible to you)…' : `Comment for ${peer.name}…`"
         rows="3"
         @keydown.ctrl.enter="submitComment"
         @keydown.meta.enter="submitComment"
@@ -64,6 +64,16 @@
       />
       <div class="comment-input-actions">
         <span class="comment-input-hint">⌘↩ to submit</span>
+        <button
+          class="comment-private-btn"
+          :class="{ active: commentInput.isPrivate }"
+          @click="commentInput.isPrivate = !commentInput.isPrivate"
+          :title="commentInput.isPrivate ? 'Private — only you can see this' : 'Make private'"
+        >
+          <Lock v-if="commentInput.isPrivate" :size="12" />
+          <LockOpen v-else :size="12" />
+          {{ commentInput.isPrivate ? 'Private' : 'Visible' }}
+        </button>
         <button class="comment-cancel-btn" @click="cancelComment">Cancel</button>
         <button class="comment-submit-btn" @click="submitComment" :disabled="!commentInput.text.trim()">Comment</button>
       </div>
@@ -72,11 +82,11 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick } from 'vue'
+import { computed, ref, nextTick, watch } from 'vue'
 import { marked } from 'marked'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppStore } from '../../store'
-import { Eye, MessageSquare, MessageSquarePlus, Copy, X } from 'lucide-vue-next'
+import { Eye, MessageSquare, MessageSquarePlus, Copy, X, Lock, LockOpen } from 'lucide-vue-next'
 
 const store = useAppStore()
 const bodyEl = ref(null)
@@ -139,8 +149,62 @@ function onBodyClick() {
   }
 }
 
+// ── Comment highlights ────────────────────────────────────────────────────────
+
+watch(
+  [renderedContent, () => store.peerFileComments],
+  async () => { await nextTick(); highlightAnchors() },
+  { deep: true }
+)
+
+function highlightAnchors() {
+  const prose = bodyEl.value?.querySelector('.viewer-prose')
+  if (!prose) return
+
+  // Remove old highlights first
+  prose.querySelectorAll('mark.comment-anchor').forEach(mark => {
+    const parent = mark.parentNode
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark)
+    parent.removeChild(mark)
+  })
+
+  const quotedTexts = [...new Set(
+    store.peerFileComments
+      .map(c => c.anchor?.quotedText)
+      .filter(t => t?.trim())
+  )]
+  for (const qt of quotedTexts) highlightTextInElement(prose, qt)
+}
+
+function highlightTextInElement(root, searchText) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const nodes = []
+  let node
+  while ((node = walker.nextNode())) nodes.push(node)
+
+  for (const textNode of nodes) {
+    const idx = textNode.textContent.indexOf(searchText)
+    if (idx === -1) continue
+
+    const before = textNode.textContent.slice(0, idx)
+    const after = textNode.textContent.slice(idx + searchText.length)
+    const mark = document.createElement('mark')
+    mark.className = 'comment-anchor'
+    mark.textContent = searchText
+
+    const parent = textNode.parentNode
+    if (before) parent.insertBefore(document.createTextNode(before), textNode)
+    parent.insertBefore(mark, textNode)
+    if (after) parent.insertBefore(document.createTextNode(after), textNode)
+    parent.removeChild(textNode)
+    break // first occurrence only
+  }
+}
+
+// ── Comment input ─────────────────────────────────────────────────────────────
+
 async function openCommentInput() {
-  commentInput.value = { visible: true, text: '' }
+  commentInput.value = { visible: true, text: '', isPrivate: false }
   await nextTick()
   commentTextareaEl.value?.focus()
 }
@@ -154,14 +218,16 @@ async function submitComment() {
   const text = commentInput.value.text.trim()
   if (!text) return
 
+  const isPrivate = commentInput.value.isPrivate
   const comment = {
     id: uuidv4(),
     author: store.config?.displayName || 'You',
     isOwn: true,
+    private: isPrivate,
     text,
     anchor: { quotedText: selectionPopover.value.text },
     createdAt: new Date().toISOString(),
-    synced: false
+    synced: isPrivate ? null : false   // private comments are never synced
   }
 
   store.addPeerComment(comment)
@@ -169,22 +235,25 @@ async function submitComment() {
   store.rightPanelTab = 'comments'
   store.rightPanelCollapsed = false
 
-  if (!store.isDemoMode && peer.value.host && peer.value.port) {
-    try {
-      const res = await fetch(
-        `http://${peer.value.host}:${peer.value.port}/comments?token=${peer.value.token}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filePath: relPath.value, comments: [comment] })
-        }
-      )
-      if (res.ok) store.updatePeerComment(comment.id, { synced: true })
-    } catch {
-      // Will be retried by flushPeerComments interval
+  // Private comments stay local — never synced
+  if (!isPrivate) {
+    if (!store.isDemoMode && peer.value.host && peer.value.port) {
+      try {
+        const res = await fetch(
+          `http://${peer.value.host}:${peer.value.port}/comments?token=${peer.value.token}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: relPath.value, comments: [comment] })
+          }
+        )
+        if (res.ok) store.updatePeerComment(comment.id, { synced: true })
+      } catch {
+        // Will be retried by flushPeerComments interval
+      }
+    } else if (store.isDemoMode) {
+      setTimeout(() => store.updatePeerComment(comment.id, { synced: true }), 800)
     }
-  } else if (store.isDemoMode) {
-    setTimeout(() => store.updatePeerComment(comment.id, { synced: true }), 800)
   }
 
   cancelComment()
@@ -342,6 +411,15 @@ async function copyToWorkspace() {
 .viewer-prose :deep(hr) { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 .viewer-prose :deep(a) { color: var(--accent); }
 
+/* Comment anchor highlights */
+.viewer-prose :deep(mark.comment-anchor) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: default;
+}
+
 /* Selection popover */
 .comment-popover {
   position: absolute;
@@ -417,6 +495,26 @@ async function copyToWorkspace() {
 .comment-input-actions { display: flex; align-items: center; gap: 6px; }
 
 .comment-input-hint { flex: 1; font-size: 0.6875rem; color: var(--text-muted); }
+
+.comment-private-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.comment-private-btn:hover { background: var(--bg-hover); }
+.comment-private-btn.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--accent);
+}
 
 .comment-cancel-btn {
   padding: 4px 10px;

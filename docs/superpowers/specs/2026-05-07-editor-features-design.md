@@ -45,14 +45,28 @@ Allow users to reference other docs in the workspace using `[[doc-name]]` syntax
 
 ### Markdown Syntax
 ```
-[[doc-name]]
+[[doc-name]]              — link to a doc
+[[doc-name#heading]]      — future: link to a specific heading
+[[doc-name#L23-L55]]      — future: link to a line range
 ```
 Stored as-is in the markdown file. No frontmatter or IDs.
 
-### Resolution
-At render time, the node view scans all files in the current workspace to resolve `doc-name` → file path. Resolution is purely by filename (without extension):
-- `[[design]]` matches `design.md` anywhere in the workspace tree; shortest path wins, then alphabetical if tied (so root-level `design.md` beats `folder/design.md`)
-- No rename tracking — if the file was renamed or deleted inside or outside the app, the reference simply appears broken
+### Node Schema
+```js
+attrs: {
+  name:   { default: '' },   // e.g. 'product-vision'
+  anchor: { default: null }  // e.g. '#risks' | '#L23-L55' | null
+}
+```
+`anchor` is parsed and stored from day one but ignored at navigation time in Phase 1. Phase 2 (future) will scroll to the heading or highlight the line range on open. No migration needed — the markdown on disk is already forward-compatible.
+
+### Resolution — File Index
+Resolution uses a pre-built in-memory index rather than scanning at render time:
+- On workspace open, the main process builds `{ 'doc-name': 'relative/path.md' }` by walking all `.md` files
+- A `chokidar` watcher on the workspace directory keeps the index current for external changes (Finder, Terminal, git operations)
+- The index is exposed to the renderer via `api.files.getIndex()` + `api.files.onIndexUpdate(cb)` IPC
+- The store holds a reactive copy (`fileIndex`) — wiki-link chips resolve against it and update live
+- Shortest path wins when a name matches multiple files (root-level `design.md` beats `folder/design.md`)
 
 ### Chip States
 | State | Condition | Color | Click behavior |
@@ -76,20 +90,26 @@ Green and broken use the same creation flow. The distinction is visual only — 
 4. Open the newly created file
 
 ### Architecture
-- **Remark plugin**: custom plugin that parses `[[name]]` into an AST node (using `remark-wiki-link` package or a small custom plugin)
-- **Milkdown node**: `$node('wiki-link')` with an `attrs.name` field
+- **Remark plugin**: custom plugin that parses `[[name]]` and `[[name#anchor]]` into AST nodes
+- **Milkdown node**: `$node('wiki-link')` with `name` and `anchor` attrs
 - **Node view**: Vue component (`WikiLinkChip.vue`) rendered via `@prosemirror-adapter/vue`
 - **Autocomplete tooltip**: Vue component (`WikiLinkTooltip.vue`) triggered on `[[` input
+- **File index**: maintained in main process via `chokidar`, synced to store via IPC
 
 ### Files
 - `src/components/editor/wiki-link/index.js` — remark plugin + Milkdown node definition
 - `src/components/editor/wiki-link/WikiLinkChip.vue` — chip renderer (three states)
 - `src/components/editor/wiki-link/WikiLinkTooltip.vue` — autocomplete dropdown
 - `src/components/editor/MilkdownEditor.vue` — register plugins + node view
+- `electron/fileIndex.js` — chokidar watcher + index build/update logic
+- `electron/main.js` — wire IPC handlers for `getIndex` / `onIndexUpdate`
+- `electron/preload.js` — expose `api.files.getIndex` + `api.files.onIndexUpdate`
+- `src/store/index.js` — add reactive `fileIndex` + IPC subscription
 
 ### Packages
 - `remark-wiki-link` — parses `[[name]]` syntax (or hand-rolled ~20 line remark plugin)
 - `@prosemirror-adapter/vue` — renders Vue components as ProseMirror node views
+- `chokidar` — file system watcher for external change detection
 
 ---
 

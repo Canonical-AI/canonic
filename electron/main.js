@@ -104,7 +104,7 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.loadURL(process.env.VITE_DEV_URL || "http://localhost:5173");
     // DevTools can be opened manually with Cmd+Option+I / F12
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));

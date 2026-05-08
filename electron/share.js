@@ -359,22 +359,24 @@ function renderBrowsePage(author, files, token, baseUrl) {
 </html>`
 }
 
-async function startWorkspaceShare(workspacePath) {
+async function startWorkspaceShare(workspacePath, options = {}) {
   if (activeShares.has(WORKSPACE_KEY)) {
     const s = activeShares.get(WORKSPACE_KEY)
     const lanIP = getLanIP()
-    return { success: true, token: s.token, localUrl: `http://${lanIP}:${s.port}/browse?token=${s.token}`, port: s.port, reads: s.reads }
+    return { success: true, token: s.token, localUrl: `http://${lanIP}:${s.port}/browse?token=${s.token}`, port: s.port, reads: s.reads, permission: s.permission }
   }
 
   const token = generateToken()
   const PORT = 3800 + Math.floor(Math.random() * 200)
+  const permission = options.permission || 'view'
   const ignore = loadIgnorePatterns(workspacePath)
   const author = os.userInfo().username
 
-  const share = { reads: 0, token, port: PORT, wss: null, server: null, heartbeat: null, limiter: null }
+  const share = { reads: 0, token, port: PORT, permission, wss: null, server: null, heartbeat: null, limiter: null }
 
   const app = express()
   app.set('trust proxy', true)
+  app.use(express.json())
 
   const limiter = new RateLimiter({
     maxPerSecond: 10, maxPerMinute: 1000, emaThreshold: 20,
@@ -384,6 +386,27 @@ async function startWorkspaceShare(workspacePath) {
   app.use(limiter.middleware())
 
   app.get('/health', (_, res) => res.json({ ok: true }))
+
+  app.post('/comments', (req, res) => {
+    if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
+    if (permission === 'view') return res.status(403).json({ error: 'Comments not allowed' })
+
+    const { filePath: commentFilePath, comments } = req.body
+    if (!commentFilePath || !Array.isArray(comments)) return res.status(400).json({ error: 'Invalid payload' })
+
+    const commentsFile = path.join(os.homedir(), '.canonic', 'comments',
+      `${commentFilePath.replace(/\//g, '_')}.json`)
+    const existing = fs.existsSync(commentsFile)
+      ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8'))
+      : []
+    const existingIds = new Set(existing.map(c => c.id))
+    const merged = [...existing, ...comments.filter(c => !existingIds.has(c.id))]
+    fs.mkdirSync(path.dirname(commentsFile), { recursive: true })
+    fs.writeFileSync(commentsFile, JSON.stringify(merged, null, 2), 'utf-8')
+
+    emitter.emit('comments:received', { filePath: commentFilePath, comments })
+    res.json({ ok: true })
+  })
 
   // HTML workspace browser
   app.get('/browse', (req, res) => {
@@ -453,18 +476,19 @@ async function startWorkspaceShare(workspacePath) {
   activeShares.set(WORKSPACE_KEY, share)
 
   const lanIP = getLanIP()
-  return { success: true, token, localUrl: `http://${lanIP}:${PORT}/browse?token=${token}`, port: PORT, reads: 0 }
+  return { success: true, token, localUrl: `http://${lanIP}:${PORT}/browse?token=${token}`, port: PORT, reads: 0, permission }
 }
 
 function stopWorkspaceShare() {
   const share = activeShares.get(WORKSPACE_KEY)
   if (!share) return { success: false, error: 'No active workspace share' }
+  const port = share.port
   clearInterval(share.heartbeat)
   share.limiter.destroy()
   share.wss.close()
   share.server.close()
   activeShares.delete(WORKSPACE_KEY)
-  return { success: true }
+  return { success: true, port }
 }
 
 async function startShare(workspacePath, filePath, options = {}) {
@@ -488,14 +512,16 @@ async function startShare(workspacePath, filePath, options = {}) {
   const token = generateToken()
   const PORT = 3800 + Math.floor(Math.random() * 200)
   const scope = options.scope || 'file'
+  const permission = options.permission || 'view'
   const ignore = loadIgnorePatterns(workspacePath)
   const author = os.userInfo().username
 
   // Stub share object so emitStats can reference it inside closures
-  const share = { reads: 0, token, port: PORT, wss: null, server: null, heartbeat: null, limiter: null }
+  const share = { reads: 0, token, port: PORT, permission, wss: null, server: null, heartbeat: null, limiter: null }
 
   const app = express()
   app.set('trust proxy', true)
+  app.use(express.json())
 
   // Rate limiter — auto-stops share if EMA exceeds 20 req/s
   const limiter = new RateLimiter({
@@ -513,6 +539,28 @@ async function startShare(workspacePath, filePath, options = {}) {
 
   // ── /health — no auth ────────────────────────────────────────────────────
   app.get('/health', (_, res) => res.json({ ok: true }))
+
+  // ── /comments — receive synced comments from a peer ──────────────────────
+  app.post('/comments', (req, res) => {
+    if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
+    if (permission === 'view') return res.status(403).json({ error: 'Comments not allowed' })
+
+    const { filePath: commentFilePath, comments } = req.body
+    if (!commentFilePath || !Array.isArray(comments)) return res.status(400).json({ error: 'Invalid payload' })
+
+    const commentsFile = path.join(os.homedir(), '.canonic', 'comments',
+      `${commentFilePath.replace(/\//g, '_')}.json`)
+    const existing = fs.existsSync(commentsFile)
+      ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8'))
+      : []
+    const existingIds = new Set(existing.map(c => c.id))
+    const merged = [...existing, ...comments.filter(c => !existingIds.has(c.id))]
+    fs.mkdirSync(path.dirname(commentsFile), { recursive: true })
+    fs.writeFileSync(commentsFile, JSON.stringify(merged, null, 2), 'utf-8')
+
+    emitter.emit('comments:received', { filePath: commentFilePath, comments })
+    res.json({ ok: true })
+  })
 
   // ── /doc — main endpoint; HTML for browsers, JSON for Canonic app ─────────
   app.get('/doc', (req, res) => {
@@ -625,7 +673,7 @@ async function startShare(workspacePath, filePath, options = {}) {
   const lanIP = getLanIP()
   const localUrl = `http://${lanIP}:${PORT}/doc?token=${token}`
 
-  return { success: true, token, localUrl, port: PORT, reads: 0 }
+  return { success: true, token, localUrl, port: PORT, reads: 0, permission }
 }
 
 /** Push a doc update to all connected WebSocket clients for a share. */
@@ -642,12 +690,26 @@ function stopShare(filePath) {
   const share = activeShares.get(filePath)
   if (!share) return { success: false, error: 'No active share' }
 
+  const port = share.port
   clearInterval(share.heartbeat)
   share.limiter.destroy()
   share.wss.close()
   share.server.close()
   activeShares.delete(filePath)
-  return { success: true }
+  return { success: true, port }
+}
+
+function stopAllShares() {
+  const stoppedPorts = []
+  for (const [key, share] of activeShares.entries()) {
+    stoppedPorts.push(share.port)
+    clearInterval(share.heartbeat)
+    share.limiter.destroy()
+    share.wss.close()
+    share.server.close()
+    activeShares.delete(key)
+  }
+  return stoppedPorts
 }
 
 async function fetchSharedDoc(url, token) {
@@ -687,4 +749,4 @@ function getStats(filePath) {
   return { filePath, reads: share.reads, connected: share.wss.clients.size }
 }
 
-module.exports = { startShare, stopShare, startWorkspaceShare, stopWorkspaceShare, pushUpdate, fetchSharedDoc, getStats, emitter, WORKSPACE_KEY }
+module.exports = { startShare, stopShare, startWorkspaceShare, stopWorkspaceShare, stopAllShares, pushUpdate, fetchSharedDoc, getStats, emitter, WORKSPACE_KEY }

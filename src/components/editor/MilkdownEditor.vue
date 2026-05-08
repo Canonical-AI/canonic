@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import { watch } from 'vue'
+import { watch, ref, provide, onUnmounted } from 'vue'
 import { Milkdown, useEditor } from '@milkdown/vue'
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, prosePluginsCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
@@ -12,6 +12,10 @@ import { history } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { Plugin, PluginKey } from 'prosemirror-state'
 import { Decoration, DecorationSet } from 'prosemirror-view'
+import { mermaidRemark, mermaidNode } from './mermaid/index.js'
+import MermaidComponent from './mermaid/MermaidComponent.vue'
+import { useNodeViewFactory } from '@prosemirror-adapter/vue'
+import { $view } from '@milkdown/utils'
 
 const props = defineProps({ content: String, comments: Array })
 const emit = defineEmits(['update'])
@@ -67,6 +71,21 @@ const highlightPlugin = new Plugin({
   }
 })
 
+// --- isDark provide (for MermaidComponent) ---
+
+const isDark = ref(document.documentElement.getAttribute('data-theme') === 'dark')
+
+const themeObserver = new MutationObserver(() => {
+  isDark.value = document.documentElement.getAttribute('data-theme') === 'dark'
+})
+themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
+provide('isDark', isDark)
+
+// --- Node view factory ---
+
+const nodeViewFactory = useNodeViewFactory()
+
 // --- Editor setup ---
 
 const { loading, get } = useEditor((root) =>
@@ -81,7 +100,19 @@ const { loading, get } = useEditor((root) =>
     .use(gfm)
     .use(history)
     .use(listener)
+    .use(mermaidRemark)
+    .use(mermaidNode)
+    .use(
+      $view(mermaidNode, () =>
+        nodeViewFactory({
+          component: MermaidComponent,
+          stopEvent: () => true,
+        })
+      )
+    )
 )
+
+onUnmounted(() => themeObserver.disconnect())
 
 function dispatchHighlights(comments) {
   get()?.action((ctx) => {

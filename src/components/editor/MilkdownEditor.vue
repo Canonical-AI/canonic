@@ -100,4 +100,40 @@ watch(loading, (isLoading) => {
 watch(() => props.comments, (comments) => {
   if (!loading.value) dispatchHighlights(comments)
 }, { deep: true })
+
+function hasLinkAtSelection() {
+  return get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (!view) return false
+    const { from, to } = view.state.selection
+    const linkMark = view.state.schema.marks.link
+    if (!linkMark) return false
+    return view.state.doc.rangeHasMark(from, to, linkMark)
+  }) ?? false
+}
+
+function addLink(url) {
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (!view) return
+    const { from, to } = view.state.selection
+    const linkMark = view.state.schema.marks.link
+    if (!linkMark) return
+    const tr = view.state.tr.addMark(from, to, linkMark.create({ href: url, title: '' }))
+    view.dispatch(tr)
+  })
+}
+
+function removeLink() {
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (!view) return
+    const { from, to } = view.state.selection
+    const linkMark = view.state.schema.marks.link
+    if (!linkMark) return
+    view.dispatch(view.state.tr.removeMark(from, to, linkMark))
+  })
+}
+
+defineExpose({ hasLinkAtSelection, addLink, removeLink })
 </script>

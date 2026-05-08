@@ -105,9 +105,10 @@ function hasLinkAtSelection() {
   return get()?.action((ctx) => {
     const view = ctx.get(editorViewCtx)
     if (!view) return false
-    const { from, to } = view.state.selection
+    const { from, to, $from } = view.state.selection
     const linkMark = view.state.schema.marks.link
     if (!linkMark) return false
+    if (from === to) return linkMark.isInSet($from.marks()) != null
     return view.state.doc.rangeHasMark(from, to, linkMark)
   }) ?? false
 }
@@ -119,7 +120,7 @@ function addLink(url) {
     const { from, to } = view.state.selection
     const linkMark = view.state.schema.marks.link
     if (!linkMark) return
-    const tr = view.state.tr.addMark(from, to, linkMark.create({ href: url, title: '' }))
+    const tr = view.state.tr.addMark(from, to, linkMark.create({ href: url }))
     view.dispatch(tr)
   })
 }

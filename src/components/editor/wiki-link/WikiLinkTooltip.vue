@@ -28,7 +28,11 @@
           <span class="wiki-item-icon">@</span>
           {{ item.name }}
         </div>
-        <div v-if="filtered.length === 0 && query" class="wiki-tooltip-item wiki-create">
+        <div
+          v-if="filtered.length === 0 && query"
+          class="wiki-tooltip-item wiki-create"
+          @mousedown.prevent="select(query)"
+        >
           <span class="wiki-item-icon">+</span>
           Create "{{ query }}"
         </div>
@@ -81,8 +85,11 @@ function close() {
 }
 
 function select(name) {
-  onSelectCallback?.(name)
+  const cb = onSelectCallback
+  onSelectCallback = null
+  onCloseCallback = null
   visible.value = false
+  cb?.(name)
 }
 
 function selectFirst() {

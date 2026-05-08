@@ -12,15 +12,6 @@
       />
       <h1 v-else class="doc-title" @dblclick="startTitleRename" title="Double-click to rename">{{ docTitle }}</h1>
       <div class="topbar-actions">
-        <button
-          class="action-btn icon-label"
-          :class="{ 'link-btn-active': linkButtonActive }"
-          @click="toggleLink"
-          title="Add or remove link"
-        >
-          <Link :size="13" />
-          Link
-        </button>
         <div class="topbar-divider" />
         <span v-if="store.isDirty" class="unsaved-label">Unsaved</span>
         <button class="action-btn" @click="save" :disabled="!store.isDirty">Save</button>
@@ -40,21 +31,6 @@
         </button>
       </div>
     </div>
-
-    <transition name="link-input-slide">
-      <div v-if="isAddingLink" class="link-input-row">
-        <input
-          ref="linkInput"
-          v-model="linkUrl"
-          class="link-url-input"
-          placeholder="Enter URL (e.g., https://example.com)"
-          @keydown.enter.prevent="submitLink"
-          @keydown.esc="cancelLink"
-        />
-        <button class="action-btn" @click="cancelLink">Cancel</button>
-        <button class="action-btn link-add-btn" @click="submitLink">Add Link</button>
-      </div>
-    </transition>
 
     <ForkDocModal v-if="showForkModal" @close="showForkModal = false" />
     <SaveVersionModal v-if="showVersionModal" @close="showVersionModal = false" />
@@ -137,7 +113,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { MilkdownProvider } from '@milkdown/vue'
 import { useAppStore } from '../../store'
 import { v4 as uuidv4 } from 'uuid'
-import { MessageSquarePlus, Tag, GitFork, GitBranch, Link } from 'lucide-vue-next'
+import { MessageSquarePlus, Tag, GitFork, GitBranch } from 'lucide-vue-next'
 import MilkdownEditor from './MilkdownEditor.vue'
 import ForkDocModal from '../modals/ForkDocModal.vue'
 import SaveVersionModal from '../modals/SaveVersionModal.vue'
@@ -155,10 +131,6 @@ const showForkModal = ref(false)
 const showVersionModal = ref(false)
 const showMergeConfirm = ref(false)
 const milkdownEditor = ref(null)
-const isAddingLink = ref(false)
-const linkUrl = ref('')
-const linkInput = ref(null)
-const linkButtonActive = ref(false)
 const isMerging = ref(false)
 const mergeError = ref('')
 const renamingTitle = ref(false)
@@ -281,40 +253,6 @@ function submitComment() {
   })
 
   cancelComment()
-}
-
-function toggleLink() {
-  if (isAddingLink.value) {
-    isAddingLink.value = false
-    linkUrl.value = ''
-    linkButtonActive.value = false
-    return
-  }
-  if (milkdownEditor.value?.hasLinkAtSelection()) {
-    milkdownEditor.value.removeLink()
-    linkButtonActive.value = false
-    return
-  }
-  isAddingLink.value = true
-  linkButtonActive.value = true
-  nextTick(() => linkInput.value?.focus())
-}
-
-function submitLink() {
-  const url = linkUrl.value.trim()
-  if (!url) return
-  milkdownEditor.value?.addLink(url)
-  isAddingLink.value = false
-  linkUrl.value = ''
-  linkButtonActive.value = false
-  milkdownEditor.value?.focusEditor()
-}
-
-function cancelLink() {
-  isAddingLink.value = false
-  linkUrl.value = ''
-  linkButtonActive.value = false
-  milkdownEditor.value?.focusEditor()
 }
 
 async function doMerge() {
@@ -679,60 +617,6 @@ onMounted(() => {
 .comment-submit-btn:hover:not(:disabled) { opacity: 0.85; }
 .comment-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.link-btn-active {
-  background: var(--bg-hover);
-  color: var(--accent);
-  border-color: var(--accent-muted);
-}
-
-.link-input-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 48px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  flex-shrink: 0;
-}
-
-.link-url-input {
-  flex: 1;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 0.8125rem;
-  font-family: inherit;
-  outline: none;
-}
-
-.link-url-input:focus { border-color: var(--accent-muted); }
-
-.link-add-btn {
-  color: var(--accent);
-  border-color: var(--accent-muted);
-}
-
-.link-input-slide-enter-active,
-.link-input-slide-leave-active {
-  transition: all 0.15s ease;
-  overflow: hidden;
-}
-
-.link-input-slide-enter-from,
-.link-input-slide-leave-to {
-  max-height: 0;
-  opacity: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.link-input-slide-enter-to,
-.link-input-slide-leave-from {
-  max-height: 60px;
-  opacity: 1;
-}
 </style>
 
 <!-- Global: style the Milkdown / ProseMirror editor to match HAL2001 theme -->

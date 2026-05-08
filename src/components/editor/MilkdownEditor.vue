@@ -15,7 +15,8 @@ import { Plugin, PluginKey } from 'prosemirror-state'
 import { Decoration, DecorationSet } from 'prosemirror-view'
 import { mermaidRemark, mermaidNode } from './mermaid/index.js'
 import MermaidComponent from './mermaid/MermaidComponent.vue'
-import { useNodeViewFactory } from '@prosemirror-adapter/vue'
+import { useNodeViewFactory, usePluginViewFactory } from '@prosemirror-adapter/vue'
+import FloatingToolbar from './FloatingToolbar.vue'
 import { $view, $prose } from '@milkdown/utils'
 import { wikiLinkRemark, wikiLinkNode } from './wiki-link/index.js'
 import WikiLinkChip from './wiki-link/WikiLinkChip.vue'
@@ -89,6 +90,11 @@ provide('isDark', isDark)
 // --- Node view factory ---
 
 const nodeViewFactory = useNodeViewFactory()
+const pluginViewFactory = usePluginViewFactory()
+
+const floatingToolbarPlugin = $prose(() => new Plugin({
+  view: pluginViewFactory({ component: FloatingToolbar })
+}))
 
 // --- Wiki-link trigger ---
 
@@ -146,6 +152,7 @@ const { loading, get } = useEditor((root) =>
     .use(gfm)
     .use(history)
     .use(listener)
+    .use(floatingToolbarPlugin)
     .use(mermaidRemark)
     .use(mermaidNode)
     .use(

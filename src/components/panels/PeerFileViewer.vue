@@ -1,5 +1,5 @@
 <template>
-  <div class="peer-viewer">
+  <div class="peer-viewer" ref="viewerEl">
     <!-- Header bar -->
     <div class="viewer-header">
       <div class="viewer-meta">
@@ -14,11 +14,7 @@
         </span>
       </div>
       <div class="viewer-actions">
-        <button
-          v-if="permission === 'copy'"
-          class="btn-action"
-          @click="copyToWorkspace"
-        >
+        <button v-if="permission === 'copy'" class="btn-action" @click="copyToWorkspace">
           Copy to workspace
         </button>
         <button class="btn-close" @click="store.openPeerFile(null)" title="Close">
@@ -28,79 +24,190 @@
     </div>
 
     <!-- Document body -->
-    <div class="viewer-body">
+    <div class="viewer-body" ref="bodyEl" @mouseup="onMouseUp" @click="onBodyClick">
       <div class="viewer-prose" v-html="renderedContent" />
     </div>
 
-    <!-- Comment bar (comment or copy permission) -->
-    <div v-if="permission === 'comment' || permission === 'copy'" class="comment-bar">
-      <div v-if="submittedComment" class="comment-sent">
-        <MessageSquare :size="13" /> Comment sent to {{ peer.name }}
+    <!-- Selection popover — "Add comment" button -->
+    <div
+      v-if="canComment && selectionPopover.visible && !commentInput.visible"
+      class="comment-popover"
+      :style="{ top: selectionPopover.y + 'px', left: selectionPopover.x + 'px' }"
+    >
+      <button class="popover-btn" @mousedown.prevent @click="openCommentInput">
+        <MessageSquarePlus :size="13" />
+        Add comment
+      </button>
+    </div>
+
+    <!-- Inline comment input -->
+    <div
+      v-if="commentInput.visible"
+      class="comment-input-box"
+      :style="{ top: selectionPopover.y + 'px', left: selectionPopover.x + 'px' }"
+      @click.stop
+      @mousedown.stop
+    >
+      <div class="comment-quoted">
+        <span class="comment-quote-bar" />
+        <span class="comment-quote-text">{{ truncateQuote(selectionPopover.text) }}</span>
       </div>
-      <template v-else>
-        <textarea
-          v-model="commentText"
-          class="comment-input"
-          :placeholder="`Leave a comment for ${peer.name}…`"
-          rows="2"
-        />
-        <button
-          class="btn-send"
-          :disabled="!commentText.trim()"
-          @click="sendComment"
-        >
-          Send
-        </button>
-      </template>
+      <textarea
+        ref="commentTextareaEl"
+        v-model="commentInput.text"
+        class="comment-textarea"
+        :placeholder="`Comment for ${peer.name}…`"
+        rows="3"
+        @keydown.ctrl.enter="submitComment"
+        @keydown.meta.enter="submitComment"
+        @keydown.esc="cancelComment"
+      />
+      <div class="comment-input-actions">
+        <span class="comment-input-hint">⌘↩ to submit</span>
+        <button class="comment-cancel-btn" @click="cancelComment">Cancel</button>
+        <button class="comment-submit-btn" @click="submitComment" :disabled="!commentInput.text.trim()">Comment</button>
+      </div>
+    </div>
+
+    <!-- Queued comments sidebar strip (shows pending comments) -->
+    <div v-if="queuedComments.length && canComment" class="queued-strip">
+      <div v-for="c in queuedComments" :key="c.id" class="queued-comment">
+        <div class="queued-quote">"{{ truncateQuote(c.anchor.quotedText, 50) }}"</div>
+        <div class="queued-text">{{ c.text }}</div>
+        <span class="queued-status" :class="c.synced ? 'sent' : 'pending'">
+          {{ c.synced ? '✓ sent' : '⏳ pending' }}
+        </span>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { marked } from 'marked'
+import { v4 as uuidv4 } from 'uuid'
 import { useAppStore } from '../../store'
-import { Lock, Eye, MessageSquare, Copy, X } from 'lucide-vue-next'
+import { Eye, MessageSquare, MessageSquarePlus, Copy, X } from 'lucide-vue-next'
 
 const store = useAppStore()
+const viewerEl = ref(null)
+const bodyEl = ref(null)
+const commentTextareaEl = ref(null)
 
 const peer = computed(() => store.peerFileContent?.peer ?? {})
 const relPath = computed(() => store.peerFileContent?.relPath ?? '')
 const content = computed(() => store.peerFileContent?.content ?? '')
 const permission = computed(() => store.peerFileContent?.peer?.permission ?? 'view')
+const canComment = computed(() => permission.value === 'comment' || permission.value === 'copy')
 
 const permLabel = computed(() => ({ view: 'read-only', comment: 'can comment', copy: 'can copy' }[permission.value] ?? 'read-only'))
-const permIcon = computed(() => ({ view: Eye, comment: MessageSquare, copy: Copy }[permission.value] ?? Lock))
+const permIcon = computed(() => ({ view: Eye, comment: MessageSquare, copy: Copy }[permission.value] ?? Eye))
 
-const commentText = ref('')
-const submittedComment = ref(false)
+const selectionPopover = ref({ visible: false, x: 0, y: 0, text: '' })
+const commentInput = ref({ visible: false, text: '' })
+const queuedComments = ref([])
 
 const renderedContent = computed(() => {
-  try {
-    return marked.parse(content.value)
-  } catch {
-    return `<pre>${content.value}</pre>`
-  }
+  try { return marked.parse(content.value) } catch { return `<pre>${content.value}</pre>` }
 })
 
 function initials(name) {
   return (name || '?').split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
-
 function basename(path) {
   return (path || '').split('/').pop()
+}
+function truncateQuote(text, len = 80) {
+  if (!text) return ''
+  return text.length > len ? text.slice(0, len) + '…' : text
+}
+
+function onMouseUp() {
+  if (commentInput.value.visible) return
+  if (!canComment.value) return
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+    selectionPopover.value.visible = false
+    return
+  }
+  const selectedText = selection.toString().trim()
+  const range = selection.getRangeAt(0)
+  const rect = range.getBoundingClientRect()
+  const wrapperRect = bodyEl.value.getBoundingClientRect()
+  selectionPopover.value = {
+    visible: true,
+    x: Math.max(0, rect.left - wrapperRect.left),
+    y: rect.top - wrapperRect.top - 44,
+    text: selectedText
+  }
+}
+
+function onBodyClick(e) {
+  if (commentInput.value.visible) return
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed) {
+    selectionPopover.value.visible = false
+  }
+}
+
+async function openCommentInput() {
+  commentInput.value = { visible: true, text: '' }
+  await nextTick()
+  commentTextareaEl.value?.focus()
+}
+
+function cancelComment() {
+  commentInput.value = { visible: false, text: '' }
+  selectionPopover.value.visible = false
+}
+
+async function submitComment() {
+  const text = commentInput.value.text.trim()
+  if (!text) return
+
+  const comment = {
+    id: uuidv4(),
+    author: store.config?.displayName || 'You',
+    text,
+    anchor: { quotedText: selectionPopover.value.text },
+    createdAt: new Date().toISOString(),
+    synced: false
+  }
+
+  queuedComments.value.unshift(comment)
+
+  // In live mode: attempt immediate POST to peer's share server
+  if (!store.isDemoMode && peer.value.host && peer.value.port) {
+    try {
+      const res = await fetch(
+        `http://${peer.value.host}:${peer.value.port}/comments?token=${peer.value.token}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: relPath.value, comments: [comment] })
+        }
+      )
+      if (res.ok) {
+        const idx = queuedComments.value.findIndex(c => c.id === comment.id)
+        if (idx >= 0) queuedComments.value[idx] = { ...comment, synced: true }
+      }
+    } catch {
+      // Will be retried by flushPeerComments interval
+    }
+  } else if (store.isDemoMode) {
+    // Demo: simulate delivery after a short delay
+    setTimeout(() => {
+      const idx = queuedComments.value.findIndex(c => c.id === comment.id)
+      if (idx >= 0) queuedComments.value[idx] = { ...queuedComments.value[idx], synced: true }
+    }, 800)
+  }
+
+  cancelComment()
 }
 
 async function copyToWorkspace() {
   await store.copyPeerFileToWorkspace({ relPath: relPath.value, content: content.value })
   store.openPeerFile(null)
-}
-
-function sendComment() {
-  if (!commentText.value.trim()) return
-  // In demo mode / live mode this would POST to the peer's share server.
-  // For now, show a confirmation.
-  submittedComment.value = true
 }
 </script>
 
@@ -110,6 +217,7 @@ function sendComment() {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .viewer-header {
@@ -225,6 +333,8 @@ function sendComment() {
   flex: 1;
   overflow-y: auto;
   padding: 40px 60px;
+  position: relative;
+  user-select: text;
 }
 
 .viewer-prose {
@@ -241,30 +351,19 @@ function sendComment() {
 .viewer-prose :deep(h3) { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.4rem; color: var(--text-primary); }
 .viewer-prose :deep(p) { margin: 0 0 1rem; color: var(--text-secondary); }
 .viewer-prose :deep(blockquote) {
-  margin: 0 0 1rem;
-  padding: 4px 0 4px 16px;
-  border-left: 3px solid var(--accent);
-  color: var(--text-muted);
-  font-style: italic;
+  margin: 0 0 1rem; padding: 4px 0 4px 16px;
+  border-left: 3px solid var(--accent); color: var(--text-muted); font-style: italic;
 }
 .viewer-prose :deep(ul),
 .viewer-prose :deep(ol) { margin: 0 0 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
 .viewer-prose :deep(li) { margin-bottom: 0.25rem; }
 .viewer-prose :deep(code) {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8125rem;
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 5px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem;
+  background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
 }
 .viewer-prose :deep(pre) {
-  background: var(--bg-base);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
-  overflow-x: auto;
-  margin: 0 0 1rem;
+  background: var(--bg-base); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1rem;
 }
 .viewer-prose :deep(pre code) { background: none; border: none; padding: 0; }
 .viewer-prose :deep(table) { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.875rem; }
@@ -274,22 +373,74 @@ function sendComment() {
 .viewer-prose :deep(hr) { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 .viewer-prose :deep(a) { color: var(--accent); }
 
-/* Comment bar */
-.comment-bar {
-  border-top: 1px solid var(--border);
-  padding: 10px 16px;
+/* Selection popover */
+.comment-popover {
+  position: absolute;
+  z-index: 50;
   background: var(--bg-surface);
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  flex-shrink: 0;
-}
-
-.comment-input {
-  flex: 1;
-  background: var(--bg-base);
   border: 1px solid var(--border);
   border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  padding: 2px;
+}
+
+.popover-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.popover-btn:hover { background: var(--bg-hover); }
+
+/* Comment input box */
+.comment-input-box {
+  position: absolute;
+  z-index: 60;
+  width: 300px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-quoted {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.comment-quote-bar {
+  width: 3px;
+  min-height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.comment-quote-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.comment-textarea {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: 7px;
   padding: 8px 10px;
   font-size: 0.8125rem;
   color: var(--text-primary);
@@ -297,31 +448,81 @@ function sendComment() {
   font-family: inherit;
   line-height: 1.5;
   outline: none;
+  box-sizing: border-box;
   transition: border-color 0.15s;
 }
-.comment-input:focus { border-color: var(--accent); }
-.comment-input::placeholder { color: var(--text-muted); }
+.comment-textarea:focus { border-color: var(--accent); }
+.comment-textarea::placeholder { color: var(--text-muted); }
 
-.btn-send {
-  padding: 7px 14px;
-  border-radius: 7px;
-  border: none;
-  background: var(--accent);
-  color: white;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.btn-send:hover:not(:disabled) { opacity: 0.85; }
-.btn-send:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.comment-sent {
+.comment-input-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8125rem;
-  color: var(--accent);
-  padding: 4px 0;
 }
+
+.comment-input-hint {
+  flex: 1;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.comment-cancel-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.775rem;
+  cursor: pointer;
+}
+.comment-cancel-btn:hover { background: var(--bg-hover); }
+
+.comment-submit-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 0.775rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.comment-submit-btn:hover:not(:disabled) { opacity: 0.85; }
+.comment-submit-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Queued comments strip */
+.queued-strip {
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+  max-height: 180px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.queued-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.queued-comment:last-child { border-bottom: none; }
+
+.queued-quote {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.queued-text {
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.queued-status {
+  font-size: 0.6875rem;
+  align-self: flex-end;
+}
+.queued-status.sent { color: var(--success, #22c55e); }
+.queued-status.pending { color: var(--text-muted); }
 </style>

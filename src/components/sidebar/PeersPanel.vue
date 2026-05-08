@@ -33,6 +33,7 @@
               v-for="file in peer.files"
               :key="file.path"
               class="peer-file"
+              @click="openDemoFile(peer, file)"
             >
               <FileText :size="13" />
               <span class="file-name">{{ file.name }}</span>
@@ -147,6 +148,7 @@
 import { ref, reactive } from 'vue'
 import { useAppStore } from '../../store'
 import { FileText, Star, AlertTriangle, Loader, Eye } from 'lucide-vue-next'
+import demoConfig from '../../../public/demo/config.json'
 
 const store = useAppStore()
 const api = window.canonic
@@ -193,6 +195,11 @@ async function copyToWorkspace() {
   const { relPath, content } = store.peerFileContent
   await store.copyPeerFileToWorkspace({ relPath, content })
   store.openPeerFile(null)
+}
+
+function openDemoFile(peer, file) {
+  const content = demoConfig.files[file.path] ?? `# ${file.name}\n\n*(No preview available)*`
+  store.openPeerFile({ peer, relPath: file.path, content })
 }
 
 function toggleFavorite(peer) {

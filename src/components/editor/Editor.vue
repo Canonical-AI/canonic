@@ -51,8 +51,8 @@
       </div>
     </div>
 
-    <div class="editor-scroll">
-      <div class="editor-content" ref="editorContentEl" @mouseup="onMouseUp" :style="{ '--editor-font-size': editorFontSize + 'px' }">
+    <div class="editor-scroll" ref="editorScrollEl">
+      <div class="editor-content" ref="editorContentEl" @mouseup="onMouseUp" @click="onEditorClick" :style="{ '--editor-font-size': editorFontSize + 'px' }">
         <MilkdownProvider :key="store.currentFile">
           <MilkdownEditor
             :content="store.currentContent"
@@ -118,6 +118,7 @@ import SaveVersionModal from '../modals/SaveVersionModal.vue'
 
 const store = useAppStore()
 const editorContentEl = ref(null)
+const editorScrollEl = ref(null)
 const commentTextareaEl = ref(null)
 const titleInput = ref(null)
 const localContent = ref('')
@@ -156,6 +157,26 @@ async function confirmTitleRename() {
 watch(() => store.currentContent, (val) => {
   localContent.value = val || ''
 }, { immediate: true })
+
+// Clear active comment when switching files so stale IDs don't linger.
+watch(() => store.currentFile, () => { store.setActiveComment(null) })
+
+// Editor → Sidebar: clicking a comment highlight activates it.
+function onEditorClick(e) {
+  const span = e.target.closest('[data-comment-id]')
+  if (span) store.setActiveComment(span.dataset.commentId)
+}
+
+// Sidebar → Editor: when activeCommentId changes, scroll to the highlight and flash it.
+watch(() => store.activeCommentId, async (id) => {
+  if (!id || !editorContentEl.value) return
+  await nextTick()
+  const el = editorContentEl.value.querySelector(`[data-comment-id="${id}"]`)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('active-highlight')
+  setTimeout(() => el.classList.remove('active-highlight'), 1200)
+})
 
 function onContentUpdate(markdown) {
   localContent.value = markdown
@@ -760,6 +781,13 @@ onMounted(() => {
 
 .comment-highlight:hover {
   background: rgba(251, 191, 36, 0.35);
+}
+
+.comment-highlight.active-highlight {
+  background: rgba(251, 191, 36, 0.6) !important;
+  outline: 2px solid rgba(251, 191, 36, 0.8);
+  border-radius: 3px;
+  transition: none;
 }
 
 .demo-highlight {

@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted, inject } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, inject } from 'vue'
 import { useNodeViewContext } from '@prosemirror-adapter/vue'
 import mermaid from 'mermaid'
 
@@ -72,6 +72,10 @@ onMounted(() => {
   renderDiagram()
 })
 
+onUnmounted(() => {
+  clearTimeout(renderTimer)
+})
+
 watch(isDark, (dark) => {
   initMermaid(dark)
   renderDiagram()
@@ -93,9 +97,11 @@ async function renderDiagram() {
   const id = `mermaid-${++renderCounter}`
   try {
     const { svg } = await mermaid.render(id, source.value)
+    if (`mermaid-${renderCounter}` !== id) return
     renderedSvg.value = svg
     renderError.value = ''
   } catch (e) {
+    if (`mermaid-${renderCounter}` !== id) return
     renderError.value = e.message || 'Invalid diagram syntax'
     renderedSvg.value = ''
   }

@@ -9,17 +9,20 @@
       <span v-else class="peer-mode-label">{{ store.peerFileContent.peer.name }}'s doc</span>
     </div>
 
-    <div class="comments-list" v-if="visibleComments.length > 0">
+    <div class="comments-list" v-if="visibleComments.length > 0" ref="listEl">
       <div
         v-for="comment in visibleComments"
         :key="comment.id"
+        :data-comment-id="comment.id"
         :class="['comment-card',
           comment.resolved && 'resolved',
           comment.isAgent && 'agent-comment',
           comment.pending && 'pending-comment',
           comment.isOwn && 'own-comment',
-          comment.private && 'private-comment'
+          comment.private && 'private-comment',
+          store.activeCommentId === comment.id && 'active-comment'
         ]"
+        @click="store.setActiveComment(comment.id)"
       >
         <div class="comment-header">
           <span :class="['comment-author', comment.isAgent && 'agent-author']">
@@ -64,11 +67,21 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../store'
 
 const store = useAppStore()
 const showResolved = ref(false)
+const listEl = ref(null)
+
+// When activeCommentId changes (e.g. user clicked a mark in the viewer),
+// scroll the matching card into view in the sidebar.
+watch(() => store.activeCommentId, async (id) => {
+  if (!id || !listEl.value) return
+  await nextTick()
+  const el = listEl.value.querySelector(`[data-comment-id="${id}"]`)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+})
 
 const isPeerMode = computed(() => !!store.peerFileContent)
 
@@ -156,6 +169,14 @@ function truncate(text, len) {
   border-left: 3px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 4%, var(--bg-surface));
 }
+
+.comment-card.active-comment {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.comment-card { cursor: pointer; }
 
 .comment-card.pending-comment {
   opacity: 0.7;

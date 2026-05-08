@@ -24,7 +24,7 @@
     </div>
 
     <!-- Document body -->
-    <div class="viewer-body" ref="bodyEl" @mouseup="onMouseUp" @click="onBodyClick">
+    <div class="viewer-body" ref="bodyEl" @mouseup="onMouseUp" @click="onBodyClick" @click.capture="onMarkClick">
       <div class="viewer-prose" v-html="renderedContent" />
     </div>
 
@@ -190,6 +190,7 @@ function highlightTextInElement(root, searchText) {
     const after = textNode.textContent.slice(idx + searchText.length)
     const mark = document.createElement('mark')
     mark.className = 'comment-anchor'
+    mark.dataset.anchor = searchText   // used for click delegation + scroll
     mark.textContent = searchText
 
     const parent = textNode.parentNode
@@ -200,6 +201,32 @@ function highlightTextInElement(root, searchText) {
     break // first occurrence only
   }
 }
+
+// When user clicks a highlight in the doc, activate the matching sidebar comment.
+function onMarkClick(e) {
+  const mark = e.target.closest('mark.comment-anchor')
+  if (!mark) return
+  e.stopPropagation()
+  const qt = mark.dataset.anchor
+  const comment = store.peerFileComments.find(c => c.anchor?.quotedText === qt)
+  if (comment) store.setActiveComment(comment.id)
+}
+
+// When activeCommentId changes (e.g. user clicked a sidebar card),
+// scroll to the matching mark in the viewer and briefly flash it.
+watch(() => store.activeCommentId, async (id) => {
+  if (!id) return
+  const comment = store.peerFileComments.find(c => c.id === id)
+  if (!comment?.anchor?.quotedText) return
+  await nextTick()
+  const mark = bodyEl.value?.querySelector(
+    `mark.comment-anchor[data-anchor="${comment.anchor.quotedText.replace(/"/g, '\\"')}"]`
+  )
+  if (!mark) return
+  mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  mark.classList.add('flash')
+  setTimeout(() => mark.classList.remove('flash'), 1200)
+})
 
 // ── Comment input ─────────────────────────────────────────────────────────────
 
@@ -417,7 +444,17 @@ async function copyToWorkspace() {
   color: inherit;
   border-radius: 2px;
   padding: 0 1px;
-  cursor: default;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.viewer-prose :deep(mark.comment-anchor:hover) {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.viewer-prose :deep(mark.comment-anchor.flash) {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 3px;
+  transition: none;
 }
 
 /* Selection popover */

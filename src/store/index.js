@@ -66,6 +66,7 @@ export const useAppStore = defineStore("app", () => {
   );
   const peerFileContent = ref(null); // { peer, relPath, content } | null
   const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
+  const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
 
   const api = window.canonic;
@@ -839,10 +840,15 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds.delete(id);
   }
 
+  function setActiveComment(id) {
+    activeCommentId.value = id;
+  }
+
   function openPeerFile(payload) {
     if (!payload) {
       peerFileContent.value = null;
       peerFileComments.value = [];
+      activeCommentId.value = null;
       return;
     }
     const { peer, relPath, content, comments } = payload;
@@ -954,12 +960,14 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeers,
     peerFileContent,
     peerFileComments,
+    activeCommentId,
     networkChanged,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,
     addPeerComment,
     updatePeerComment,
+    setActiveComment,
     copyPeerFileToWorkspace,
   };
 });

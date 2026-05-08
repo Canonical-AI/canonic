@@ -130,7 +130,7 @@
 
             <!-- Right panel -->
             <aside
-                v-if="store.currentFile"
+                v-if="store.currentFile || store.peerFileContent"
                 class="right-panel"
                 :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
                 :style="store.rightPanelCollapsed ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined }"

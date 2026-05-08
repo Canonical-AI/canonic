@@ -1,25 +1,35 @@
 <template>
   <div class="comments-panel">
     <div class="panel-header">
-      <span>{{ activeComments.length }} comment{{ activeComments.length !== 1 ? 's' : '' }}</span>
-      <label class="toggle-label">
+      <span>{{ visibleComments.length }} comment{{ visibleComments.length !== 1 ? 's' : '' }}</span>
+      <label v-if="!isPeerMode" class="toggle-label">
         <input type="checkbox" v-model="showResolved" />
         Show resolved
       </label>
+      <span v-else class="peer-mode-label">{{ store.peerFileContent.peer.name }}'s doc</span>
     </div>
 
     <div class="comments-list" v-if="visibleComments.length > 0">
       <div
         v-for="comment in visibleComments"
         :key="comment.id"
-        :class="['comment-card', comment.resolved && 'resolved', comment.isAgent && 'agent-comment']"
-        @click="highlightAnchor(comment)"
+        :class="['comment-card',
+          comment.resolved && 'resolved',
+          comment.isAgent && 'agent-comment',
+          comment.pending && 'pending-comment',
+          comment.isOwn && 'own-comment'
+        ]"
       >
         <div class="comment-header">
           <span :class="['comment-author', comment.isAgent && 'agent-author']">
             {{ comment.isAgent ? `${comment.agentName || 'Agent'} · suggestion` : comment.author }}
           </span>
-          <span class="comment-time">{{ formatTime(comment.createdAt) }}</span>
+          <span class="comment-meta">
+            <span v-if="comment.pending" class="sync-status pending">⏳ pending</span>
+            <span v-else-if="comment.synced === false" class="sync-status pending">⏳ pending</span>
+            <span v-else-if="comment.synced === true" class="sync-status sent">✓ sent</span>
+            <span v-else class="comment-time">{{ formatTime(comment.createdAt) }}</span>
+          </span>
         </div>
 
         <div v-if="comment.anchor?.quotedText" class="quoted-text">
@@ -31,7 +41,7 @@
 
         <p class="comment-text">{{ comment.text }}</p>
 
-        <div class="comment-actions">
+        <div v-if="!isPeerMode" class="comment-actions">
           <button v-if="!comment.resolved" class="action-link" @click.stop="store.resolveComment(comment.id)">
             Resolve
           </button>
@@ -44,7 +54,9 @@
 
     <div v-else class="empty-comments">
       <p>No comments yet.</p>
-      <p class="hint">Select text in the document to add a comment.</p>
+      <p class="hint">
+        {{ isPeerMode ? 'Select text in the document to leave a comment.' : 'Select text in the document to add a comment.' }}
+      </p>
     </div>
   </div>
 </template>
@@ -56,10 +68,15 @@ import { useAppStore } from '../../store'
 const store = useAppStore()
 const showResolved = ref(false)
 
-const activeComments = computed(() => store.comments.filter(c => !c.resolved))
-const visibleComments = computed(() =>
-  showResolved.value ? store.comments : activeComments.value
-)
+const isPeerMode = computed(() => !!store.peerFileContent)
+
+const visibleComments = computed(() => {
+  if (isPeerMode.value) {
+    return store.peerFileComments
+  }
+  const active = store.comments.filter(c => !c.resolved)
+  return showResolved.value ? store.comments : active
+})
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -74,10 +91,6 @@ function formatTime(iso) {
 
 function truncate(text, len) {
   return text.length > len ? text.slice(0, len) + '…' : text
-}
-
-function highlightAnchor(comment) {
-  // Emit to parent to scroll editor to anchor — simplified for now
 }
 </script>
 
@@ -108,6 +121,11 @@ function highlightAnchor(comment) {
   font-size: 0.75rem;
 }
 
+.peer-mode-label {
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
 .comments-list {
   flex: 1;
   overflow-y: auto;
@@ -122,12 +140,19 @@ function highlightAnchor(comment) {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
-  cursor: pointer;
   transition: border-color 0.15s;
 }
 
 .comment-card:hover { border-color: var(--accent-muted); }
 .comment-card.resolved { opacity: 0.5; }
+
+.comment-card.own-comment {
+  border-left: 3px solid var(--accent);
+}
+
+.comment-card.pending-comment {
+  opacity: 0.7;
+}
 
 .comment-header {
   display: flex;
@@ -142,10 +167,21 @@ function highlightAnchor(comment) {
   color: var(--text-primary);
 }
 
+.comment-meta {
+  display: flex;
+  align-items: center;
+}
+
 .comment-time {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+
+.sync-status {
+  font-size: 0.7rem;
+}
+.sync-status.pending { color: var(--text-muted); }
+.sync-status.sent { color: var(--success, #22c55e); }
 
 .quoted-text {
   font-size: 0.8rem;
@@ -205,17 +241,7 @@ function highlightAnchor(comment) {
 
 .hint { font-size: 0.8rem; color: var(--text-muted); opacity: 0.7; }
 
-/* Agent (AI) comment styling */
-.comment-card.agent-comment {
-  border-left: 3px solid var(--accent);
-}
-
-.comment-card.agent-comment:hover {
-  border-color: var(--accent);
-}
-
-.agent-author {
-  color: var(--accent) !important;
-  font-style: italic;
-}
+.comment-card.agent-comment { border-left: 3px solid var(--accent); }
+.comment-card.agent-comment:hover { border-color: var(--accent); }
+.agent-author { color: var(--accent) !important; font-style: italic; }
 </style>

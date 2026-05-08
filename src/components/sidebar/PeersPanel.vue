@@ -226,7 +226,8 @@ async function copyToWorkspace() {
 
 function openDemoFile(peer, file) {
   const content = demoConfig.files[file.path] ?? `# ${file.name}\n\n*(No preview available)*`
-  store.openPeerFile({ peer: { ...peer, permission: file.permission ?? 'view' }, relPath: file.path, content })
+  const comments = demoConfig.comments?.[file.path] ?? []
+  store.openPeerFile({ peer: { ...peer, permission: file.permission ?? 'view' }, relPath: file.path, content, comments })
 }
 
 function unfavoriteDemoPeer(id) {

@@ -65,6 +65,7 @@ export const useAppStore = defineStore("app", () => {
     discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
   );
   const peerFileContent = ref(null); // { peer, relPath, content } | null
+  const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
   const networkChanged = ref(false);
 
   const api = window.canonic;
@@ -838,8 +839,24 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds.delete(id);
   }
 
-  function openPeerFile({ peer, relPath, content }) {
+  function openPeerFile(payload) {
+    if (!payload) {
+      peerFileContent.value = null;
+      peerFileComments.value = [];
+      return;
+    }
+    const { peer, relPath, content, comments } = payload;
     peerFileContent.value = { peer, relPath, content };
+    peerFileComments.value = comments ? [...comments] : [];
+  }
+
+  function addPeerComment(comment) {
+    peerFileComments.value.unshift(comment);
+  }
+
+  function updatePeerComment(id, patch) {
+    const idx = peerFileComments.value.findIndex(c => c.id === id);
+    if (idx >= 0) peerFileComments.value[idx] = { ...peerFileComments.value[idx], ...patch };
   }
 
   async function copyPeerFileToWorkspace({ relPath, content }) {
@@ -936,10 +953,13 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds,
     favoritedPeers,
     peerFileContent,
+    peerFileComments,
     networkChanged,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,
+    addPeerComment,
+    updatePeerComment,
     copyPeerFileToWorkspace,
   };
 });

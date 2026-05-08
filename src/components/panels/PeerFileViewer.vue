@@ -17,7 +17,7 @@
         <button v-if="permission === 'copy'" class="btn-action" @click="copyToWorkspace">
           Copy to workspace
         </button>
-        <button class="btn-close" @click="store.openPeerFile(null)" title="Close">
+        <button class="btn-close" @click="close" title="Close">
           <X :size="14" />
         </button>
       </div>
@@ -68,17 +68,6 @@
         <button class="comment-submit-btn" @click="submitComment" :disabled="!commentInput.text.trim()">Comment</button>
       </div>
     </div>
-
-    <!-- Queued comments sidebar strip (shows pending comments) -->
-    <div v-if="queuedComments.length && canComment" class="queued-strip">
-      <div v-for="c in queuedComments" :key="c.id" class="queued-comment">
-        <div class="queued-quote">"{{ truncateQuote(c.anchor.quotedText, 50) }}"</div>
-        <div class="queued-text">{{ c.text }}</div>
-        <span class="queued-status" :class="c.synced ? 'sent' : 'pending'">
-          {{ c.synced ? '✓ sent' : '⏳ pending' }}
-        </span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -90,7 +79,6 @@ import { useAppStore } from '../../store'
 import { Eye, MessageSquare, MessageSquarePlus, Copy, X } from 'lucide-vue-next'
 
 const store = useAppStore()
-const viewerEl = ref(null)
 const bodyEl = ref(null)
 const commentTextareaEl = ref(null)
 
@@ -105,7 +93,6 @@ const permIcon = computed(() => ({ view: Eye, comment: MessageSquare, copy: Copy
 
 const selectionPopover = ref({ visible: false, x: 0, y: 0, text: '' })
 const commentInput = ref({ visible: false, text: '' })
-const queuedComments = ref([])
 
 const renderedContent = computed(() => {
   try { return marked.parse(content.value) } catch { return `<pre>${content.value}</pre>` }
@@ -114,12 +101,14 @@ const renderedContent = computed(() => {
 function initials(name) {
   return (name || '?').split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
-function basename(path) {
-  return (path || '').split('/').pop()
-}
+function basename(p) { return (p || '').split('/').pop() }
 function truncateQuote(text, len = 80) {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
+}
+
+function close() {
+  store.openPeerFile(null)
 }
 
 function onMouseUp() {
@@ -142,7 +131,7 @@ function onMouseUp() {
   }
 }
 
-function onBodyClick(e) {
+function onBodyClick() {
   if (commentInput.value.visible) return
   const selection = window.getSelection()
   if (!selection || selection.isCollapsed) {
@@ -168,15 +157,18 @@ async function submitComment() {
   const comment = {
     id: uuidv4(),
     author: store.config?.displayName || 'You',
+    isOwn: true,
     text,
     anchor: { quotedText: selectionPopover.value.text },
     createdAt: new Date().toISOString(),
     synced: false
   }
 
-  queuedComments.value.unshift(comment)
+  store.addPeerComment(comment)
+  // Switch sidebar to comments tab so user sees it
+  store.rightPanelTab = 'comments'
+  store.rightPanelCollapsed = false
 
-  // In live mode: attempt immediate POST to peer's share server
   if (!store.isDemoMode && peer.value.host && peer.value.port) {
     try {
       const res = await fetch(
@@ -187,19 +179,12 @@ async function submitComment() {
           body: JSON.stringify({ filePath: relPath.value, comments: [comment] })
         }
       )
-      if (res.ok) {
-        const idx = queuedComments.value.findIndex(c => c.id === comment.id)
-        if (idx >= 0) queuedComments.value[idx] = { ...comment, synced: true }
-      }
+      if (res.ok) store.updatePeerComment(comment.id, { synced: true })
     } catch {
       // Will be retried by flushPeerComments interval
     }
   } else if (store.isDemoMode) {
-    // Demo: simulate delivery after a short delay
-    setTimeout(() => {
-      const idx = queuedComments.value.findIndex(c => c.id === comment.id)
-      if (idx >= 0) queuedComments.value[idx] = { ...queuedComments.value[idx], synced: true }
-    }, 800)
+    setTimeout(() => store.updatePeerComment(comment.id, { synced: true }), 800)
   }
 
   cancelComment()
@@ -207,7 +192,7 @@ async function submitComment() {
 
 async function copyToWorkspace() {
   await store.copyPeerFileToWorkspace({ relPath: relPath.value, content: content.value })
-  store.openPeerFile(null)
+  close()
 }
 </script>
 
@@ -252,12 +237,7 @@ async function copyToWorkspace() {
   flex-shrink: 0;
 }
 
-.viewer-doc-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
+.viewer-doc-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 
 .doc-name {
   font-size: 0.875rem;
@@ -268,10 +248,7 @@ async function copyToWorkspace() {
   text-overflow: ellipsis;
 }
 
-.peer-name {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
+.peer-name { font-size: 0.75rem; color: var(--text-muted); }
 
 .perm-badge {
   display: inline-flex;
@@ -297,12 +274,7 @@ async function copyToWorkspace() {
   background: color-mix(in srgb, #22c55e 8%, transparent);
 }
 
-.viewer-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
+.viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 .btn-action {
   padding: 5px 12px;
@@ -345,17 +317,15 @@ async function copyToWorkspace() {
   font-size: 0.9375rem;
 }
 
-/* Markdown typography */
-.viewer-prose :deep(h1) { font-size: 1.75rem; font-weight: 700; margin: 0 0 8px; color: var(--text-primary); }
-.viewer-prose :deep(h2) { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.5rem; color: var(--text-primary); }
-.viewer-prose :deep(h3) { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.4rem; color: var(--text-primary); }
+.viewer-prose :deep(h1) { font-size: 1.75rem; font-weight: 700; margin: 0 0 8px; }
+.viewer-prose :deep(h2) { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.5rem; }
+.viewer-prose :deep(h3) { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.4rem; }
 .viewer-prose :deep(p) { margin: 0 0 1rem; color: var(--text-secondary); }
 .viewer-prose :deep(blockquote) {
   margin: 0 0 1rem; padding: 4px 0 4px 16px;
   border-left: 3px solid var(--accent); color: var(--text-muted); font-style: italic;
 }
-.viewer-prose :deep(ul),
-.viewer-prose :deep(ol) { margin: 0 0 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+.viewer-prose :deep(ul), .viewer-prose :deep(ol) { margin: 0 0 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
 .viewer-prose :deep(li) { margin-bottom: 0.25rem; }
 .viewer-prose :deep(code) {
   font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem;
@@ -367,9 +337,8 @@ async function copyToWorkspace() {
 }
 .viewer-prose :deep(pre code) { background: none; border: none; padding: 0; }
 .viewer-prose :deep(table) { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.875rem; }
-.viewer-prose :deep(th),
-.viewer-prose :deep(td) { padding: 7px 12px; border: 1px solid var(--border); text-align: left; }
-.viewer-prose :deep(th) { background: var(--bg-base); font-weight: 600; color: var(--text-primary); }
+.viewer-prose :deep(th), .viewer-prose :deep(td) { padding: 7px 12px; border: 1px solid var(--border); text-align: left; }
+.viewer-prose :deep(th) { background: var(--bg-base); font-weight: 600; }
 .viewer-prose :deep(hr) { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
 .viewer-prose :deep(a) { color: var(--accent); }
 
@@ -414,11 +383,7 @@ async function copyToWorkspace() {
   gap: 8px;
 }
 
-.comment-quoted {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
+.comment-quoted { display: flex; align-items: flex-start; gap: 8px; }
 
 .comment-quote-bar {
   width: 3px;
@@ -429,12 +394,7 @@ async function copyToWorkspace() {
   align-self: stretch;
 }
 
-.comment-quote-text {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-style: italic;
-  line-height: 1.4;
-}
+.comment-quote-text { font-size: 0.75rem; color: var(--text-muted); font-style: italic; line-height: 1.4; }
 
 .comment-textarea {
   width: 100%;
@@ -454,17 +414,9 @@ async function copyToWorkspace() {
 .comment-textarea:focus { border-color: var(--accent); }
 .comment-textarea::placeholder { color: var(--text-muted); }
 
-.comment-input-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.comment-input-actions { display: flex; align-items: center; gap: 6px; }
 
-.comment-input-hint {
-  flex: 1;
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-}
+.comment-input-hint { flex: 1; font-size: 0.6875rem; color: var(--text-muted); }
 
 .comment-cancel-btn {
   padding: 4px 10px;
@@ -489,40 +441,4 @@ async function copyToWorkspace() {
 }
 .comment-submit-btn:hover:not(:disabled) { opacity: 0.85; }
 .comment-submit-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-/* Queued comments strip */
-.queued-strip {
-  border-top: 1px solid var(--border);
-  background: var(--bg-surface);
-  max-height: 180px;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-.queued-comment {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.queued-comment:last-child { border-bottom: none; }
-
-.queued-quote {
-  font-size: 0.725rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.queued-text {
-  font-size: 0.8125rem;
-  color: var(--text-primary);
-}
-
-.queued-status {
-  font-size: 0.6875rem;
-  align-self: flex-end;
-}
-.queued-status.sent { color: var(--success, #22c55e); }
-.queued-status.pending { color: var(--text-muted); }
 </style>

@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, watch, onMounted } from 'vue'
 import { marked } from 'marked'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppStore } from '../../store'
@@ -151,6 +151,14 @@ function onBodyClick() {
 
 // ── Comment highlights ────────────────────────────────────────────────────────
 
+// Fire on initial mount — the component mounts AFTER peerFileContent is set,
+// so the watch below won't see a change on first render.
+onMounted(async () => {
+  await nextTick()
+  highlightAnchors()
+})
+
+// Re-apply whenever content re-renders or comments are added/updated.
 watch(
   [renderedContent, () => store.peerFileComments],
   async () => { await nextTick(); highlightAnchors() },
@@ -440,19 +448,19 @@ async function copyToWorkspace() {
 
 /* Comment anchor highlights */
 .viewer-prose :deep(mark.comment-anchor) {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--secondary, #f59e0b) 30%, transparent);
   color: inherit;
   border-radius: 2px;
-  padding: 0 1px;
+  padding: 0 2px;
   cursor: pointer;
   transition: background 0.2s;
 }
 .viewer-prose :deep(mark.comment-anchor:hover) {
-  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: color-mix(in srgb, var(--secondary, #f59e0b) 50%, transparent);
 }
 .viewer-prose :deep(mark.comment-anchor.flash) {
-  background: color-mix(in srgb, var(--accent) 55%, transparent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--secondary, #f59e0b) 65%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--secondary, #f59e0b) 80%, transparent);
   border-radius: 3px;
   transition: none;
 }

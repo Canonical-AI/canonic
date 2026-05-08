@@ -92,8 +92,8 @@ provide('isDark', isDark)
 const nodeViewFactory = useNodeViewFactory()
 const pluginViewFactory = usePluginViewFactory()
 
-const floatingToolbarPlugin = $prose(() => new Plugin({
-  view: pluginViewFactory({ component: FloatingToolbar })
+const floatingToolbarPlugin = $prose((ctx) => new Plugin({
+  view: pluginViewFactory({ component: FloatingToolbar, key: 'floating-toolbar' })
 }))
 
 // --- Wiki-link trigger ---

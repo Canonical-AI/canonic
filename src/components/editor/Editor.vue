@@ -300,19 +300,21 @@ function toggleLink() {
   nextTick(() => linkInput.value?.focus())
 }
 
-async function submitLink() {
+function submitLink() {
   const url = linkUrl.value.trim()
   if (!url) return
   milkdownEditor.value?.addLink(url)
   isAddingLink.value = false
   linkUrl.value = ''
   linkButtonActive.value = false
+  milkdownEditor.value?.focusEditor()
 }
 
 function cancelLink() {
   isAddingLink.value = false
   linkUrl.value = ''
   linkButtonActive.value = false
+  milkdownEditor.value?.focusEditor()
 }
 
 async function doMerge() {

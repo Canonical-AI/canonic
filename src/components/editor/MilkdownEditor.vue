@@ -136,5 +136,12 @@ function removeLink() {
   })
 }
 
-defineExpose({ hasLinkAtSelection, addLink, removeLink })
+function focusEditor() {
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    view?.focus()
+  })
+}
+
+defineExpose({ hasLinkAtSelection, addLink, removeLink, focusEditor })
 </script>

@@ -7,8 +7,8 @@
     @mousedown.prevent
   >
     <span class="chip-icon">@</span>
-    <span class="chip-name">{{ node.attrs.name }}</span>
-    <span v-if="node.attrs.anchor" class="chip-anchor">{{ node.attrs.anchor }}</span>
+    <span class="chip-name">{{ node.value.attrs.name }}</span>
+    <span v-if="node.value.attrs.anchor" class="chip-anchor">{{ node.value.attrs.anchor }}</span>
   </span>
 </template>
 
@@ -50,6 +50,7 @@ async function createDoc() {
 
 async function generateContent(name) {
   try {
+    window.canonic.ai.removeListeners()
     const parentContent = store.currentContent || ''
     const prompt = `You are helping create a new document. The user is writing a document and referenced a new document titled "${name}". Based on the context below from the parent document, write a short, useful starter template for the new document. Output only the document content in markdown, no commentary.\n\nParent document context:\n${parentContent.slice(0, 2000)}`
 
@@ -68,6 +69,7 @@ async function generateContent(name) {
       model: store.config.aiModel,
     })
   } catch {
+    window.canonic.ai.removeListeners()
     // fall back to empty doc silently
   }
 }

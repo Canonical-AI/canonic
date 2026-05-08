@@ -45,7 +45,7 @@
             >
               <FileText :size="13" />
               <span class="file-name">{{ file.name }}</span>
-              <span class="perm-badge">view</span>
+              <span class="perm-badge" :class="file.permission ?? 'view'">{{ file.permission ?? 'view' }}</span>
             </button>
           </div>
         </div>
@@ -226,7 +226,7 @@ async function copyToWorkspace() {
 
 function openDemoFile(peer, file) {
   const content = demoConfig.files[file.path] ?? `# ${file.name}\n\n*(No preview available)*`
-  store.openPeerFile({ peer, relPath: file.path, content })
+  store.openPeerFile({ peer: { ...peer, permission: file.permission ?? 'view' }, relPath: file.path, content })
 }
 
 function unfavoriteDemoPeer(id) {

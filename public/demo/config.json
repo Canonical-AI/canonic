@@ -24,10 +24,10 @@
       "online": true,
       "workspaceName": "Priya's Product Workspace",
       "files": [
-        { "path": "Vision/product-vision.md", "name": "product-vision", "type": "file" },
-        { "path": "Strategy/strategy.md", "name": "strategy", "type": "file" },
-        { "path": "Strategy/competitive-analysis.md", "name": "competitive-analysis", "type": "file" },
-        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file" }
+        { "path": "Vision/product-vision.md", "name": "product-vision", "type": "file", "permission": "comment" },
+        { "path": "Strategy/strategy.md", "name": "strategy", "type": "file", "permission": "comment" },
+        { "path": "Strategy/competitive-analysis.md", "name": "competitive-analysis", "type": "file", "permission": "view" },
+        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file", "permission": "view" }
       ]
     },
     {
@@ -38,9 +38,9 @@
       "lastSeen": "3h ago",
       "workspaceName": "Ben's Platform Docs",
       "files": [
-        { "path": "Discovery/problem-statement.md", "name": "problem-statement", "type": "file" },
-        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file" },
-        { "path": "Discovery/user-research.md", "name": "user-research", "type": "file" }
+        { "path": "Discovery/problem-statement.md", "name": "problem-statement", "type": "file", "permission": "comment" },
+        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file", "permission": "view" },
+        { "path": "Discovery/user-research.md", "name": "user-research", "type": "file", "permission": "view" }
       ]
     }
   ],

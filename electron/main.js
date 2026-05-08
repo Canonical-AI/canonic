@@ -14,6 +14,7 @@ let gitService;
 let searchService;
 let shareService;
 const discoveryService = require("./discovery");
+const { flushPeerComments } = require("./comment-sync");
 
 // In-memory list of currently discovered (online) peers
 const discoveredPeers = [];
@@ -54,59 +55,6 @@ function startNetworkWatcher() {
 // ── Comment sync queue ─────────────────────────────────────────────────────
 const PEER_COMMENTS_DIR = path.join(os.homedir(), ".canonic", "comments", "peers");
 
-async function flushPeerComments() {
-  if (!fs.existsSync(PEER_COMMENTS_DIR)) return;
-  let fetch;
-  try {
-    fetch = (await import("node-fetch")).default;
-  } catch {
-    return;
-  }
-  const authorDirs = fs.readdirSync(PEER_COMMENTS_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
-
-  for (const author of authorDirs) {
-    const peer = discoveredPeers.find((p) => p.name === author);
-    if (!peer) continue;
-
-    const authorDir = path.join(PEER_COMMENTS_DIR, author);
-    const files = fs.readdirSync(authorDir).filter((f) => f.endsWith(".json"));
-
-    for (const file of files) {
-      const filePath = path.join(authorDir, file);
-      let comments;
-      try {
-        comments = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      } catch {
-        continue;
-      }
-      const unsynced = comments.filter((c) => !c.synced);
-      if (!unsynced.length) continue;
-
-      const relPath = file.replace(/_/g, "/").replace(/\.json$/, "");
-      try {
-        const res = await fetch(
-          `http://${peer.host}:${peer.port}/comments?token=${peer.token}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filePath: relPath, comments: unsynced }),
-            timeout: 5000,
-          }
-        );
-        if (res.ok) {
-          const updated = comments.map((c) =>
-            unsynced.find((u) => u.id === c.id) ? { ...c, synced: true } : c
-          );
-          fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), "utf-8");
-        }
-      } catch {
-        // retry next cycle
-      }
-    }
-  }
-}
 
 // Suppress harmless Chrome DevTools autofill protocol errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
@@ -383,7 +331,7 @@ function setupIpcHandlers() {
   });
 
   // Start 60s comment sync interval
-  setInterval(flushPeerComments, 60000);
+  setInterval(() => flushPeerComments(discoveredPeers), 60000);
 
   // --- Workspace ---
   ipcMain.handle("workspace:open-dialog", async () => {

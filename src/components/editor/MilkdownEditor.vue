@@ -103,43 +103,33 @@ const wikiTriggerPlugin = $prose(() => new Plugin({
       if (text !== '[') return false
 
       const { state } = view
-      const before = state.doc.textBetween(
-        Math.max(0, state.selection.from - 1),
-        state.selection.from
-      )
-
+      // The first [ is immediately before the insertion point (_from)
+      const before = state.doc.textBetween(Math.max(0, _from - 1), _from)
       if (before !== '[') return false
 
-      // Second [ typed — show the tooltip
-      const coords = view.coordsAtPos(state.selection.from)
-      setTimeout(() => {
-        wikiTooltipRef.value?.open(
-          { top: coords.bottom + 4, left: coords.left },
-          (name) => insertWikiLink(view, name),
-          () => {}
-        )
-      }, 0)
+      // Capture the start of [[ at trigger time so insertWikiLink isn't
+      // sensitive to cursor movement while the tooltip is open.
+      const bracketStart = _from - 1
+      const coords = view.coordsAtPos(_from)
+      wikiTooltipRef.value?.open(
+        { top: coords.bottom + 4, left: coords.left },
+        (name) => insertWikiLink(view, name, bracketStart),
+        () => {}
+      )
 
       return false
     }
   }
 }))
 
-function insertWikiLink(view, name) {
+function insertWikiLink(view, name, bracketStart) {
   const { state, dispatch } = view
-  const from = state.selection.from
-  const textBefore = state.doc.textBetween(Math.max(0, from - 10), from)
-  const bracketIdx = textBefore.lastIndexOf('[[')
-  if (bracketIdx === -1) return
-
-  const replaceFrom = from - (textBefore.length - bracketIdx)
-
   const nodeType = state.schema.nodes.wiki_link
   if (!nodeType) return
-
+  // After handleTextInput returns false the second [ is inserted, so [[ spans
+  // bracketStart to bracketStart + 2.
   const node = nodeType.create({ name, anchor: null })
-  const tr = state.tr.replaceWith(replaceFrom, from, node)
-  dispatch(tr)
+  dispatch(state.tr.replaceWith(bracketStart, bracketStart + 2, node))
 }
 
 // --- Editor setup ---

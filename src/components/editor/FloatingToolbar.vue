@@ -57,11 +57,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, nextTick, watch } from 'vue'
 import { usePluginViewContext } from '@prosemirror-adapter/vue'
 import { Bold, Italic, Strikethrough, Link, List, ListOrdered, Quote, Code } from 'lucide-vue-next'
 
-const { view } = usePluginViewContext()
+const { view, prevState } = usePluginViewContext()
+
+watch(prevState, () => updateState())
 
 const show = ref(false)
 const style = reactive({ position: 'fixed', top: '0px', left: '0px', zIndex: 2000, transform: 'translateX(-50%)' })
@@ -188,19 +190,6 @@ function submitUrl() {
   v.focus()
 }
 
-onMounted(() => {
-  const dom = view.value?.dom
-  if (!dom) return
-  dom.addEventListener('mouseup', updateState)
-  dom.addEventListener('keyup', updateState)
-})
-
-onUnmounted(() => {
-  const dom = view.value?.dom
-  if (!dom) return
-  dom.removeEventListener('mouseup', updateState)
-  dom.removeEventListener('keyup', updateState)
-})
 </script>
 
 <style scoped>

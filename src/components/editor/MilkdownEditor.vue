@@ -170,6 +170,7 @@ const { loading, get } = useEditor((root) =>
       $view(wikiLinkNode, () =>
         nodeViewFactory({
           component: WikiLinkChip,
+          as: 'span',
           stopEvent: () => true,
         })
       )

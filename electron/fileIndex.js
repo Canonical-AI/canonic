@@ -51,6 +51,10 @@ function startWatcher(workspacePath, onUpdate) {
   watcher.on('unlink', refresh)
   watcher.on('addDir', refresh)
   watcher.on('unlinkDir', refresh)
+
+  watcher.on('error', (err) => {
+    console.error('[fileIndex] watcher error:', err)
+  })
 }
 
 function stopWatcher() {

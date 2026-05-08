@@ -43,7 +43,7 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("files:move", workspacePath, oldPath, newPath),
     getIndex: () => ipcRenderer.invoke("files:index"),
     onIndexUpdate: (cb) => ipcRenderer.on("files:index-update", (_, idx) => cb(idx)),
-    offIndexUpdate: (cb) => ipcRenderer.removeListener("files:index-update", cb),
+    offIndexUpdate: () => ipcRenderer.removeAllListeners("files:index-update"),
     trash: {
       delete: (workspacePath, itemPath, isDirectory) =>
         ipcRenderer.invoke("files:trash", workspacePath, itemPath, isDirectory),

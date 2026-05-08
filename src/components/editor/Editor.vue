@@ -287,6 +287,7 @@ function toggleLink() {
   if (isAddingLink.value) {
     isAddingLink.value = false
     linkUrl.value = ''
+    linkButtonActive.value = false
     return
   }
   if (milkdownEditor.value?.hasLinkAtSelection()) {

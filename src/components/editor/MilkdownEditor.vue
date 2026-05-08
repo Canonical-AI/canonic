@@ -1,5 +1,6 @@
 <template>
   <Milkdown />
+  <WikiLinkTooltip ref="wikiTooltipRef" />
 </template>
 
 <script setup>
@@ -15,7 +16,10 @@ import { Decoration, DecorationSet } from 'prosemirror-view'
 import { mermaidRemark, mermaidNode } from './mermaid/index.js'
 import MermaidComponent from './mermaid/MermaidComponent.vue'
 import { useNodeViewFactory } from '@prosemirror-adapter/vue'
-import { $view } from '@milkdown/utils'
+import { $view, $prose } from '@milkdown/utils'
+import { wikiLinkRemark, wikiLinkNode } from './wiki-link/index.js'
+import WikiLinkChip from './wiki-link/WikiLinkChip.vue'
+import WikiLinkTooltip from './wiki-link/WikiLinkTooltip.vue'
 
 const props = defineProps({ content: String, comments: Array })
 const emit = defineEmits(['update'])
@@ -86,6 +90,58 @@ provide('isDark', isDark)
 
 const nodeViewFactory = useNodeViewFactory()
 
+// --- Wiki-link trigger ---
+
+const wikiTooltipRef = ref(null)
+
+const WIKI_KEY = new PluginKey('wikiLinkTrigger')
+
+const wikiTriggerPlugin = $prose(() => new Plugin({
+  key: WIKI_KEY,
+  props: {
+    handleTextInput(view, _from, _to, text) {
+      if (text !== '[') return false
+
+      const { state } = view
+      const before = state.doc.textBetween(
+        Math.max(0, state.selection.from - 1),
+        state.selection.from
+      )
+
+      if (before !== '[') return false
+
+      // Second [ typed — show the tooltip
+      const coords = view.coordsAtPos(state.selection.from)
+      setTimeout(() => {
+        wikiTooltipRef.value?.open(
+          { top: coords.bottom + 4, left: coords.left },
+          (name) => insertWikiLink(view, name),
+          () => {}
+        )
+      }, 0)
+
+      return false
+    }
+  }
+}))
+
+function insertWikiLink(view, name) {
+  const { state, dispatch } = view
+  const from = state.selection.from
+  const textBefore = state.doc.textBetween(Math.max(0, from - 10), from)
+  const bracketIdx = textBefore.lastIndexOf('[[')
+  if (bracketIdx === -1) return
+
+  const replaceFrom = from - (textBefore.length - bracketIdx)
+
+  const nodeType = state.schema.nodes.wiki_link
+  if (!nodeType) return
+
+  const node = nodeType.create({ name, anchor: null })
+  const tr = state.tr.replaceWith(replaceFrom, from, node)
+  dispatch(tr)
+}
+
 // --- Editor setup ---
 
 const { loading, get } = useEditor((root) =>
@@ -106,6 +162,17 @@ const { loading, get } = useEditor((root) =>
       $view(mermaidNode, () =>
         nodeViewFactory({
           component: MermaidComponent,
+          stopEvent: () => true,
+        })
+      )
+    )
+    .use(wikiLinkRemark)
+    .use(wikiLinkNode)
+    .use(wikiTriggerPlugin)
+    .use(
+      $view(wikiLinkNode, () =>
+        nodeViewFactory({
+          component: WikiLinkChip,
           stopEvent: () => true,
         })
       )

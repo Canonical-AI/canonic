@@ -44,6 +44,23 @@
       ]
     }
   ],
+  "discoveredPeers": [
+    {
+      "id": "maya-chen@maya-mbp.local",
+      "name": "maya-chen",
+      "online": true
+    },
+    {
+      "id": "luca-russo@luca-studio.local",
+      "name": "luca-russo",
+      "online": true
+    },
+    {
+      "id": "sofia-reyes@sofia-air.local",
+      "name": "sofia-reyes",
+      "online": false
+    }
+  ],
   "comments": {
     "Vision/product-vision.md": [
       {

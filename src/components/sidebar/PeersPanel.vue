@@ -169,6 +169,10 @@ function basename(relPath) {
 async function switchToDiscover() {
   view.value = 'discover'
   if (allDiscovered.value.length > 0) return
+  if (store.isDemoMode) {
+    allDiscovered.value = demoConfig.discoveredPeers || []
+    return
+  }
   discovering.value = true
   try {
     const peers = await api.peers.listDiscovered()
@@ -203,6 +207,15 @@ function openDemoFile(peer, file) {
 }
 
 function toggleFavorite(peer) {
+  if (store.isDemoMode) {
+    // In demo mode just toggle the local set without hitting IPC
+    if (store.favoritedPeerIds.has(peer.id)) {
+      store.favoritedPeerIds.delete(peer.id)
+    } else {
+      store.favoritedPeerIds.add(peer.id)
+    }
+    return
+  }
   if (store.favoritedPeerIds.has(peer.id)) {
     store.unfavoritePeer(peer.id)
   } else {

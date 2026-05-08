@@ -14,48 +14,82 @@
 
     <!-- FAVORITES VIEW -->
     <div v-if="view === 'favorites'" class="panel-body">
-      <div v-if="store.favoritedPeers.length === 0" class="empty-hint">
-        No favorited peers yet. Switch to Discover to find people on your network and star them.
-      </div>
-
-      <div v-for="peer in store.favoritedPeers" :key="peer.id" class="peer-group">
-        <div class="peer-header">
-          <div class="peer-avatar">{{ initials(peer.name) }}</div>
-          <div class="peer-info">
-            <span class="peer-name">{{ peer.name }}</span>
-            <span class="peer-id">{{ peer.id }}</span>
+      <!-- Demo mode: show legacy demo peers -->
+      <template v-if="store.isDemoMode">
+        <div v-for="peer in store.demoPeers" :key="peer.id" class="peer-group">
+          <div class="peer-header">
+            <div class="peer-avatar">{{ initials(peer.name) }}</div>
+            <div class="peer-info">
+              <span class="peer-name">{{ peer.name }}</span>
+              <span class="peer-id">{{ peer.role }}</span>
+            </div>
+            <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
+              <span class="status-dot" />
+            </div>
           </div>
-          <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
-            <span class="status-dot" />
-          </div>
-          <button class="icon-btn unfav-btn" title="Unfavorite" @click="store.unfavoritePeer(peer.id)">
-            <Star :size="13" fill="currentColor" />
-          </button>
-        </div>
-
-        <div v-if="peer.online">
-          <div v-if="peerFiles[peer.id] === undefined" class="peer-files-loading">
-            <button class="load-files-btn" @click="loadFiles(peer)">Load files…</button>
-          </div>
-          <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
-            Could not load files.
-          </div>
-          <div v-else class="peer-files">
-            <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+          <div class="peer-workspace-name">{{ peer.workspaceName }}</div>
+          <div class="peer-files">
             <button
-              v-for="relPath in peerFiles[peer.id]"
-              :key="relPath"
+              v-for="file in peer.files"
+              :key="file.path"
               class="peer-file"
-              @click="openFile(peer, relPath)"
             >
               <FileText :size="13" />
-              <span class="file-name">{{ basename(relPath) }}</span>
-              <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+              <span class="file-name">{{ file.name }}</span>
+              <span class="perm-badge">view</span>
             </button>
           </div>
         </div>
-        <div v-else class="peer-offline-hint">Offline — can't load files</div>
-      </div>
+        <div v-if="!store.demoPeers.length" class="empty-hint">
+          No shared workspaces yet.
+        </div>
+      </template>
+
+      <!-- Live mode -->
+      <template v-else>
+        <div v-if="store.favoritedPeers.length === 0" class="empty-hint">
+          No favorited peers yet. Switch to Discover to find people on your network and star them.
+        </div>
+
+        <div v-for="peer in store.favoritedPeers" :key="peer.id" class="peer-group">
+          <div class="peer-header">
+            <div class="peer-avatar">{{ initials(peer.name) }}</div>
+            <div class="peer-info">
+              <span class="peer-name">{{ peer.name }}</span>
+              <span class="peer-id">{{ peer.id }}</span>
+            </div>
+            <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
+              <span class="status-dot" />
+            </div>
+            <button class="icon-btn unfav-btn" title="Unfavorite" @click="store.unfavoritePeer(peer.id)">
+              <Star :size="13" fill="currentColor" />
+            </button>
+          </div>
+
+          <div v-if="peer.online">
+            <div v-if="peerFiles[peer.id] === undefined" class="peer-files-loading">
+              <button class="load-files-btn" @click="loadFiles(peer)">Load files…</button>
+            </div>
+            <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
+              Could not load files.
+            </div>
+            <div v-else class="peer-files">
+              <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+              <button
+                v-for="relPath in peerFiles[peer.id]"
+                :key="relPath"
+                class="peer-file"
+                @click="openFile(peer, relPath)"
+              >
+                <FileText :size="13" />
+                <span class="file-name">{{ basename(relPath) }}</span>
+                <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+              </button>
+            </div>
+          </div>
+          <div v-else class="peer-offline-hint">Offline — can't load files</div>
+        </div>
+      </template>
     </div>
 
     <!-- DISCOVER VIEW -->
@@ -299,6 +333,13 @@ function toggleFavorite(peer) {
 .fav-btn { color: var(--text-muted); }
 .fav-btn:hover { color: var(--accent); }
 .unfav-btn { color: var(--accent); }
+
+.peer-workspace-name {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0 10px 4px 43px;
+  font-style: italic;
+}
 
 .peer-files {
   display: flex;

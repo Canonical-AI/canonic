@@ -93,7 +93,7 @@ const nodeViewFactory = useNodeViewFactory()
 const pluginViewFactory = usePluginViewFactory()
 
 const floatingToolbarPlugin = $prose((ctx) => new Plugin({
-  view: pluginViewFactory({ component: FloatingToolbar, key: 'floating-toolbar' })
+  view: pluginViewFactory({ component: FloatingToolbar })
 }))
 
 // --- Wiki-link trigger ---

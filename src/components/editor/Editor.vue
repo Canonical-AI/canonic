@@ -54,14 +54,16 @@
 
     <div class="editor-scroll" ref="editorScrollEl">
       <div class="editor-content" ref="editorContentEl" @mouseup="onMouseUp" @click="onEditorClick" :style="{ '--editor-font-size': editorFontSize + 'px' }">
-        <MilkdownProvider :key="store.currentFile">
-          <MilkdownEditor
-            ref="milkdownEditor"
-            :content="store.currentContent"
-            :comments="store.comments"
-            @update="onContentUpdate"
-          />
-        </MilkdownProvider>
+        <ProsemirrorAdapterProvider>
+          <MilkdownProvider :key="store.currentFile">
+            <MilkdownEditor
+              ref="milkdownEditor"
+              :content="store.currentContent"
+              :comments="store.comments"
+              @update="onContentUpdate"
+            />
+          </MilkdownProvider>
+        </ProsemirrorAdapterProvider>
       </div>
     </div>
 
@@ -111,6 +113,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { MilkdownProvider } from '@milkdown/vue'
+import { ProsemirrorAdapterProvider } from '@prosemirror-adapter/vue'
 import { useAppStore } from '../../store'
 import { v4 as uuidv4 } from 'uuid'
 import { MessageSquarePlus, Tag, GitFork, GitBranch } from 'lucide-vue-next'

@@ -1,5 +1,5 @@
 <template>
-    <div class="layout">
+    <div class="layout" :class="{ 'is-resizing': isResizing }">
         <!-- Titlebar -->
         <div class="titlebar">
             <div class="titlebar-left">
@@ -132,7 +132,9 @@
                 v-if="store.currentFile"
                 class="right-panel"
                 :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
+                :style="store.rightPanelCollapsed ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined }"
             >
+                <div v-if="!store.rightPanelCollapsed" class="resize-handle" @mousedown="onResizeStart" />
                 <div class="panel-tabs" :class="{ 'panel-tabs--collapsed': store.rightPanelCollapsed }">
                     <!-- Collapse toggle (leftmost when collapsed, topmost when open) -->
                     <button
@@ -149,7 +151,6 @@
                         title="Comments"
                     >
                         <MessageSquare :size="15" />
-                        <span v-if="!store.rightPanelCollapsed" class="tab-label">Comments</span>
                     </button>
                     <button
                         :class="['tab', store.rightPanelTab === 'ai' && 'active']"
@@ -157,7 +158,6 @@
                         title="AI"
                     >
                         <Sparkles :size="15" />
-                        <span v-if="!store.rightPanelCollapsed" class="tab-label">AI</span>
                     </button>
                     <button
                         :class="['tab', store.rightPanelTab === 'history' && 'active']"
@@ -165,7 +165,6 @@
                         title="History"
                     >
                         <History :size="15" />
-                        <span v-if="!store.rightPanelCollapsed" class="tab-label">History</span>
                     </button>
                     <button
                         :class="['tab', store.rightPanelTab === 'share' && 'active']"
@@ -173,7 +172,6 @@
                         title="Share"
                     >
                         <Share2 :size="15" />
-                        <span v-if="!store.rightPanelCollapsed" class="tab-label">Share</span>
                     </button>
                 </div>
                 <template v-if="!store.rightPanelCollapsed">
@@ -444,6 +442,34 @@ function handleRightTabClick(tab) {
         store.rightPanelTab = tab;
     }
 }
+
+const RIGHT_PANEL_WIDTH_KEY = "canonic:rightPanelWidth";
+const rightPanelWidth = ref(
+    parseInt(localStorage.getItem(RIGHT_PANEL_WIDTH_KEY) || "280")
+);
+const isResizing = ref(false);
+
+function onResizeStart(e) {
+    e.preventDefault();
+    isResizing.value = true;
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth.value;
+
+    function onMouseMove(e) {
+        const delta = startX - e.clientX;
+        rightPanelWidth.value = Math.max(200, Math.min(600, startWidth + delta));
+    }
+
+    function onMouseUp() {
+        isResizing.value = false;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, rightPanelWidth.value);
+    }
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+}
 </script>
 
 <style scoped>
@@ -453,6 +479,12 @@ function handleRightTabClick(tab) {
     height: 100vh;
     background: var(--bg-base);
     color: var(--text-primary);
+}
+
+.layout.is-resizing,
+.layout.is-resizing * {
+    user-select: none;
+    cursor: col-resize !important;
 }
 
 .titlebar {
@@ -642,6 +674,22 @@ function handleRightTabClick(tab) {
     background: var(--bg-sidebar);
     overflow: hidden;
     transition: width 0.2s ease;
+    position: relative;
+}
+
+.resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    cursor: col-resize;
+    z-index: 10;
+    transition: background 0.15s;
+}
+
+.resize-handle:hover {
+    background: var(--accent-muted);
 }
 
 .right-panel--collapsed {
@@ -661,9 +709,9 @@ function handleRightTabClick(tab) {
 }
 
 .panel-tabs .tab {
-    flex: 1;
+    flex: 0 0 auto;
     border-radius: 0;
-    padding: 9px 0;
+    padding: 9px 12px;
     font-size: 0.75rem;
     display: flex;
     align-items: center;

@@ -468,8 +468,6 @@ onMounted(() => {
 }
 
 .editor-content {
-  max-width: 720px;
-  margin: 0 auto;
   padding: 32px 48px 80px;
   position: relative;
   min-height: 100%;

@@ -37,7 +37,7 @@ describe("config", () => {
     expect(cfg).toHaveProperty("telemetryEnabled", false);
     expect(cfg.sharingDefaults).toMatchObject({
       scope: "file",
-      accessLevel: "read",
+      permission: "view",
     });
   });
 

@@ -58,6 +58,19 @@ export const useAppStore = defineStore("app", () => {
   const agentSession = ref(null);   // null | { sessionId, agentName, file, startedAt }
   const actionPickerOpen = ref(false);
 
+  // Peer discovery state
+  const discoveredPeers = ref([]);
+  const favoritedPeerIds = reactive(new Set());
+  const favoritedPeers = computed(() =>
+    discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
+  );
+  const peerFileContent = ref(null); // { peer, relPath, content } | null
+  const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
+  const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
+  const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
+  const networkChanged = ref(false);
+  const fileIndex = ref({});
+
   const api = window.canonic;
 
   // Register agent session IPC listeners once
@@ -72,6 +85,27 @@ export const useAppStore = defineStore("app", () => {
   api.share.onStats((stats) => {
     shareStatsByFile[stats.filePath] = { reads: stats.reads, connected: stats.connected };
   });
+
+  // Wire peer discovery IPC listeners
+  if (api.peers.onFound) {
+    api.peers.onFound((peer) => {
+      const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
+      if (idx >= 0) discoveredPeers.value[idx] = peer;
+      else discoveredPeers.value.push(peer);
+    });
+    api.peers.onLost(({ id }) => {
+      const idx = discoveredPeers.value.findIndex((p) => p.id === id);
+      if (idx >= 0) discoveredPeers.value.splice(idx, 1);
+    });
+  }
+
+  if (api.share.onNetworkChanged) {
+    api.share.onNetworkChanged(() => { networkChanged.value = true });
+  }
+
+  if (api.files.onIndexUpdate) {
+    api.files.onIndexUpdate((idx) => { fileIndex.value = idx });
+  }
 
 
   // Active branch for the current document (defaults to 'main' if not in map)
@@ -158,6 +192,14 @@ export const useAppStore = defineStore("app", () => {
       await refreshBranches();
       await loadDocBranchMap();
       await loadTrash();
+      if (api.peers?.list) {
+        const persistedPeers = await api.peers.list()
+        persistedPeers.forEach(p => { if (p.favorited) favoritedPeerIds.add(p.id) })
+      }
+      if (api.files.getIndex) {
+        const idx = await api.files.getIndex();
+        fileIndex.value = idx;
+      }
       await logEvent("workspace:open", { template });
     } finally {
       isLoading.value = false;
@@ -798,6 +840,47 @@ export const useAppStore = defineStore("app", () => {
   function openActionPicker() { actionPickerOpen.value = true }
   function closeActionPicker() { actionPickerOpen.value = false }
 
+  async function favoritePeer(id) {
+    await api.peers.favorite(id);
+    favoritedPeerIds.add(id);
+  }
+
+  async function unfavoritePeer(id) {
+    await api.peers.unfavorite(id);
+    favoritedPeerIds.delete(id);
+  }
+
+  function setActiveComment(id) {
+    activeCommentId.value = id;
+  }
+
+  function openPeerFile(payload) {
+    if (!payload) {
+      peerFileContent.value = null;
+      peerFileComments.value = [];
+      activeCommentId.value = null;
+      return;
+    }
+    const { peer, relPath, content, comments } = payload;
+    peerFileContent.value = { peer, relPath, content };
+    peerFileComments.value = comments ? [...comments] : [];
+  }
+
+  function addPeerComment(comment) {
+    peerFileComments.value.unshift(comment);
+  }
+
+  function updatePeerComment(id, patch) {
+    const idx = peerFileComments.value.findIndex(c => c.id === id);
+    if (idx >= 0) peerFileComments.value[idx] = { ...peerFileComments.value[idx], ...patch };
+  }
+
+  async function copyPeerFileToWorkspace({ relPath, content }) {
+    if (!workspacePath.value) return;
+    await api.files.write(workspacePath.value, relPath, content);
+    await refreshFiles();
+  }
+
   return {
     workspacePath,
     workspaceName,
@@ -882,5 +965,21 @@ export const useAppStore = defineStore("app", () => {
     addAgentComment,
     openActionPicker,
     closeActionPicker,
+    discoveredPeers,
+    favoritedPeerIds,
+    favoritedPeers,
+    peerFileContent,
+    navBack,
+    peerFileComments,
+    activeCommentId,
+    networkChanged,
+    favoritePeer,
+    unfavoritePeer,
+    openPeerFile,
+    addPeerComment,
+    updatePeerComment,
+    setActiveComment,
+    copyPeerFileToWorkspace,
+    fileIndex,
   };
 });

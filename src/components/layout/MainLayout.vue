@@ -118,7 +118,8 @@
 
             <!-- Editor -->
             <main class="editor-area">
-                <Editor v-if="store.currentFile" />
+                <PeerFileViewer v-if="store.peerFileContent" />
+                <Editor v-else-if="store.currentFile" />
                 <div v-else class="empty-state">
                     <p>Open a document or create a new one</p>
                     <button class="btn-primary" @click="newDoc">
@@ -129,7 +130,7 @@
 
             <!-- Right panel -->
             <aside
-                v-if="store.currentFile"
+                v-if="store.currentFile || store.peerFileContent"
                 class="right-panel"
                 :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
                 :style="store.rightPanelCollapsed ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined }"
@@ -249,6 +250,7 @@ import FileTree from "../sidebar/FileTree.vue";
 import SearchPanel from "../sidebar/SearchPanel.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
 import Editor from "../editor/Editor.vue";
+import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
 import AIChat from "../panels/AIChat.vue";
 import HistoryPanel from "../panels/HistoryPanel.vue";

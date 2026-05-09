@@ -206,6 +206,7 @@ const taskCheckboxPlugin = $prose(() => new Plugin({
   }
 }))
 
+
 // --- Trailing paragraph plugin ---
 // ProseMirror atom nodes (mermaid_block, wiki_link) at the end of the doc leave no
 // place to put the cursor. This plugin ensures there is always a trailing paragraph.

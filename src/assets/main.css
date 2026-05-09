@@ -160,6 +160,7 @@ button:focus:not(:focus-visible) { outline: none; }
   text-decoration: line-through;
 }
 
+
 .inline-completion-ghost {
   display: inline;
   color: var(--text-muted, #6b7280);

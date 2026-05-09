@@ -248,7 +248,11 @@ app.whenReady().then(async () => {
 function setupAutoUpdater() {
   if (isDev) return;
 
-  autoUpdater.autoDownload = false;
+  // Read channel preference at boot (changing channel requires restart)
+  const cfg = configService.read();
+  autoUpdater.autoDownload = false; // downloads are controlled manually
+  autoUpdater.allowPrerelease = cfg?.updateChannel === "experimental";
+
   autoUpdater.checkForUpdatesAndNotify();
 
   // Check for updates every 4 hours
@@ -261,6 +265,12 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-available", (info) => {
     mainWindow?.webContents.send("update:available", info);
+    // Re-read config live so toggling autoUpdate in Settings takes effect
+    // without requiring a restart
+    const liveCfg = configService.read();
+    if (liveCfg?.autoUpdate !== false) {
+      autoUpdater.downloadUpdate();
+    }
   });
 
   autoUpdater.on("download-progress", (progressObj) => {

@@ -14,8 +14,13 @@
 
     <!-- FAVORITES VIEW -->
     <div v-if="view === 'favorites'" class="panel-body">
-      <!-- Demo mode: show legacy demo peers -->
+      <!-- Demo mode: show favorited peers (demoPeers + any favorited from Discover) -->
       <template v-if="store.isDemoMode">
+        <div v-if="!store.demoPeers.length && !store.favoritedPeers.length" class="empty-hint">
+          No favorited peers yet. Switch to Discover to find people on your network and star them.
+        </div>
+
+        <!-- Legacy demo peers (Priya, Ben) -->
         <div v-for="peer in store.demoPeers" :key="peer.id" class="peer-group">
           <div class="peer-header">
             <div class="peer-avatar">{{ initials(peer.name) }}</div>
@@ -26,6 +31,9 @@
             <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
               <span class="status-dot" />
             </div>
+            <button class="icon-btn unfav-btn" title="Unfavorite" @click="unfavoriteDemoPeer(peer.id)">
+              <Star :size="13" fill="currentColor" />
+            </button>
           </div>
           <div class="peer-workspace-name">{{ peer.workspaceName }}</div>
           <div class="peer-files">
@@ -37,12 +45,27 @@
             >
               <FileText :size="13" />
               <span class="file-name">{{ file.name }}</span>
-              <span class="perm-badge">view</span>
+              <span class="perm-badge" :class="file.permission ?? 'view'">{{ file.permission ?? 'view' }}</span>
             </button>
           </div>
         </div>
-        <div v-if="!store.demoPeers.length" class="empty-hint">
-          No shared workspaces yet.
+
+        <!-- Discovered peers that were favorited -->
+        <div v-for="peer in store.favoritedPeers" :key="peer.id" class="peer-group">
+          <div class="peer-header">
+            <div class="peer-avatar">{{ initials(peer.name) }}</div>
+            <div class="peer-info">
+              <span class="peer-name">{{ peer.name }}</span>
+              <span class="peer-id">{{ peer.id }}</span>
+            </div>
+            <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
+              <span class="status-dot" />
+            </div>
+            <button class="icon-btn unfav-btn" title="Unfavorite" @click="toggleFavorite(peer)">
+              <Star :size="13" fill="currentColor" />
+            </button>
+          </div>
+          <div class="peer-offline-hint">{{ peer.online ? 'Online — not sharing files' : 'Offline' }}</div>
         </div>
       </template>
 
@@ -203,16 +226,28 @@ async function copyToWorkspace() {
 
 function openDemoFile(peer, file) {
   const content = demoConfig.files[file.path] ?? `# ${file.name}\n\n*(No preview available)*`
-  store.openPeerFile({ peer, relPath: file.path, content })
+  const comments = demoConfig.comments?.[file.path] ?? []
+  store.openPeerFile({ peer: { ...peer, permission: file.permission ?? 'view' }, relPath: file.path, content, comments })
+}
+
+function unfavoriteDemoPeer(id) {
+  const idx = store.demoPeers.findIndex(p => p.id === id)
+  if (idx >= 0) store.demoPeers.splice(idx, 1)
 }
 
 function toggleFavorite(peer) {
   if (store.isDemoMode) {
-    // In demo mode just toggle the local set without hitting IPC
     if (store.favoritedPeerIds.has(peer.id)) {
       store.favoritedPeerIds.delete(peer.id)
+      // Remove from discoveredPeers so favoritedPeers computed updates
+      const idx = store.discoveredPeers.findIndex(p => p.id === peer.id)
+      if (idx >= 0) store.discoveredPeers.splice(idx, 1)
     } else {
       store.favoritedPeerIds.add(peer.id)
+      // Add to discoveredPeers so favoritedPeers computed picks it up
+      if (!store.discoveredPeers.find(p => p.id === peer.id)) {
+        store.discoveredPeers.push(peer)
+      }
     }
     return
   }

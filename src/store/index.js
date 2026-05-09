@@ -65,7 +65,11 @@ export const useAppStore = defineStore("app", () => {
     discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
   );
   const peerFileContent = ref(null); // { peer, relPath, content } | null
+  const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
+  const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
+  const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
+  const fileIndex = ref({});
 
   const api = window.canonic;
 
@@ -97,6 +101,10 @@ export const useAppStore = defineStore("app", () => {
 
   if (api.share.onNetworkChanged) {
     api.share.onNetworkChanged(() => { networkChanged.value = true });
+  }
+
+  if (api.files.onIndexUpdate) {
+    api.files.onIndexUpdate((idx) => { fileIndex.value = idx });
   }
 
 
@@ -187,6 +195,10 @@ export const useAppStore = defineStore("app", () => {
       if (api.peers?.list) {
         const persistedPeers = await api.peers.list()
         persistedPeers.forEach(p => { if (p.favorited) favoritedPeerIds.add(p.id) })
+      }
+      if (api.files.getIndex) {
+        const idx = await api.files.getIndex();
+        fileIndex.value = idx;
       }
       await logEvent("workspace:open", { template });
     } finally {
@@ -838,8 +850,29 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds.delete(id);
   }
 
-  function openPeerFile({ peer, relPath, content }) {
+  function setActiveComment(id) {
+    activeCommentId.value = id;
+  }
+
+  function openPeerFile(payload) {
+    if (!payload) {
+      peerFileContent.value = null;
+      peerFileComments.value = [];
+      activeCommentId.value = null;
+      return;
+    }
+    const { peer, relPath, content, comments } = payload;
     peerFileContent.value = { peer, relPath, content };
+    peerFileComments.value = comments ? [...comments] : [];
+  }
+
+  function addPeerComment(comment) {
+    peerFileComments.value.unshift(comment);
+  }
+
+  function updatePeerComment(id, patch) {
+    const idx = peerFileComments.value.findIndex(c => c.id === id);
+    if (idx >= 0) peerFileComments.value[idx] = { ...peerFileComments.value[idx], ...patch };
   }
 
   async function copyPeerFileToWorkspace({ relPath, content }) {
@@ -936,10 +969,17 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds,
     favoritedPeers,
     peerFileContent,
+    navBack,
+    peerFileComments,
+    activeCommentId,
     networkChanged,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,
+    addPeerComment,
+    updatePeerComment,
+    setActiveComment,
     copyPeerFileToWorkspace,
+    fileIndex,
   };
 });

@@ -10,7 +10,7 @@
 
     "Strategy/competitive-analysis.md": "# Competitive Analysis\n\n## Landscape Overview\n\nThe PM document space is dominated by general-purpose collaboration tools (Notion, Google Docs, Confluence) and task managers that bolt on docs (Linear, Jira). Nobody is building specifically for the problem of document versioning and pre-build alignment. That's the opening.\n\n## Competitors\n\n| Competitor | Strengths | Weaknesses | Our Differentiation |\n|---|---|---|---|\n| **Notion** | Flexible, widely adopted, good for wikis | No real version history, comments get lost, no branching concept | Git-native history + named versions + branch drafts |\n| **Google Docs** | Real-time collab, version history exists | Version history auto-saves every few seconds — useless for \"what did we decide\" | Meaningful commits you choose, not noise |\n| **Confluence** | Enterprise adoption, structured pages | Terrible UX, no AI, nobody actually reads Confluence docs | Modern editor, AI that challenges, not just stores |\n| **Linear** | Excellent engineering workflow | Documents are second-class citizens, no deep PM tooling | Documents as first-class artifacts with full git history |\n| **Obsidian** | Local-first, powerful, markdown | No collaboration, no PM templates, no AI | Collaboration + PM-specific templates + AI thinking partner |\n\n## Where We Win\n\nGit under the hood means a real history model — branching, merging, named versions, diffs. No other PM tool has this because they built on databases, not files. That's not a feature gap we can close with a changelog modal — it's a fundamental architectural difference.\n\nThe AI angle is genuinely different: we tune the system prompt to ask questions, not generate answers. Most AI writing tools make you lazier. We're trying to make PMs think harder before they commit.\n\nLocal-first is a real differentiator for privacy-conscious teams. Your strategy never leaves your machine unless you choose to share it.\n",
 
-    "Planning/roadmap.md": "# Roadmap\n\n> What we're building and roughly when.\n\n## Now (Q2 2026)\n\nActive work — in flight or next up.\n\n- [x] Git version control per document: commit, branch, merge, history\n- [x] Named versions with restore (snapshot any commit as \"v1.0\", \"approved\", \"sent-to-eng\")\n- [x] Fork document to a new branch draft\n- [x] History panel with commit log and diff view\n- [x] AI chat sidebar (thinking partner, not ghostwriter)\n- [x] Inline comments anchored to selected text\n- [x] Sharing via Cloudflare Tunnel (token-secured links, one click)\n- [x] Demo mode\n- [ ] Show uncommitted changes indicator clearly in editor\n- [ ] Collapsible sidebar\n\n## Next (Q3 2026)\n\nCommitted, not yet started. Building toward team collaboration.\n\n- [ ] Peer document sync — view a teammate's workspace read-only, synced via git fetch\n- [ ] Agent web search — AI can pull in external research on demand during a conversation\n- [ ] Agent inline suggestions — ghost diff lines the user can accept or reject without leaving the doc\n- [ ] Terminal pane — run CLI commands in the context of the workspace\n- [ ] **Claude Code integration** — \"update the app to reflect this PRD\" launches a Claude Code session pointed at the committed document\n\n## Later\n\nDirectional. Subject to change based on what we learn.\n\n- Hosted relay (paid tier) — team sync without self-hosting\n- Team access management — share workspaces with ACLs\n- Git hooks for document quality (e.g., require filled sections before a commit can be saved)\n- Mobile read-only client\n\n## Deprioritized\n\n- Real-time collaborative editing: async review is the right model; Google Docs already does real-time better than we could, and building it would require a server\n- Web app: local-first is the differentiator; hosting docs breaks the trust model\n- Jira/Linear/Notion integrations: distraction until the core loop is loved\n",
+    "Planning/roadmap.md": "# Roadmap\n\n> What we're building and roughly when. See [[product-vision]] for where this is headed and [[strategy]] for how we're getting there.\n\n## Now (Q2 2026)\n\nActive work — in flight or next up.\n\n- [x] Git version control per document: commit, branch, merge, history\n- [x] Named versions with restore (snapshot any commit as \"v1.0\", \"approved\", \"sent-to-eng\")\n- [x] Fork document to a new branch draft\n- [x] History panel with commit log and diff view\n- [x] AI chat sidebar (thinking partner, not ghostwriter)\n- [x] Inline comments anchored to selected text\n- [x] Sharing via Cloudflare Tunnel (token-secured links, one click)\n- [x] Demo mode\n- [ ] Show uncommitted changes indicator clearly in editor\n- [ ] Collapsible sidebar\n\n## Next (Q3 2026)\n\nCommitted, not yet started. Building toward team collaboration.\n\n- [ ] Peer document sync — view a teammate's workspace read-only, synced via git fetch\n- [ ] Agent web search — AI can pull in external research on demand during a conversation\n- [ ] Agent inline suggestions — ghost diff lines the user can accept or reject without leaving the doc\n- [ ] Terminal pane — run CLI commands in the context of the workspace\n- [ ] **Claude Code integration** — \"update the app to reflect this PRD\" launches a Claude Code session pointed at the committed document\n\n## Later\n\nDirectional. Subject to change based on what we learn.\n\n- Hosted relay (paid tier) — team sync without self-hosting\n- Team access management — share workspaces with ACLs\n- Git hooks for document quality (e.g., require filled sections before a commit can be saved)\n- Mobile read-only client\n\n## Deprioritized\n\n- Real-time collaborative editing: async review is the right model; Google Docs already does real-time better than we could, and building it would require a server\n- Web app: local-first is the differentiator; hosting docs breaks the trust model\n- Jira/Linear/Notion integrations: distraction until the core loop is loved\n\n## Delivery Timeline\n\n```mermaid\ngantt\n  title Q2–Q3 2026\n  dateFormat YYYY-MM-DD\n  section Now\n  Uncommitted indicator :done, 2026-05-01, 2026-05-15\n  Collapsible sidebar   :active, 2026-05-10, 2026-05-20\n  section Next\n  Peer doc sync         :2026-06-01, 2026-07-15\n  Agent inline edits    :2026-07-01, 2026-08-15\n  Claude Code integration :2026-08-01, 2026-09-30\n```\n",
 
     "Discovery/problem-statement.md": "# Problem Statement\n\n> A crisp definition of the problem we're solving.\n\n## The Problem\n\nProduct managers struggle to create a shared, authoritative version of a document that the team trusts enough to build from — because the tools they use treat documents as living notes rather than versioned artifacts. This means engineering teams often start building before the PM is done thinking, and \"alignment\" is achieved through Slack threads instead of reviewed, committed documents.\n\n## Evidence\n\n- `Final_v3_APPROVED.docx` is a real naming convention used at companies with $1B+ ARR\n- Notion's version history records every keystroke — so it's technically there, but useless for reconstructing a decision\n- Engineers regularly describe getting requirement changes mid-sprint via Slack DM\n- In user interviews: \"I can tell you what the doc says today but I can't tell you what changed last week or why we changed it\"\n- The workaround (manual versioning in filenames) is universal and universally hated\n\n## Current Workarounds\n\n- Manual version naming in the filename: v1, v2, FINAL, FINAL_APPROVED, FINAL_FINAL\n- Google Docs version history — exists but not actionable (no branches, no named snapshots, no diffs between meaningful moments)\n- Printing to PDF at key moments and attaching to Jira tickets\n- Keeping duplicate files (`Strategy_old.md`) as informal archives\n\n## Success Criteria\n\nA PM opens Canonic, writes a requirements document, commits it at two stages of review, and can show an engineer the exact diff between \"first draft\" and \"approved\" — without any of those words being in the filename, without any Slack thread, and without asking anyone \"which version is the real one?\"\n",
 
@@ -24,10 +24,10 @@
       "online": true,
       "workspaceName": "Priya's Product Workspace",
       "files": [
-        { "path": "Vision/product-vision.md", "name": "product-vision", "type": "file" },
-        { "path": "Strategy/strategy.md", "name": "strategy", "type": "file" },
-        { "path": "Strategy/competitive-analysis.md", "name": "competitive-analysis", "type": "file" },
-        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file" }
+        { "path": "Vision/product-vision.md", "name": "product-vision", "type": "file", "permission": "comment" },
+        { "path": "Strategy/strategy.md", "name": "strategy", "type": "file", "permission": "comment" },
+        { "path": "Strategy/competitive-analysis.md", "name": "competitive-analysis", "type": "file", "permission": "view" },
+        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file", "permission": "view" }
       ]
     },
     {
@@ -38,9 +38,9 @@
       "lastSeen": "3h ago",
       "workspaceName": "Ben's Platform Docs",
       "files": [
-        { "path": "Discovery/problem-statement.md", "name": "problem-statement", "type": "file" },
-        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file" },
-        { "path": "Discovery/user-research.md", "name": "user-research", "type": "file" }
+        { "path": "Discovery/problem-statement.md", "name": "problem-statement", "type": "file", "permission": "comment" },
+        { "path": "Planning/roadmap.md", "name": "roadmap", "type": "file", "permission": "view" },
+        { "path": "Discovery/user-research.md", "name": "user-research", "type": "file", "permission": "view" }
       ]
     }
   ],
@@ -63,6 +63,17 @@
   ],
   "comments": {
     "Vision/product-vision.md": [
+      {
+        "id": "demo-own-private-1",
+        "author": "You",
+        "isOwn": true,
+        "private": true,
+        "text": "Ask Priya whether 200-person company is really the right upper bound — feels high for the solo PM story.",
+        "anchor": { "quotedText": "B2B product managers at 20–200 person companies who ship software" },
+        "createdAt": "2026-05-06T10:15:00.000Z",
+        "synced": null,
+        "isDemo": true
+      },
       {
         "id": "demo-priya-1",
         "author": "Priya Nair",

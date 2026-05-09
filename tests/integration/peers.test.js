@@ -82,3 +82,69 @@ describe('peers store', () => {
     expect(store.favoritedPeers).toHaveLength(1)
   })
 })
+
+describe('peer file viewer store', () => {
+  let store
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useAppStore()
+    vi.clearAllMocks()
+    mockApi.config.read.mockResolvedValue(null)
+    mockApi.files.list.mockResolvedValue([])
+    mockApi.git.log.mockResolvedValue([])
+    mockApi.git.branches.mockResolvedValue({ branches: ['main'], current: 'main' })
+    mockApi.peers.list.mockResolvedValue([])
+    mockApi.peers.listDiscovered.mockResolvedValue([])
+  })
+
+  it('openPeerFile() stores peer content and pre-loads comments', () => {
+    const peer = { id: 'priya@host', name: 'Priya', permission: 'comment' }
+    const comments = [{ id: 'c1', author: 'Priya', text: 'Good point', anchor: { quotedText: 'Hello' } }]
+    store.openPeerFile({ peer, relPath: 'Vision/vision.md', content: '# Vision', comments })
+
+    expect(store.peerFileContent).toMatchObject({ relPath: 'Vision/vision.md' })
+    expect(store.peerFileComments).toHaveLength(1)
+    expect(store.peerFileComments[0].id).toBe('c1')
+  })
+
+  it('openPeerFile(null) clears content, comments, and activeCommentId', () => {
+    store.openPeerFile({ peer: { id: 'p', name: 'P' }, relPath: 'a.md', content: '# A', comments: [] })
+    store.setActiveComment('c1')
+    store.openPeerFile(null)
+
+    expect(store.peerFileContent).toBeNull()
+    expect(store.peerFileComments).toHaveLength(0)
+    expect(store.activeCommentId).toBeNull()
+  })
+
+  it('addPeerComment() prepends to peerFileComments', () => {
+    store.openPeerFile({ peer: { id: 'p', name: 'P' }, relPath: 'a.md', content: '#', comments: [
+      { id: 'existing', text: 'old', anchor: {} }
+    ]})
+    store.addPeerComment({ id: 'new-c', text: 'new', anchor: { quotedText: 'word' } })
+    expect(store.peerFileComments[0].id).toBe('new-c')
+    expect(store.peerFileComments).toHaveLength(2)
+  })
+
+  it('updatePeerComment() patches an existing comment by id', () => {
+    store.openPeerFile({ peer: { id: 'p', name: 'P' }, relPath: 'a.md', content: '#', comments: [
+      { id: 'c1', text: 'draft', synced: false, anchor: {} }
+    ]})
+    store.updatePeerComment('c1', { synced: true })
+    expect(store.peerFileComments[0].synced).toBe(true)
+    expect(store.peerFileComments[0].text).toBe('draft') // unchanged fields preserved
+  })
+
+  it('setActiveComment() sets activeCommentId', () => {
+    expect(store.activeCommentId).toBeNull()
+    store.setActiveComment('c42')
+    expect(store.activeCommentId).toBe('c42')
+  })
+
+  it('setActiveComment() can be cleared by setting null', () => {
+    store.setActiveComment('c42')
+    store.setActiveComment(null)
+    expect(store.activeCommentId).toBeNull()
+  })
+})

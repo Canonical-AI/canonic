@@ -33,7 +33,9 @@ describe("config", () => {
     config.write({ displayName: "Test" });
     const cfg = config.read();
     expect(cfg).toHaveProperty("displayName", "Test");
-    expect(cfg).toHaveProperty("model");
+    expect(cfg).toHaveProperty("providers");
+    expect(cfg.assistant).toHaveProperty("model");
+    expect(cfg.completion).toHaveProperty("model");
     expect(cfg).toHaveProperty("telemetryEnabled", false);
     expect(cfg.sharingDefaults).toMatchObject({
       scope: "file",
@@ -44,13 +46,14 @@ describe("config", () => {
   it("write() persists config and read() returns it", () => {
     const saved = config.write({
       displayName: "Alice",
-      apiKey: "",
-      model: "claude-sonnet-4-6",
+      providers: [{ id: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", apiKey: "sk-test" }],
+      assistant: { providerId: "openrouter", model: "claude-sonnet-4-6" },
     });
     expect(saved.displayName).toBe("Alice");
     expect(config.exists()).toBe(true);
     const reread = config.read();
     expect(reread.displayName).toBe("Alice");
+    expect(reread.assistant.model).toBe("claude-sonnet-4-6");
   });
 
   it("validate() requires displayName", () => {

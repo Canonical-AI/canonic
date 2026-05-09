@@ -114,3 +114,13 @@ button:focus:not(:focus-visible) { outline: none; }
 
 /* Modal stacking */
 .modal-backdrop { isolation: isolate; }
+
+/* Inline completions */
+.inline-completion-ghost {
+  display: inline;
+  color: var(--text-muted, #6b7280);
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
+}

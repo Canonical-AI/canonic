@@ -56,6 +56,12 @@
                             </button>
                         </div>
                         <input
+                            v-model="form.providerLabel"
+                            class="field-input"
+                            placeholder="Provider name (e.g. OpenRouter)"
+                            style="margin-top: 6px"
+                        />
+                        <input
                             v-model="form.baseUrl"
                             class="field-input"
                             placeholder="https://openrouter.ai/api/v1"
@@ -85,8 +91,7 @@
                         </div>
                         <p class="field-hint">
                             Enables the AI assistant. You can change this
-                            anytime in Settings. Stored locally in
-                            <code>~/.canonic/config.json</code>.
+                            anytime in Settings → Providers.
                         </p>
                     </div>
 
@@ -234,6 +239,56 @@
                         <button class="btn-ghost" @click="step = 2">
                             ← Back
                         </button>
+                        <button class="btn-primary" @click="step = 4">
+                            Continue →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Inline completions -->
+                <div v-if="step === 4" class="step">
+                    <h2 class="step-title">Inline completions</h2>
+                    <p class="step-subtitle">
+                        As you type, Canonic can suggest completions as faint ghost text.
+                        Press <kbd class="kbd">Tab</kbd> to accept, <kbd class="kbd">Esc</kbd> to dismiss.
+                    </p>
+
+                    <div class="completion-preview">
+                        <span class="preview-text">The goal of this initiative is to</span>
+                        <span class="preview-ghost"> streamline cross-team collaboration by…</span>
+                    </div>
+
+                    <div class="field">
+                        <label class="field-label">
+                            Codestral API key
+                            <span class="optional">(optional — free)</span>
+                        </label>
+                        <div class="secret-input">
+                            <input
+                                v-model="form.completionKey"
+                                :type="showCompletionKey ? 'text' : 'password'"
+                                class="field-input"
+                                placeholder="Leave blank to skip for now"
+                            />
+                            <button
+                                class="reveal-btn"
+                                @click="showCompletionKey = !showCompletionKey"
+                                type="button"
+                            >
+                                {{ showCompletionKey ? "Hide" : "Show" }}
+                            </button>
+                        </div>
+                        <p class="field-hint">
+                            Codestral is Mistral's free completion model — get a key at
+                            <strong>mistral.ai/codestral</strong>.
+                            You can also set this up later in Settings → Completions.
+                        </p>
+                    </div>
+
+                    <div class="step-actions">
+                        <button class="btn-ghost" @click="step = 3">
+                            ← Back
+                        </button>
                         <button
                             class="btn-primary"
                             @click="save"
@@ -250,6 +305,7 @@
                 <div :class="['dot', step >= 1 && 'active']" />
                 <div :class="['dot', step >= 2 && 'active']" />
                 <div :class="['dot', step >= 3 && 'active']" />
+                <div :class="['dot', step >= 4 && 'active']" />
             </div>
         </div>
     </div>
@@ -266,10 +322,12 @@ const store = useAppStore();
 
 const step = ref(1);
 const showKey = ref(false);
+const showCompletionKey = ref(false);
 const saving = ref(false);
 const errors = ref({});
 const form = reactive({
     displayName: "",
+    providerLabel: "OpenRouter",
     apiKey: "",
     baseUrl: "https://openrouter.ai/api/v1",
     model: "anthropic/claude-sonnet-4-5",
@@ -279,6 +337,7 @@ const form = reactive({
         scope: "file",
         accessLevel: "read",
     },
+    completionKey: "",
 });
 
 const providerPresets = [
@@ -311,6 +370,7 @@ const providerPresets = [
 ];
 
 function applyPreset(p) {
+    form.providerLabel = p.label;
     form.baseUrl = p.url;
     form.model = p.model;
 }
@@ -359,9 +419,54 @@ async function browsePath() {
     if (chosen) form.defaultWorkspacePath = chosen;
 }
 
+function slugify(str) {
+    return str
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "")
+        .slice(0, 40);
+}
+
 async function save() {
     saving.value = true;
-    const result = await store.saveConfig(JSON.parse(JSON.stringify(form)));
+    const { completionKey, providerLabel, apiKey, baseUrl, model, ...rest } =
+        JSON.parse(JSON.stringify(form));
+
+    const providers = [];
+    let assistantProviderId = "";
+
+    const mainLabel = (providerLabel || "Provider").trim();
+    const mainId = slugify(mainLabel) || "provider";
+    if (apiKey || baseUrl) {
+        providers.push({ id: mainId, label: mainLabel, baseUrl, apiKey });
+        assistantProviderId = mainId;
+    }
+
+    let completionProviderId = "";
+    const cKey = completionKey.trim();
+    if (cKey) {
+        const codestralId = "codestral";
+        providers.push({
+            id: codestralId,
+            label: "Codestral",
+            baseUrl: "https://codestral.mistral.ai/v1",
+            apiKey: cKey,
+        });
+        completionProviderId = codestralId;
+    }
+
+    const configToSave = {
+        ...rest,
+        providers,
+        assistant: { providerId: assistantProviderId, model },
+        completion: {
+            enabled: !!completionProviderId,
+            providerId: completionProviderId,
+            model: "codestral-latest",
+        },
+    };
+
+    const result = await store.saveConfig(configToSave);
     saving.value = false;
     if (result.success) {
         emit("done");
@@ -741,5 +846,35 @@ async function save() {
 
 .toggle.on .toggle-thumb {
     transform: translateX(16px);
+}
+
+.kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--border-mid);
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-family: "JetBrains Mono", monospace;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+.completion-preview {
+    padding: 14px 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.preview-text {
+    color: var(--text-primary);
+}
+
+.preview-ghost {
+    color: var(--text-muted);
+    opacity: 0.6;
 }
 </style>

@@ -9,6 +9,26 @@
                 >
             </div>
             <div class="titlebar-right">
+                <!-- Update indicator -->
+                <template v-if="updateReady">
+                    <button class="update-ready-btn" @click="installUpdate" title="Restart and install update">
+                        <ArrowUpCircle :size="14" />
+                        <span>{{ updateInfo?.version }} ready — Restart</span>
+                    </button>
+                </template>
+                <template v-else-if="updateDownloading">
+                    <span class="update-progress-pill">
+                        <span class="update-progress-bar" :style="{ width: downloadProgress + '%' }" />
+                        <span class="update-progress-label">{{ downloadProgress }}%</span>
+                    </span>
+                </template>
+                <template v-else-if="updateAvailable">
+                    <button class="update-available-btn" @click="downloadUpdate" title="Download available update">
+                        <ArrowUpCircle :size="14" />
+                        <span>Update</span>
+                    </button>
+                </template>
+
                 <!-- Font toggle -->
                 <button
                     class="icon-btn"
@@ -184,40 +204,6 @@
             </aside>
         </div>
 
-        <!-- Update banner -->
-        <div
-            v-if="updateAvailable || updateDownloading || updateReady"
-            class="update-banner"
-        >
-            <template v-if="updateReady">
-                <span>A new version of Canonic is ready.</span>
-                <button class="update-btn" @click="installUpdate">
-                    Restart & Update
-                </button>
-                <button class="update-dismiss" @click="clearUpdate">
-                    Later
-                </button>
-            </template>
-            <template v-else-if="updateDownloading">
-                <span>Downloading update... {{ downloadProgress }}%</span>
-                <div class="progress-bar-bg">
-                    <div
-                        class="progress-bar-fill"
-                        :style="{ width: downloadProgress + '%' }"
-                    ></div>
-                </div>
-            </template>
-            <template v-else-if="updateAvailable">
-                <span>New version available ({{ updateInfo?.version }}).</span>
-                <button class="update-btn" @click="downloadUpdate">
-                    Download
-                </button>
-                <button class="update-dismiss" @click="clearUpdate">
-                    Later
-                </button>
-            </template>
-        </div>
-
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
         <SettingsModal v-if="showSettings" @close="showSettings = false" />
@@ -245,6 +231,7 @@ import {
     Sparkles,
     History,
     Share2,
+    ArrowUpCircle,
 } from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
 import SearchPanel from "../sidebar/SearchPanel.vue";
@@ -752,64 +739,83 @@ function onResizeStart(e) {
     z-index: 199;
 }
 
-.update-banner {
-    position: fixed;
-    bottom: 16px;
-    right: 16px;
+/* ── Titlebar update indicator ── */
+.update-ready-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--bg-surface);
-    border: 1px solid var(--accent);
-    border-radius: 10px;
-    font-size: 0.875rem;
-    color: var(--text-primary);
-    z-index: 500;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.update-btn {
-    padding: 6px 14px;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
     background: var(--accent);
     color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 500;
     cursor: pointer;
+    animation: update-pulse 2s ease-in-out infinite;
+    white-space: nowrap;
+    -webkit-app-region: no-drag;
 }
 
-.update-btn:hover {
-    opacity: 0.85;
+.update-ready-btn:hover {
+    opacity: 0.88;
 }
 
-.update-dismiss {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    font-size: 0.8125rem;
+@keyframes update-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(74, 122, 155, 0.5); }
+    50%       { box-shadow: 0 0 0 5px rgba(74, 122, 155, 0); }
+}
+
+.update-available-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--accent-muted);
+    background: transparent;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 500;
     cursor: pointer;
-    padding: 0;
+    transition: background 0.15s;
+    white-space: nowrap;
+    -webkit-app-region: no-drag;
 }
 
-.update-dismiss:hover {
-    color: var(--text-secondary);
+.update-available-btn:hover {
+    background: var(--accent-muted);
 }
 
-.progress-bar-bg {
-    width: 100px;
-    height: 4px;
+.update-progress-pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
     background: var(--bg-hover);
-    border-radius: 2px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
     overflow: hidden;
-    margin-left: 8px;
+    min-width: 60px;
+    white-space: nowrap;
 }
 
-.progress-bar-fill {
-    height: 100%;
-    background: var(--accent);
+.update-progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--accent-muted);
     transition: width 0.3s ease;
+    z-index: 0;
+}
+
+.update-progress-label {
+    position: relative;
+    z-index: 1;
 }
 
 /* Theme picker */

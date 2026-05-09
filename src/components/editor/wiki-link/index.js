@@ -17,11 +17,11 @@ export function wikiLinkRemarkPlugin() {
           newNodes.push({ type: 'text', value: node.value.slice(lastIndex, match.index) })
         }
         const wlName = match[1].trim()
-        const wlAnchor = match[2] ? `#${match[2].trim()}` : ''
-        const wlValue = wlAnchor ? `${wlName}#${match[2].trim()}` : wlName
+        const wlAnchor = match[2] ? `#${match[2].trim()}` : null
         newNodes.push({
           type: 'wikiLink',
-          value: wlValue,
+          value: wlAnchor ? `${wlName}${wlAnchor}` : wlName,
+          data: { name: wlName, anchor: wlAnchor },
         })
         lastIndex = regex.lastIndex
       }
@@ -62,10 +62,17 @@ export const wikiLinkNode = $node('wiki_link', () => ({
   parseMarkdown: {
     match: (node) => node.type === 'wikiLink',
     runner: (state, node, type) => {
-      const raw = node.value || ''
-      const hashIdx = raw.indexOf('#')
-      const name = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw
-      const anchor = hashIdx >= 0 ? `#${raw.slice(hashIdx + 1)}` : null
+      // Prefer structured data.name/anchor; fall back to splitting value for compat
+      let name, anchor
+      if (node.data?.name !== undefined) {
+        name = node.data.name
+        anchor = node.data.anchor ?? null
+      } else {
+        const raw = node.value || ''
+        const hashIdx = raw.indexOf('#')
+        name = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw
+        anchor = hashIdx >= 0 ? `#${raw.slice(hashIdx + 1)}` : null
+      }
       state.addNode(type, { name, anchor })
     },
   },

@@ -133,6 +133,7 @@
                     <FileTree v-if="store.sidebarTab === 'files'" />
                     <SearchPanel v-else-if="store.sidebarTab === 'search'" />
                     <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
+                    <HintsPanel :config="store.config" @navigate="handleHintNavigate" />
                 </template>
             </aside>
 
@@ -206,7 +207,7 @@
 
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
-        <SettingsModal v-if="showSettings" @close="showSettings = false" />
+        <SettingsModal v-if="showSettings" :initial-tab="settingsInitialTab" @close="showSettings = false; settingsInitialTab = 'profile'" />
 
         <AgentSessionPill />
     </div>
@@ -236,6 +237,7 @@ import {
 import FileTree from "../sidebar/FileTree.vue";
 import SearchPanel from "../sidebar/SearchPanel.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
+import HintsPanel from "../sidebar/HintsPanel.vue";
 import Editor from "../editor/Editor.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
@@ -363,6 +365,14 @@ onBeforeUnmount(() => {
 
 const showNewDoc = ref(false);
 const showSettings = ref(false);
+const settingsInitialTab = ref('profile');
+
+function handleHintNavigate(target) {
+    if (target.startsWith('settings:')) {
+        settingsInitialTab.value = target.slice('settings:'.length)
+    }
+    showSettings.value = true
+}
 const updateReady = ref(false);
 const updateAvailable = ref(false);
 const updateDownloading = ref(false);

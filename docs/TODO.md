@@ -7,8 +7,6 @@ when complete move stuff to complete. its just that easy
 
 ## Bugs
 
-* \[ ] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
-
 * \[ ] something funky in the saves...
 
 * the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
@@ -19,7 +17,9 @@ when complete move stuff to complete. its just that easy
 
 ## Features
 
-* [ ] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
+* [ ] comprehensive editor testing. so we need to test all inputs like ' [[' ' ```mermaid' ect
+
+* [X] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 
 * [ ] **PR / review workflow** — after copying a peer's file and making changes, "Propose changes" diffs against peer's HEAD and POSTs to their share server; owner reviews in a new Review panel (accept/request changes/reject).
 
@@ -86,6 +86,10 @@ when complete move stuff to complete. its just that easy
 * [x] **Scoped commit** — `commit()` in `electron/git.js` saves and restores pre-staged files around each Canonic commit so external staged changes are never bundled in
 
 ## Completed
+
+* \[X] [bug] when you type '[ ]' its dissapearing
+
+* \[X] [bug] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
 
 * \[X] should work with existing git repos. and shouldnt blow stuff up
 

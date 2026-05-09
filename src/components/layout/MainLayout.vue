@@ -19,7 +19,7 @@
                 <template v-else-if="updateDownloading">
                     <span class="update-progress-pill">
                         <span class="update-progress-bar" :style="{ width: downloadProgress + '%' }" />
-                        <span class="update-progress-label">{{ downloadProgress }}%</span>
+                        <span class="update-progress-label">Downloading… {{ downloadProgress }}%</span>
                     </span>
                 </template>
                 <template v-else-if="updateAvailable">

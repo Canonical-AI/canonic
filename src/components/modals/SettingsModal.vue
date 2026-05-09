@@ -11,7 +11,13 @@
                     :class="['tab', activeTab === 'profile' && 'active']"
                     @click="activeTab = 'profile'"
                 >
-                    Profile & AI
+                    Profile
+                </button>
+                <button
+                    :class="['tab', activeTab === 'providers' && 'active']"
+                    @click="activeTab = 'providers'"
+                >
+                    AI
                 </button>
                 <button
                     :class="['tab', activeTab === 'sharing' && 'active']"
@@ -45,7 +51,7 @@
                 </button>
             </div>
 
-            <!-- Profile & AI tab -->
+            <!-- Profile tab -->
             <div v-if="activeTab === 'profile'" class="tab-content">
                 <div class="field">
                     <label class="field-label">Display name</label>
@@ -61,70 +67,198 @@
                 </div>
 
                 <div class="field">
-                    <label class="field-label"
-                        >AI provider
-                        <span class="optional">(optional)</span></label
+                    <div
+                        class="telemetry-card"
+                        :class="{ active: hintsEnabled }"
+                        @click="hintsEnabled = !hintsEnabled"
                     >
-                    <div class="preset-pills">
-                        <button
-                            v-for="p in providerPresets"
-                            :key="p.url"
-                            class="preset-pill"
-                            :class="{ active: form.baseUrl === p.url }"
-                            @click="applyPreset(p)"
-                            type="button"
-                        >
-                            {{ p.label }}
-                        </button>
+                        <div class="telemetry-header">
+                            <span class="telemetry-label">Show feature hints</span>
+                            <div class="toggle" :class="{ on: hintsEnabled }">
+                                <div class="toggle-thumb"></div>
+                            </div>
+                        </div>
+                        <p class="telemetry-desc">Tips shown at the bottom of the sidebar.</p>
                     </div>
-                    <input
-                        v-model="form.baseUrl"
-                        class="field-input"
-                        placeholder="https://openrouter.ai/api/v1"
-                        style="margin-top: 6px"
+                </div>
+            </div>
+
+            <!-- AI tab: Providers + Assistant + Completions -->
+            <div v-if="activeTab === 'providers'" class="tab-content">
+
+                <!-- Providers section -->
+                <p class="section-heading">Providers</p>
+                <div class="providers-list">
+                    <div
+                        v-for="(provider, idx) in form.providers"
+                        :key="provider.id"
+                        class="provider-row"
+                    >
+                        <template v-if="editingProviderId !== provider.id">
+                            <div class="provider-info">
+                                <span class="provider-label">{{ provider.label }}</span>
+                                <span class="provider-url">{{ provider.baseUrl }}</span>
+                                <span class="provider-key-mask">{{ provider.apiKey ? '••••' + provider.apiKey.slice(-4) : 'no key' }}</span>
+                            </div>
+                            <div class="provider-actions">
+                                <button class="provider-btn" @click="editingProviderId = provider.id" type="button">Edit</button>
+                                <button class="provider-btn danger" @click="deleteProvider(idx)" type="button">✕</button>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <ProviderForm
+                                :initial="provider"
+                                :existing-ids="form.providers.map(p => p.id).filter(id => id !== provider.id)"
+                                @save="updateProvider(idx, $event)"
+                                @cancel="editingProviderId = null"
+                            />
+                        </template>
+                    </div>
+
+                    <div v-if="form.providers.length === 0" class="providers-empty">
+                        No providers configured. Add one below.
+                    </div>
+                </div>
+
+                <template v-if="addingProvider">
+                    <ProviderForm
+                        :existing-ids="form.providers.map(p => p.id)"
+                        @save="addProvider($event)"
+                        @cancel="addingProvider = false"
                     />
-                    <p class="field-hint">
-                        Any OpenAI-compatible endpoint.
-                        <strong>OpenRouter</strong> gives you access to every
-                        provider with one key.
-                    </p>
-                </div>
+                </template>
+                <button
+                    v-else
+                    class="add-provider-btn"
+                    @click="addingProvider = true"
+                    type="button"
+                >
+                    + Add provider
+                </button>
+                <p class="field-hint" style="margin-top: 8px">
+                    ⚠ API keys stored as plain text in <code>~/.canonic/config.json</code>.
+                </p>
 
+                <!-- Assistant section -->
+                <p class="section-heading" style="margin-top: 24px">AI Assistant</p>
                 <div class="field">
-                    <label class="field-label"
-                        >API key <span class="optional">(optional)</span></label
-                    >
-                    <div class="secret-input">
-                        <input
-                            v-model="form.apiKey"
-                            :type="showKey ? 'text' : 'password'"
-                            class="field-input"
-                        />
-                        <button
-                            class="reveal-btn"
-                            @click="showKey = !showKey"
-                            type="button"
-                        >
-                            {{ showKey ? "Hide" : "Show" }}
-                        </button>
-                    </div>
-                    <p class="field-hint warning">
-                        ⚠ Stored as plain text in
-                        <code>~/.canonic/config.json</code>. Do not commit that
-                        file.
-                    </p>
+                    <label class="field-label">Name</label>
+                    <input
+                        v-model="form.assistant.name"
+                        class="field-input"
+                        placeholder="Spark"
+                    />
+                    <p class="field-hint">How the assistant introduces itself.</p>
                 </div>
-
+                <div class="field">
+                    <label class="field-label">Provider</label>
+                    <select v-model="form.assistant.providerId" class="field-select">
+                        <option value="">— None —</option>
+                        <option v-for="p in form.providers" :key="p.id" :value="p.id">
+                            {{ p.label }}
+                        </option>
+                    </select>
+                </div>
                 <div class="field">
                     <label class="field-label">Model</label>
                     <input
-                        v-model="form.model"
+                        v-model="form.assistant.model"
                         class="field-input"
                         placeholder="e.g. anthropic/claude-sonnet-4-5"
                     />
-                    <p class="field-hint">
-                        Enter any model ID supported by your provider.
-                    </p>
+                    <p class="field-hint">Any model ID supported by the selected provider.</p>
+                </div>
+                <div class="field">
+                    <label class="field-label">Extra instructions</label>
+                    <textarea
+                        v-model="form.assistant.extraInstructions"
+                        class="field-input field-textarea"
+                        placeholder="e.g. Focus on B2B SaaS context. Always ask about the target user before diving in."
+                        rows="3"
+                    />
+                    <p class="field-hint">Appended to the base system prompt. Use to tune tone, domain, or focus.</p>
+                </div>
+
+                <!-- Completions section -->
+                <p class="section-heading" style="margin-top: 24px">Inline Completions</p>
+                <div class="field">
+                    <div
+                        class="telemetry-card"
+                        :class="{ active: form.completion.enabled && form.completion.providerId }"
+                        @click="form.completion.enabled = !form.completion.enabled"
+                    >
+                        <div class="telemetry-header">
+                            <span class="telemetry-label">Enable inline completions</span>
+                            <div class="toggle" :class="{ on: form.completion.enabled && form.completion.providerId }">
+                                <div class="toggle-thumb"></div>
+                            </div>
+                        </div>
+                        <p class="telemetry-desc">
+                            Ghost text suggestions as you type.
+                            <kbd class="kbd">Tab</kbd> accept · <kbd class="kbd">Esc</kbd> dismiss · <kbd class="kbd">⌘→</kbd> one word.
+                        </p>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="field-label">Provider</label>
+                    <select v-model="form.completion.providerId" class="field-select">
+                        <option value="">— None —</option>
+                        <option v-for="p in form.providers" :key="p.id" :value="p.id">
+                            {{ p.label }}
+                        </option>
+                    </select>
+                    <p class="field-hint">Codestral (free, fast FIM model) works best.</p>
+                </div>
+                <div class="field">
+                    <label class="field-label">Model</label>
+                    <input v-model="form.completion.model" class="field-input" placeholder="codestral-latest" />
+                    <p class="field-hint">For local providers try <code>qwen2.5-coder:1.5b</code>.</p>
+                </div>
+                <div class="field">
+                    <label class="field-label">Trigger delay</label>
+                    <select v-model.number="form.completion.debounceMs" class="field-select">
+                        <option :value="150">Fast (150 ms)</option>
+                        <option :value="350">Normal (350 ms)</option>
+                        <option :value="600">Slow (600 ms)</option>
+                        <option :value="1000">Very slow (1 s)</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field-label">Max suggestion length (tokens)</label>
+                    <input
+                        v-model.number="form.completion.maxTokens"
+                        type="number"
+                        min="5"
+                        max="200"
+                        class="field-input"
+                        style="width: 120px"
+                    />
+                    <p class="field-hint">Lower = shorter suggestions, fewer API credits. Default 25.</p>
+                </div>
+                <div class="field">
+                    <div
+                        class="telemetry-card"
+                        :class="{ active: form.completion.wordBoundaryOnly }"
+                        @click="form.completion.wordBoundaryOnly = !form.completion.wordBoundaryOnly"
+                    >
+                        <div class="telemetry-header">
+                            <span class="telemetry-label">Word boundary trigger only</span>
+                            <div class="toggle" :class="{ on: form.completion.wordBoundaryOnly }">
+                                <div class="toggle-thumb"></div>
+                            </div>
+                        </div>
+                        <p class="telemetry-desc">Only suggest after a space or punctuation, not mid-word.</p>
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="field-label">Extra instructions</label>
+                    <textarea
+                        v-model="form.completion.extraInstructions"
+                        class="field-input field-textarea"
+                        placeholder="e.g. Prefer active voice. Match the document's formal tone."
+                        rows="3"
+                    />
+                    <p class="field-hint">Hints appended to the completion system prompt.</p>
                 </div>
 
             </div>
@@ -435,6 +569,7 @@
                 </div>
             </div>
 
+
             <div class="modal-footer">
                 <p v-if="saveSuccess" class="save-success">✓ Saved</p>
                 <p v-if="saveError" class="save-error">{{ saveError }}</p>
@@ -460,14 +595,22 @@
 import { ref, reactive, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
+import { useHints } from "../../composables/useHints.js";
+import ProviderForm from "./ProviderForm.vue";
 
+const props = defineProps({ initialTab: { type: String, default: "profile" } });
 const emit = defineEmits(["close"]);
 const router = useRouter();
 const store = useAppStore();
 
 const buildInfo = `build ${__BUILD_COMMIT__} · ${__BUILD_BRANCH__} · ${__BUILD_DATE__}`
 
-const activeTab = ref("profile");
+const activeTab = ref(props.initialTab);
+const { enabled: hintsEnabled } = useHints();
+
+// Provider management state
+const editingProviderId = ref(null);
+const addingProvider = ref(false);
 const showKey = ref(false);
 const saving = ref(false);
 const saveSuccess = ref(false);
@@ -490,48 +633,36 @@ window.canonic.cleanup.getPaths().then((p) => {
 
 const form = reactive({
     displayName: "",
-    apiKey: "",
-    baseUrl: "https://openrouter.ai/api/v1",
-    model: "anthropic/claude-sonnet-4-5",
     defaultWorkspacePath: "",
     telemetryEnabled: false,
     autoUpdate: true,
     updateChannel: "stable",
     sharingDefaults: { scope: "file", accessLevel: "read" },
+    providers: [],
+    assistant: { providerId: "", model: "", name: "Spark", extraInstructions: "" },
+    completion: { enabled: false, providerId: "", model: "codestral-latest", debounceMs: 350, maxTokens: 25, wordBoundaryOnly: true, extraInstructions: "" },
 });
 
-const providerPresets = [
-    {
-        label: "OpenRouter",
-        url: "https://openrouter.ai/api/v1",
-        model: "anthropic/claude-sonnet-4-5",
-    },
-    { label: "OpenAI", url: "https://api.openai.com/v1", model: "gpt-4o" },
-    {
-        label: "Mistral",
-        url: "https://api.mistral.ai/v1",
-        model: "mistral-large-latest",
-    },
-    {
-        label: "DeepSeek",
-        url: "https://api.deepseek.com/v1",
-        model: "deepseek-chat",
-    },
-    {
-        label: "Groq",
-        url: "https://api.groq.com/openai/v1",
-        model: "llama-3.3-70b-versatile",
-    },
-    {
-        label: "Ollama (local)",
-        url: "http://localhost:11434/v1",
-        model: "llama3.2",
-    },
-];
+// Provider management
+function slugify(str) {
+    return str.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 40);
+}
 
-function applyPreset(p) {
-    form.baseUrl = p.url;
-    form.model = p.model;
+function addProvider(provider) {
+    form.providers.push(provider);
+    addingProvider.value = false;
+}
+
+function updateProvider(idx, provider) {
+    form.providers.splice(idx, 1, provider);
+    editingProviderId.value = null;
+}
+
+function deleteProvider(idx) {
+    const id = form.providers[idx].id;
+    form.providers.splice(idx, 1);
+    if (form.assistant.providerId === id) form.assistant.providerId = "";
+    if (form.completion.providerId === id) form.completion.providerId = "";
 }
 
 const scopeOptions = [
@@ -557,9 +688,6 @@ onMounted(async () => {
     const cfg = store.config || (await store.loadConfig());
     if (cfg) {
         form.displayName = cfg.displayName || "";
-        form.apiKey = cfg.apiKey || "";
-        form.baseUrl = cfg.baseUrl || "https://openrouter.ai/api/v1";
-        form.model = cfg.model || "anthropic/claude-sonnet-4-5";
         form.defaultWorkspacePath = cfg.defaultWorkspacePath || "";
         form.telemetryEnabled = !!cfg.telemetryEnabled;
         form.autoUpdate = cfg.autoUpdate !== false;
@@ -569,6 +697,13 @@ onMounted(async () => {
                 ...form.sharingDefaults,
                 ...(cfg.sharingDefaults || {}),
             }),
+        );
+        form.providers = JSON.parse(JSON.stringify(cfg.providers || []));
+        form.assistant = JSON.parse(
+            JSON.stringify({ ...form.assistant, ...(cfg.assistant || {}) }),
+        );
+        form.completion = JSON.parse(
+            JSON.stringify({ ...form.completion, ...(cfg.completion || {}) }),
         );
     }
 });
@@ -714,7 +849,7 @@ async function copyUninstall() {
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: 12px;
-    width: 500px;
+    width: 680px;
     max-width: 95vw;
     max-height: 85vh;
     display: flex;
@@ -746,6 +881,7 @@ async function copyUninstall() {
 
 .tabs {
     display: flex;
+    flex-wrap: wrap;
     padding: 12px 24px 0;
     gap: 0;
     border-bottom: 1px solid var(--border);
@@ -1434,4 +1570,132 @@ async function copyUninstall() {
     transition: background 0.15s, color 0.15s;
 }
 .ws-stop-btn:hover { background: rgba(239,68,68,0.1); color: #f87171; border-color: rgba(239,68,68,0.3); }
+
+.kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    border: 1px solid var(--border-mid);
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-family: "JetBrains Mono", monospace;
+    background: var(--bg-hover);
+    color: var(--text-secondary);
+}
+
+/* Providers tab */
+.providers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.providers-empty {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    padding: 12px 0;
+    text-align: center;
+}
+
+.provider-row {
+    background: var(--bg-base);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.provider-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.provider-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.provider-url {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: "JetBrains Mono", monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.provider-key-mask {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: "JetBrains Mono", monospace;
+    white-space: nowrap;
+}
+
+.provider-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.provider-btn {
+    padding: 3px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.775rem;
+    cursor: pointer;
+    transition: background 0.12s;
+}
+.provider-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.provider-btn.danger { color: var(--error); border-color: rgba(231,76,60,0.3); }
+.provider-btn.danger:hover { background: rgba(231,76,60,0.1); }
+
+.add-provider-btn {
+    padding: 7px 14px;
+    border-radius: 7px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.12s, color 0.12s;
+}
+.add-provider-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.link-btn {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: inherit;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.section-heading {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0 0 10px;
+}
+
+.field-textarea {
+    resize: vertical;
+    min-height: 72px;
+    font-family: inherit;
+    line-height: 1.5;
+}
 </style>

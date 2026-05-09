@@ -124,6 +124,7 @@ const editorScrollEl = ref(null)
 const commentTextareaEl = ref(null)
 const titleInput = ref(null)
 const localContent = ref('')
+const editorInitialized = ref(false)
 
 const selectionPopover = ref({ visible: false, x: 0, y: 0, text: '' })
 const commentInput = ref({ visible: false, text: '' })
@@ -174,7 +175,11 @@ watch(() => store.currentContent, (val) => {
 }, { immediate: true })
 
 // Clear active comment when switching files so stale IDs don't linger.
-watch(() => store.currentFile, () => { store.setActiveComment(null) })
+// Also reset the init-update guard so the new editor's first serialization doesn't mark dirty.
+watch(() => store.currentFile, () => {
+  store.setActiveComment(null)
+  editorInitialized.value = false
+})
 
 
 // Editor → Sidebar: clicking a comment highlight activates it.
@@ -196,6 +201,13 @@ watch(() => store.activeCommentId, async (id) => {
 
 function onContentUpdate(markdown) {
   localContent.value = markdown
+  if (!editorInitialized.value) {
+    // First emission is the editor's init serialization (remark may normalize whitespace,
+    // escape sequences, etc.) — accept it as the new baseline without marking dirty.
+    editorInitialized.value = true
+    store.currentContent = markdown
+    return
+  }
   if (markdown !== store.currentContent) {
     store.currentContent = markdown
     store.isDirty = true

@@ -193,6 +193,7 @@ contextBridge.exposeInMainWorld("canonic", {
   // AI (proxied through main process to avoid CORS)
   ai: {
     chat: (params) => ipcRenderer.invoke("ai:chat", params),
+    complete: (params) => ipcRenderer.invoke("ai:complete", params),
     onChunk: (cb) => ipcRenderer.on("ai:chunk", (_, text) => cb(text)),
     onDone: (cb) => ipcRenderer.on("ai:done", () => cb()),
     onError: (cb) => ipcRenderer.on("ai:error", (_, msg) => cb(msg)),

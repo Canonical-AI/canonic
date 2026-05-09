@@ -3,13 +3,13 @@
         <div class="chat-messages" ref="messagesEl">
             <div class="ai-intro" v-if="messages.length === 0">
                 <div class="ai-avatar"><Sparkles :size="20" /></div>
+                <p class="ai-name">{{ assistantName }}</p>
                 <p>
-                    I'm here to help you think through your document — not write
+                    Here to help you think through your document — not write
                     it for you.
                 </p>
                 <p class="hint">
-                    I can challenge your assumptions, spot gaps, ask clarifying
-                    questions, or research facts.
+                    Challenge assumptions, spot gaps, ask clarifying questions.
                 </p>
                 <div class="suggestion-chips">
                     <button
@@ -122,12 +122,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, nextTick, onUnmounted } from "vue";
+import { ref, reactive, computed, nextTick, onUnmounted } from "vue";
 import { useAppStore } from "../../store";
 import { v4 as uuidv4 } from "uuid";
 import { Sparkles, SendHorizonal, ChevronDown } from "lucide-vue-next";
 
 const store = useAppStore();
+const assistantName = computed(() => store.config?.assistant?.name || 'Spark')
 const messagesEl = ref(null);
 const userInput = ref("");
 const messages = ref([]);
@@ -154,10 +155,20 @@ function saveAgentCaps() { localStorage.setItem(CAPS_KEY, JSON.stringify({ ...ag
 function toggleAgentCapsOpen() { agentCapsOpen.value = !agentCapsOpen.value; localStorage.setItem(CAPS_OPEN_KEY, JSON.stringify(agentCapsOpen.value)); }
 // ─────────────────────────────────────────────────────────────────────────────
 
-const getApiKey = () => store.config?.apiKey;
-const getModel = () => store.config?.model || "anthropic/claude-sonnet-4-5";
-const getBaseUrl = () =>
-    store.config?.baseUrl || "https://openrouter.ai/api/v1";
+function resolveAssistant() {
+    const cfg = store.config;
+    if (!cfg) return { apiKey: "", baseUrl: "", model: "", name: "Spark", extraInstructions: "" };
+    const provider = cfg.providers?.find(
+        (p) => p.id === cfg.assistant?.providerId
+    );
+    return {
+        apiKey: provider?.apiKey || "",
+        baseUrl: provider?.baseUrl || "",
+        model: cfg.assistant?.model || "anthropic/claude-sonnet-4-5",
+        name: cfg.assistant?.name || "Spark",
+        extraInstructions: cfg.assistant?.extraInstructions || "",
+    };
+}
 
 const suggestions = [
     "What's missing from this document?",
@@ -166,7 +177,8 @@ const suggestions = [
     "What are the risks here?",
 ];
 
-const SYSTEM_PROMPT = `You are a thinking partner for product managers writing internal documents. Your role is to help them think more clearly — NOT to write content for them.
+function buildSystemPrompt(name, extraInstructions) {
+    const base = `You are ${name}, a thinking partner for product managers writing internal documents. Your role is to help them think more clearly — NOT to write content for them.
 
 Your behaviors:
 - Ask clarifying questions that expose gaps or unstated assumptions
@@ -181,7 +193,11 @@ Your constraints:
 
 To leave an inline comment on a specific passage, include this anywhere in your response:
 <canonic:comment anchor="exact quoted text from the document">Your comment text here</canonic:comment>
-You can include multiple comment tags. They will be posted to the document's comment panel.`;
+You can include multiple comment tags. They will be posted to the document's comment panel.`
+    return extraInstructions?.trim()
+        ? `${base}\n\nAdditional instructions:\n${extraInstructions.trim()}`
+        : base
+}
 
 const COMMENT_TAG_RE = /<canonic:comment\s+anchor="([^"]*)">([\s\S]*?)<\/canonic:comment>/g;
 
@@ -309,21 +325,21 @@ async function sendMessage() {
     userInput.value = "";
     scrollToBottom();
 
-    const apiKey = getApiKey();
+    const { apiKey, baseUrl, model, name, extraInstructions } = resolveAssistant();
     if (!apiKey) {
         if (import.meta.env.DEV) console.warn("[AIChat] No API key found");
         messages.value.push({
             id: uuidv4(),
             role: "assistant",
             content:
-                "No API key configured. Open Settings → AI to add your API key.",
+                "No API key configured. Open Settings → Providers to add a provider.",
         });
         return;
     }
 
     streaming.value = true;
     streamBuffer.value = "";
-    store.logEvent("ai:chat_sent", { model: getModel() });
+    store.logEvent("ai:chat_sent", { model });
 
     // Clean up any previous listeners before adding new ones
     window.canonic.ai.removeListeners();
@@ -378,8 +394,8 @@ async function sendMessage() {
 
     if (import.meta.env.DEV) {
         console.log("[AIChat] Request params:", {
-            model: getModel(),
-            baseUrl: getBaseUrl(),
+            model,
+            baseUrl,
             messageCount: contextMessages.length,
             hasKey: !!apiKey,
             indexedDocs: indexedDocCount.value,
@@ -388,10 +404,10 @@ async function sendMessage() {
 
     window.canonic.ai.chat({
         messages: contextMessages,
-        system: SYSTEM_PROMPT + workspaceBlock + docContext,
-        model: getModel(),
+        system: buildSystemPrompt(name, extraInstructions) + workspaceBlock + docContext,
+        model,
         apiKey,
-        baseUrl: getBaseUrl(),
+        baseUrl,
     });
 }
 
@@ -435,8 +451,16 @@ onUnmounted(() => {
 .ai-avatar {
     display: flex;
     justify-content: center;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     color: var(--accent);
+}
+
+.ai-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    margin-bottom: 6px;
 }
 
 .hint {

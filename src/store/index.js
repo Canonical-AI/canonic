@@ -65,6 +65,7 @@ export const useAppStore = defineStore("app", () => {
     discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
   );
   const peerFileContent = ref(null); // { peer, relPath, content } | null
+  const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
   const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
   const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
@@ -968,6 +969,7 @@ export const useAppStore = defineStore("app", () => {
     favoritedPeerIds,
     favoritedPeers,
     peerFileContent,
+    navBack,
     peerFileComments,
     activeCommentId,
     networkChanged,

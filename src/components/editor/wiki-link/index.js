@@ -1,4 +1,4 @@
-import { $node, $remark } from '@milkdown/utils'
+import { $node } from '@milkdown/utils'
 import { visit, SKIP } from 'unist-util-visit'
 
 export function wikiLinkRemarkPlugin() {
@@ -16,12 +16,12 @@ export function wikiLinkRemarkPlugin() {
         if (match.index > lastIndex) {
           newNodes.push({ type: 'text', value: node.value.slice(lastIndex, match.index) })
         }
+        const wlName = match[1].trim()
+        const wlAnchor = match[2] ? `#${match[2].trim()}` : ''
+        const wlValue = wlAnchor ? `${wlName}#${match[2].trim()}` : wlName
         newNodes.push({
           type: 'wikiLink',
-          data: {
-            name: match[1].trim(),
-            anchor: match[2] ? `#${match[2].trim()}` : null,
-          },
+          value: wlValue,
         })
         lastIndex = regex.lastIndex
       }
@@ -36,8 +36,6 @@ export function wikiLinkRemarkPlugin() {
     })
   }
 }
-
-export const wikiLinkRemark = $remark('wikiLink', () => wikiLinkRemarkPlugin)
 
 export const wikiLinkNode = $node('wiki_link', () => ({
   group: 'inline',
@@ -64,10 +62,11 @@ export const wikiLinkNode = $node('wiki_link', () => ({
   parseMarkdown: {
     match: (node) => node.type === 'wikiLink',
     runner: (state, node, type) => {
-      state.addNode(type, {
-        name: node.data.name,
-        anchor: node.data.anchor,
-      })
+      const raw = node.value || ''
+      const hashIdx = raw.indexOf('#')
+      const name = hashIdx >= 0 ? raw.slice(0, hashIdx) : raw
+      const anchor = hashIdx >= 0 ? `#${raw.slice(hashIdx + 1)}` : null
+      state.addNode(type, { name, anchor })
     },
   },
   toMarkdown: {

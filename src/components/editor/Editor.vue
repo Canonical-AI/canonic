@@ -52,6 +52,15 @@
       </div>
     </div>
 
+    <!-- Back navigation banner -->
+    <div v-if="store.navBack" class="nav-back-banner">
+      <button class="nav-back-btn" @click="goBack">
+        <ArrowLeft :size="13" />
+        Back to {{ store.navBack.name }}
+      </button>
+      <button class="nav-back-dismiss" @click="store.navBack = null" title="Dismiss">✕</button>
+    </div>
+
     <div class="editor-scroll" ref="editorScrollEl">
       <div class="editor-content" ref="editorContentEl" @mouseup="onMouseUp" @click="onEditorClick" :style="{ '--editor-font-size': editorFontSize + 'px' }">
         <ProsemirrorAdapterProvider>
@@ -65,18 +74,6 @@
           </MilkdownProvider>
         </ProsemirrorAdapterProvider>
       </div>
-    </div>
-
-    <!-- Selection comment popover -->
-    <div
-      v-if="selectionPopover.visible && !commentInput.visible"
-      class="comment-popover"
-      :style="{ top: selectionPopover.y + 'px', left: selectionPopover.x + 'px' }"
-    >
-      <button class="popover-btn" @click="openCommentInput">
-        <MessageSquarePlus :size="13" />
-        Add comment
-      </button>
     </div>
 
     <!-- Inline comment input -->
@@ -111,12 +108,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick, provide } from 'vue'
 import { MilkdownProvider } from '@milkdown/vue'
 import { ProsemirrorAdapterProvider } from '@prosemirror-adapter/vue'
 import { useAppStore } from '../../store'
 import { v4 as uuidv4 } from 'uuid'
-import { MessageSquarePlus, Tag, GitFork, GitBranch } from 'lucide-vue-next'
+import { Tag, GitFork, GitBranch, ArrowLeft } from 'lucide-vue-next'
 import MilkdownEditor from './MilkdownEditor.vue'
 import ForkDocModal from '../modals/ForkDocModal.vue'
 import SaveVersionModal from '../modals/SaveVersionModal.vue'
@@ -130,6 +127,18 @@ const localContent = ref('')
 
 const selectionPopover = ref({ visible: false, x: 0, y: 0, text: '' })
 const commentInput = ref({ visible: false, text: '' })
+
+provide('openCommentFromToolbar', (selectedText, fixedCoords) => {
+  const wrapperRect = editorContentEl.value?.getBoundingClientRect() ?? { left: 0, top: 0 }
+  selectionPopover.value = {
+    visible: false,
+    x: Math.max(0, fixedCoords.left - wrapperRect.left),
+    y: fixedCoords.top - wrapperRect.top,
+    text: selectedText,
+  }
+  commentInput.value = { visible: true, text: '' }
+  nextTick(() => commentTextareaEl.value?.focus())
+})
 const showForkModal = ref(false)
 const showVersionModal = ref(false)
 const showMergeConfirm = ref(false)
@@ -166,6 +175,7 @@ watch(() => store.currentContent, (val) => {
 
 // Clear active comment when switching files so stale IDs don't linger.
 watch(() => store.currentFile, () => { store.setActiveComment(null) })
+
 
 // Editor → Sidebar: clicking a comment highlight activates it.
 function onEditorClick(e) {
@@ -212,14 +222,13 @@ function onMouseUp() {
     selectionPopover.value.visible = false
     return
   }
-
+  // Track selection for comment input position; the floating toolbar handles the button UI
   const selectedText = selection.toString().trim()
   const range = selection.getRangeAt(0)
   const rect = range.getBoundingClientRect()
   const wrapperRect = editorContentEl.value.getBoundingClientRect()
-
   selectionPopover.value = {
-    visible: true,
+    visible: false,
     x: Math.max(0, rect.left - wrapperRect.left),
     y: rect.top - wrapperRect.top - 44,
     text: selectedText
@@ -228,12 +237,6 @@ function onMouseUp() {
 
 function truncateQuote(text, len = 80) {
   return text.length > len ? text.slice(0, len) + '…' : text
-}
-
-async function openCommentInput() {
-  commentInput.value = { visible: true, text: '' }
-  await nextTick()
-  commentTextareaEl.value?.focus()
 }
 
 function cancelComment() {
@@ -256,6 +259,17 @@ function submitComment() {
   })
 
   cancelComment()
+}
+
+async function goBack() {
+  const back = store.navBack
+  store.navBack = null
+  if (!back) return
+  await store.openFile(back.path)
+  await nextTick()
+  if (editorScrollEl.value && back.scrollTop != null) {
+    editorScrollEl.value.scrollTop = back.scrollTop
+  }
 }
 
 async function doMerge() {
@@ -500,32 +514,6 @@ onMounted(() => {
   min-height: 100%;
 }
 
-.comment-popover {
-  position: absolute;
-  z-index: 100;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-}
-
-.popover-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-size: 0.8125rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.popover-btn:hover { background: var(--bg-hover); }
-
 .comment-input-box {
   position: absolute;
   z-index: 101;
@@ -619,6 +607,45 @@ onMounted(() => {
 
 .comment-submit-btn:hover:not(:disabled) { opacity: 0.85; }
 .comment-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.nav-back-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 48px;
+  background: rgba(74, 122, 155, 0.1);
+  border-bottom: 1px solid var(--accent-muted);
+  flex-shrink: 0;
+}
+
+.nav-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-muted);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.nav-back-btn:hover { background: rgba(74, 122, 155, 0.15); }
+
+.nav-back-dismiss {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.nav-back-dismiss:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 </style>
 

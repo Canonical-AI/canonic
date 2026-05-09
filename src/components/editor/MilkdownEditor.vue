@@ -4,26 +4,31 @@
 </template>
 
 <script setup>
-import { watch, ref, provide, onUnmounted } from 'vue'
+import { watch, ref, provide, computed, onUnmounted } from 'vue'
 import { Milkdown, useEditor } from '@milkdown/vue'
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx, prosePluginsCtx } from '@milkdown/core'
+import { useAppStore } from '../../store'
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx, prosePluginsCtx, remarkPluginsCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
 import { history } from '@milkdown/plugin-history'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { Plugin, PluginKey } from 'prosemirror-state'
 import { Decoration, DecorationSet } from 'prosemirror-view'
-import { mermaidRemark, mermaidNode } from './mermaid/index.js'
+import { mermaidRemarkPlugin, mermaidNode } from './mermaid/index.js'
 import MermaidComponent from './mermaid/MermaidComponent.vue'
 import { useNodeViewFactory, usePluginViewFactory } from '@prosemirror-adapter/vue'
 import FloatingToolbar from './FloatingToolbar.vue'
 import { $view, $prose } from '@milkdown/utils'
-import { wikiLinkRemark, wikiLinkNode } from './wiki-link/index.js'
+import { wikiLinkRemarkPlugin, wikiLinkNode } from './wiki-link/index.js'
 import WikiLinkChip from './wiki-link/WikiLinkChip.vue'
 import WikiLinkTooltip from './wiki-link/WikiLinkTooltip.vue'
 
-const props = defineProps({ content: String, comments: Array })
+const props = defineProps({ content: String, comments: Array, readonly: Boolean })
 const emit = defineEmits(['update'])
+
+const store = useAppStore()
+const editorReadonly = computed(() => props.readonly || !!store.peerFileContent)
+provide('editorReadonly', editorReadonly)
 
 // --- Comment highlight ProseMirror plugin ---
 
@@ -78,10 +83,13 @@ const highlightPlugin = new Plugin({
 
 // --- isDark provide (for MermaidComponent) ---
 
-const isDark = ref(document.documentElement.getAttribute('data-theme') === 'dark')
+const LIGHT_THEMES = new Set(['paper'])
+const getIsDark = () => !LIGHT_THEMES.has(document.documentElement.getAttribute('data-theme'))
+
+const isDark = ref(getIsDark())
 
 const themeObserver = new MutationObserver(() => {
-  isDark.value = document.documentElement.getAttribute('data-theme') === 'dark'
+  isDark.value = getIsDark()
 })
 themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
@@ -138,6 +146,39 @@ function insertWikiLink(view, name, bracketStart) {
   dispatch(state.tr.replaceWith(bracketStart, bracketStart + 2, node))
 }
 
+// --- Trailing paragraph plugin ---
+// ProseMirror atom nodes (mermaid_block, wiki_link) at the end of the doc leave no
+// place to put the cursor. This plugin ensures there is always a trailing paragraph.
+const trailingParagraphPlugin = $prose(() => new Plugin({
+  appendTransaction(transactions, _oldState, newState) {
+    if (!transactions.some(tr => tr.docChanged)) return null
+    const { doc, schema, tr } = newState
+    const last = doc.lastChild
+    if (!last || last.type === schema.nodes.paragraph) return null
+    return tr.insert(doc.content.size, schema.nodes.paragraph.create())
+  }
+}))
+
+// --- Mermaid code-block → mermaid_block auto-conversion ---
+// When the user types ```mermaid, commonmark creates a code_block with language='mermaid'.
+// This plugin converts it to a mermaid_block node so the diagram card renders.
+const mermaidConvertPlugin = $prose(() => new Plugin({
+  appendTransaction(transactions, _oldState, newState) {
+    if (!transactions.some(tr => tr.docChanged)) return null
+    const mermaidType = newState.schema.nodes.mermaid_block
+    if (!mermaidType) return null
+
+    let tr = null
+    newState.doc.descendants((node, pos) => {
+      if (node.type.name !== 'code_block' || node.attrs.language !== 'mermaid') return
+      const content = node.textContent || ''
+      if (!tr) tr = newState.tr
+      tr.replaceWith(pos, pos + node.nodeSize, mermaidType.create({ value: content }))
+    })
+    return tr
+  }
+}))
+
 // --- Editor setup ---
 
 const { loading, get } = useEditor((root) =>
@@ -145,15 +186,25 @@ const { loading, get } = useEditor((root) =>
     .config((ctx) => {
       ctx.set(rootCtx, root)
       ctx.set(defaultValueCtx, props.content || '')
-      ctx.get(listenerCtx).markdownUpdated((_, markdown) => emit('update', markdown))
+      ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
+        // remark-stringify escapes [[ to \[\[ — unescape wiki-link openings
+        const fixed = markdown.replace(/\\\[\\\[/g, '[[')
+        emit('update', fixed)
+      })
       ctx.update(prosePluginsCtx, (plugins) => [...plugins, highlightPlugin])
+      ctx.update(remarkPluginsCtx, (plugins) => [
+        ...plugins,
+        { plugin: mermaidRemarkPlugin, options: {} },
+        { plugin: wikiLinkRemarkPlugin, options: {} },
+      ])
     })
     .use(commonmark)
     .use(gfm)
     .use(history)
     .use(listener)
     .use(floatingToolbarPlugin)
-    .use(mermaidRemark)
+    .use(trailingParagraphPlugin)
+    .use(mermaidConvertPlugin)
     .use(mermaidNode)
     .use(
       $view(mermaidNode, () =>
@@ -163,7 +214,6 @@ const { loading, get } = useEditor((root) =>
         })
       )
     )
-    .use(wikiLinkRemark)
     .use(wikiLinkNode)
     .use(wikiTriggerPlugin)
     .use(

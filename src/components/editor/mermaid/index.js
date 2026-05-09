@@ -1,8 +1,8 @@
-import { $node, $remark } from '@milkdown/utils'
+import { $node } from '@milkdown/utils'
 import { visit, SKIP } from 'unist-util-visit'
 
 // Remark plugin: convert ```mermaid fenced code blocks into mermaidBlock AST nodes
-function mermaidRemarkPlugin() {
+export function mermaidRemarkPlugin() {
   return (tree) => {
     visit(tree, 'code', (node, index, parent) => {
       if (node.lang !== 'mermaid') return
@@ -15,8 +15,6 @@ function mermaidRemarkPlugin() {
     })
   }
 }
-
-export const mermaidRemark = $remark('mermaid', () => mermaidRemarkPlugin)
 
 export const mermaidNode = $node('mermaid_block', () => ({
   group: 'block',

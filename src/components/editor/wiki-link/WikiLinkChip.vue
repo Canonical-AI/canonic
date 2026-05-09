@@ -7,32 +7,64 @@
     @mousedown.prevent
   >
     <span class="chip-icon">@</span>
-    <span class="chip-name">{{ node.value.attrs.name }}</span>
-    <span v-if="node.value.attrs.anchor" class="chip-anchor">{{ node.value.attrs.anchor }}</span>
+    <span class="chip-name">{{ node?.attrs?.name }}</span>
+    <span v-if="node?.attrs?.anchor" class="chip-anchor">{{ node?.attrs?.anchor }}</span>
   </span>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import { useNodeViewContext } from '@prosemirror-adapter/vue'
 import { useAppStore } from '../../../store'
 
 const { node } = useNodeViewContext()
 const store = useAppStore()
 
-const resolvedPath = computed(() => store.fileIndex[node.value.attrs.name] ?? null)
+const resolvedPath = computed(() => store.fileIndex[node.value?.attrs?.name] ?? null)
 
 const chipClass = computed(() => resolvedPath.value ? 'chip-resolved' : 'chip-new')
 
 const chipTitle = computed(() =>
   resolvedPath.value
     ? `Open ${resolvedPath.value}`
-    : `Create "${node.value.attrs.name}"`
+    : `Create "${node.value?.attrs?.name}"`
 )
 
+function scrollToAnchor(anchor) {
+  const scroller = document.querySelector('.editor-scroll')
+  if (!scroller) return
+
+  if (!anchor) {
+    scroller.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+
+  // Strip leading # and normalise to match heading text
+  const target = anchor.replace(/^#/, '').toLowerCase().replace(/-/g, ' ')
+  const headings = scroller.querySelectorAll('h1, h2, h3, h4, h5, h6')
+  for (const el of headings) {
+    if (el.textContent.trim().toLowerCase() === target) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+  }
+
+  // Anchor not found — fall back to top
+  scroller.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 async function handleClick() {
+  const name = node.value?.attrs?.name
+  if (!name) return
+
   if (resolvedPath.value) {
+    const fromPath = store.currentFile
+    const fromName = fromPath ? fromPath.split('/').pop().replace('.md', '') : null
+    const scrollTop = document.querySelector('.editor-scroll')?.scrollTop ?? 0
+    store.navBack = fromPath ? { path: fromPath, name: fromName, scrollTop } : null
     await store.openFile(resolvedPath.value)
+    await nextTick()
+    scrollToAnchor(node.value?.attrs?.anchor)
     return
   }
   await createDoc()

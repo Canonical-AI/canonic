@@ -6,7 +6,9 @@
   >
     <div class="mermaid-body">
       <div v-if="tab === 'preview'" class="mermaid-preview">
-        <div v-if="renderError" class="mermaid-error">{{ renderError }}</div>
+        <div v-if="renderError" class="mermaid-error">
+          <span class="mermaid-error-label">Diagram error:</span> {{ renderError }}
+        </div>
         <div v-else v-html="renderedSvg" class="mermaid-svg" />
       </div>
       <div v-else class="mermaid-editor-tab">
@@ -22,7 +24,7 @@
         </div>
       </div>
     </div>
-    <div v-if="hovering" class="mermaid-tabs">
+    <div v-if="hovering && !editorReadonly" class="mermaid-tabs">
       <button
         class="mermaid-tab"
         :class="{ active: tab === 'preview' }"
@@ -32,7 +34,7 @@
         class="mermaid-tab"
         :class="{ active: tab === 'editor' }"
         @click="tab = 'editor'"
-      >Editor</button>
+      >Edit</button>
     </div>
   </div>
 </template>
@@ -49,23 +51,75 @@ const hovering = ref(false)
 const renderedSvg = ref('')
 const renderError = ref('')
 let renderTimer = null
-let renderCounter = 0
+let currentRenderId = ''
 
-const source = ref(node.value.attrs.value || '')
+const source = ref(node.value?.attrs?.value || '')
 
 const sourceRows = computed(() => Math.max(4, source.value.split('\n').length + 1))
 
 function initMermaid(dark) {
+  const vars = dark ? {
+    background:            '#0C0E12',
+    mainBkg:               '#161A21',
+    nodeBkg:               '#161A21',
+    primaryColor:          '#1e2d3d',
+    primaryTextColor:      '#D6CFCB',
+    primaryBorderColor:    '#4A7A9B',
+    lineColor:             '#4A7A9B',
+    secondaryColor:        '#282F3B',
+    tertiaryColor:         '#1a222c',
+    edgeLabelBackground:   '#161A21',
+    clusterBkg:            '#1e2730',
+    titleColor:            '#D6CFCB',
+    textColor:             '#D6CFCB',
+    labelColor:            '#D6CFCB',
+    nodeTextColor:         '#D6CFCB',
+    // gantt-specific
+    sectionBkgColor:       '#161A21',
+    altSectionBkgColor:    '#1e2730',
+    gridColor:             '#2a3545',
+    taskBkgColor:          '#4A7A9B',
+    taskBorderColor:       '#6A97B5',
+    taskTextColor:         '#E8E2DE',
+    taskTextLightColor:    '#E8E2DE',
+    taskTextOutsideColor:  '#A899AD',
+    taskTextClickableColor:'#D6CFCB',
+    activeTaskBkgColor:    '#6A97B5',
+    activeTaskBorderColor: '#8ab5d0',
+    doneTaskBkgColor:      '#3a4e62',
+    doneTaskBorderColor:   '#5a7a90',
+    critBkgColor:          'rgba(224,82,82,0.25)',
+    critBorderColor:       '#e05252',
+    todayLineColor:        '#f59e0b',
+  } : {
+    background:            '#F6F4F7',
+    primaryColor:          '#dce8f0',
+    primaryTextColor:      '#2A1F2E',
+    primaryBorderColor:    '#5B7FA5',
+    lineColor:             '#5B7FA5',
+    textColor:             '#2A1F2E',
+    titleColor:            '#2A1F2E',
+    taskBkgColor:          '#5B7FA5',
+    taskTextColor:         '#ffffff',
+    taskTextLightColor:    '#2A1F2E',
+    taskTextOutsideColor:  '#4A3A4E',
+    activeTaskBkgColor:    '#7A9BBF',
+    doneTaskBkgColor:      '#E6E1E8',
+    todayLineColor:        '#f59e0b',
+  }
+
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'loose',
-    theme: dark ? 'dark' : 'default',
+    theme: 'base',
+    themeVariables: vars,
     fontFamily: 'inherit',
     maxTextSize: 100000,
   })
 }
 
 const isDark = inject('isDark', ref(false))
+const editorReadonly = inject('editorReadonly', ref(false))
 
 onMounted(() => {
   initMermaid(isDark.value)
@@ -89,19 +143,22 @@ watch(source, () => {
   }, 300)
 })
 
-watch(() => node.value.attrs.value, (val) => {
+watch(() => node.value?.attrs?.value, (val) => {
   if (val !== source.value) source.value = val || ''
 })
 
 async function renderDiagram() {
-  const id = `mermaid-${++renderCounter}`
+  if (!source.value.trim()) return
+  // Use a unique ID per render call so multiple diagrams on the same page never collide
+  const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  currentRenderId = id
   try {
     const { svg } = await mermaid.render(id, source.value)
-    if (`mermaid-${renderCounter}` !== id) return
+    if (currentRenderId !== id) return
     renderedSvg.value = svg
     renderError.value = ''
   } catch (e) {
-    if (`mermaid-${renderCounter}` !== id) return
+    if (currentRenderId !== id) return
     renderError.value = e.message || 'Invalid diagram syntax'
     renderedSvg.value = ''
   }
@@ -114,7 +171,7 @@ async function renderDiagram() {
   border-radius: 8px;
   overflow: hidden;
   margin: 8px 0;
-  background: var(--bg-secondary);
+  background: var(--bg-surface);
 }
 
 .mermaid-body { padding: 16px; }
@@ -127,15 +184,82 @@ async function renderDiagram() {
   max-width: 100% !important;
   overflow: visible !important;
   display: block;
+  background: transparent !important;
+}
+
+/* Global text fallback — catches any text element mermaid doesn't explicitly theme */
+.mermaid-svg :deep(text) {
+  fill: var(--text-primary) !important;
+  opacity: 1 !important;
+}
+
+/* Hide outside overflow labels — they double-up with the inside label */
+.mermaid-svg :deep(.taskTextOutsideRight),
+.mermaid-svg :deep(.taskTextOutsideLeft),
+.mermaid-svg :deep(.taskTextOutside0),
+.mermaid-svg :deep(.taskTextOutside1) {
+  display: none !important;
+}
+
+/* Task text inside bars — always primary color, full opacity */
+.mermaid-svg :deep(.taskText),
+.mermaid-svg :deep(.taskText0),
+.mermaid-svg :deep(.taskText1) {
+  fill: var(--text-primary) !important;
+  opacity: 1 !important;
+}
+
+/* Section row backgrounds and their labels */
+.mermaid-svg :deep(.section0),
+.mermaid-svg :deep(.section1) {
+  fill: transparent !important;
+  opacity: 1 !important;
+}
+
+.mermaid-svg :deep(.sectionTitle),
+.mermaid-svg :deep(.sectionTitle0),
+.mermaid-svg :deep(.sectionTitle1) {
+  fill: var(--text-secondary) !important;
+}
+
+/* Diagram title */
+.mermaid-svg :deep(.titleText) {
+  fill: var(--text-primary) !important;
+}
+
+/* Axis / date tick labels */
+.mermaid-svg :deep(.tick text),
+.mermaid-svg :deep(.tick line) {
+  fill: var(--text-secondary) !important;
+  stroke: var(--border) !important;
+}
+
+/* Grid lines */
+.mermaid-svg :deep(.grid .tick line),
+.mermaid-svg :deep(.grid path) {
+  stroke: var(--border) !important;
+  opacity: 0.5;
+}
+
+/* Today marker line */
+.mermaid-svg :deep(.today) {
+  stroke: #f59e0b !important;
+  stroke-width: 2px;
 }
 
 .mermaid-error {
-  color: var(--text-error, #e05252);
+  color: #e05252;
   font-size: 0.8125rem;
   font-family: 'JetBrains Mono', monospace;
-  padding: 8px;
-  background: rgba(224, 82, 82, 0.08);
-  border-radius: 4px;
+  padding: 10px 12px;
+  background: rgba(224, 82, 82, 0.1);
+  border: 1px solid rgba(224, 82, 82, 0.3);
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
+.mermaid-error-label {
+  font-weight: 600;
 }
 
 .mermaid-textarea {

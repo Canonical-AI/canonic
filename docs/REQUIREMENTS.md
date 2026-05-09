@@ -1,239 +1,536 @@
-# Canonic — Human-Readable Requirements
+# Canonic — Requirements
 
-This document is the source of truth for product requirements. Each section maps directly
-to a feature area. Acceptance criteria are structured to be testable — each criterion
-becomes one or more automated or manual test cases.
+Source of truth for product requirements. When a requirement changes, update this file first, then tests, then code.
 
 ---
 
-## How to use this document
+## Global Configuration (CFG)
 
-- **Product decisions** live here, not in code comments
-- **Test suites** reference criterion IDs (e.g. `CFG-3`) to stay traceable
-- When a requirement changes, update this doc first — then update tests — then update code
-- Mark criteria `[DONE]` when implemented and tested, `[PARTIAL]` when incomplete
+> First-run setup and persistent user preferences. Config lives at `~/.canonic/config.json`. Setup screen appears on first launch; settings are always accessible from the titlebar gear icon.
 
----
+- scenario: first launch with no config
+    given: no config file exists at ~/.canonic/config.json
+    when: the app launches
+    then: the Setup screen appears before the Workspace screen
 
-## Feature: Global Configuration (CFG)
+- scenario: first launch with valid config
+    given: ~/.canonic/config.json exists and is valid
+    when: the app launches
+    then: the Setup screen is skipped and the Workspace screen loads directly
 
-### Description
-First-run setup and persistent user preferences. Config is stored at `~/.canonic/config.json`.
-The setup screen appears when no config exists. Settings are also accessible at any time
-from the titlebar gear icon.
+- scenario: setup screen fields
+    given: the Setup screen is open
+    when: the user views it
+    then: fields are present for Display Name, Anthropic API key, default model (sonnet/opus/haiku), and default workspace path
 
-### User Stories
-- As a new user, I want to enter my API key once so I don't have to re-enter it every session
-- As a user, I want to see my display name on my comments and commits
-- As a user, I want to change my API key without reinstalling the app
+- scenario: API key field masking
+    given: the Setup screen is open
+    when: the user views the API key field
+    then: characters are hidden by default with a toggle to reveal them
 
-### Acceptance Criteria
+- scenario: setup validation — empty required field
+    given: the Setup screen is open and a required field is empty
+    when: the user clicks Continue
+    then: an inline validation error appears and the app does not proceed
 
-| ID | Criterion | Status |
-|---|---|---|
-| CFG-1 | On first launch with no config, the Setup screen appears before the Workspace screen | [ ] |
-| CFG-2 | Setup screen has fields for: Display Name, Anthropic API key, default model (sonnet/opus/haiku), default workspace path | [ ] |
-| CFG-3 | API key field renders as a password input (characters hidden by default, toggle to reveal) | [ ] |
-| CFG-4 | Clicking "Continue" with any required field empty shows inline validation error; does not proceed | [ ] |
-| CFG-5 | On valid submission, config is written to `~/.canonic/config.json` with fields: `displayName`, `apiKey`, `model`, `defaultWorkspacePath`, `sharingDefaults` | [ ] |
-| CFG-6 | Config file is NOT tracked in any git workspace (never appears in `git status`) | [ ] |
-| CFG-7 | After setup, the Settings modal is accessible via the gear icon in the titlebar | [ ] |
-| CFG-8 | Changing the API key in Settings and saving immediately affects new AI chat requests | [ ] |
-| CFG-9 | Display name is used as the `author.name` in all git commits made by this user | [ ] |
-| CFG-10 | Display name is used as `author` in all comments added by this user | [ ] |
-| CFG-11 | If `~/.canonic/config.json` exists and is valid on launch, the Setup screen is skipped | [ ] |
-| CFG-12 | API key is stored as-is (plain text in config file); a warning is shown that config contains sensitive data | [ ] |
+- scenario: setup submission writes config
+    given: all required fields are filled with valid values
+    when: the user clicks Continue
+    then: ~/.canonic/config.json is written with fields displayName, apiKey, model, defaultWorkspacePath, and sharingDefaults
 
----
+- scenario: config file not tracked by git
+    given: a workspace is open
+    when: the user runs git status inside the workspace
+    then: ~/.canonic/config.json does not appear in the output
 
-## Feature: Workspace Templates (WKS)
+- scenario: settings accessible after setup
+    given: setup has been completed
+    when: the user clicks the gear icon in the titlebar
+    then: the Settings modal opens
 
-### Description
-When creating a new workspace, the user can choose from workspace templates.
-The PM Framework template creates a structured directory hierarchy with starter documents.
+- scenario: API key change takes effect immediately
+    given: Settings is open and the user changes the API key and saves
+    when: the user sends a new AI chat message
+    then: the new API key is used for that request
 
-### User Stories
-- As a PM, I want to start with a framework I recognize so I don't have to build structure from scratch
-- As a user, I want a blank workspace when I don't need opinionated structure
-- As a team lead, I want all team members to start from the same document structure
+- scenario: display name on commits
+    given: the user has a display name set in config
+    when: a git commit is made
+    then: the commit's author.name matches the display name
 
-### Workspace Templates Available
+- scenario: display name on comments
+    given: the user has a display name set in config
+    when: the user adds a comment
+    then: the comment's author field matches the display name
 
-**1. Blank** — empty git repo, no files created beyond README  
-**2. PM Framework** — structured directory hierarchy for product teams:
-
-```
-Vision/
-  product-vision.md     ← What we're building and why
-  north-star-metric.md  ← The one metric that matters most
-Strategy/
-  strategy.md           ← How we'll achieve the vision
-  competitive-analysis.md
-Planning/
-  roadmap.md            ← What we're building and when
-  okrs.md               ← Objectives and key results
-Discovery/
-  user-research.md      ← What we've learned from users
-  problem-statement.md  ← The problem we're solving
-Implementation/
-  technical-spec.md     ← How we're building it
-  launch-checklist.md   ← Pre-launch verification
-Monitoring/
-  metrics-dashboard.md  ← Key metrics to watch post-launch
-  incident-log.md       ← Issues and resolutions
-```
-
-### Acceptance Criteria
-
-| ID | Criterion | Status |
-|---|---|---|
-| WKS-1 | Workspace setup screen shows at least two template options: "Blank" and "PM Framework" | [ ] |
-| WKS-2 | Each template option shows a name, short description, and preview of what will be created | [ ] |
-| WKS-3 | Selecting "Blank" creates an empty workspace with only README.md | [ ] |
-| WKS-4 | Selecting "PM Framework" creates all 6 directories with all 12 template files | [ ] |
-| WKS-5 | Each template file contains a title heading and a brief description of what belongs in that document | [ ] |
-| WKS-6 | The initial git commit for a PM Framework workspace includes all 12 template files with message "Initialize PM Framework workspace" | [ ] |
-| WKS-7 | The file tree in the sidebar correctly shows the 6 top-level directories collapsed by default | [ ] |
-| WKS-8 | Opening any template file shows the starter content in the editor, ready to edit | [ ] |
-| WKS-9 | After workspace creation, the selected branch is `main` | [ ] |
-| WKS-10 | Re-opening an existing workspace (already initialized) skips the template selection | [ ] |
+- scenario: sensitive data warning
+    given: the user opens the config file or Settings
+    when: the API key is stored
+    then: a warning is shown that the config file contains sensitive data stored in plain text
 
 ---
 
-## Feature: Sharing Scope & Permissions (SHR)
+## Workspace Templates (WKS)
 
-### Description
-Users can configure what they share at multiple levels: individual files, directories,
-or the whole workspace. Sharing is configured both globally (in Settings as defaults)
-and per-share-session. Recipients access shared content via a token-secured link.
+> When creating a new workspace the user picks a template. Blank gives an empty repo. PM Framework scaffolds a full directory hierarchy with twelve starter documents.
 
-### User Stories
-- As a user, I want to share my entire Strategy directory with a stakeholder without sharing everything
-- As a user, I want to set "share nothing" as my default so I never accidentally expose documents
-- As a user, I want to share a whole workspace with my team so everyone has read access
+- scenario: template options shown
+    given: the user is creating a new workspace
+    when: the template selection screen appears
+    then: at least two options are shown — Blank and PM Framework — each with a name, short description, and preview of what will be created
 
-### Share Scope Options
+- scenario: blank template
+    given: the user selects Blank and confirms
+    when: the workspace is created
+    then: only README.md exists in the workspace
 
-| Scope | Description |
-|---|---|
-| `none` | Nothing is shared; share button is disabled |
-| `file` | Only the currently open document (default) |
-| `directory` | The directory containing the current document |
-| `workspace` | The entire workspace |
+- scenario: PM Framework template — files created
+    given: the user selects PM Framework and confirms
+    when: the workspace is created
+    then: all 6 directories and 12 template files are present (Vision, Strategy, Planning, Discovery, Implementation, Monitoring)
 
-### Access Levels
+- scenario: PM Framework template — file content
+    given: the PM Framework workspace was just created
+    when: the user opens any template file
+    then: the file contains a title heading and a brief description of what belongs there
 
-| Level | Description |
-|---|---|
-| `read` | Can view document content and comments |
-| `comment` | Can read and leave new comments (comments synced back) |
+- scenario: PM Framework template — initial commit
+    given: the PM Framework workspace was just created
+    when: the user checks the git log
+    then: exactly one commit exists with message "Initialize PM Framework workspace" containing all 12 files
 
-### Acceptance Criteria
+- scenario: PM Framework template — sidebar
+    given: the PM Framework workspace is open
+    when: the user views the sidebar
+    then: the 6 top-level directories are shown collapsed by default
 
-| ID | Criterion | Status |
-|---|---|---|
-| SHR-1 | Settings screen has a "Sharing Defaults" section with scope selector (none / file / directory / workspace) | [ ] |
-| SHR-2 | Settings screen has a default access level selector (read / comment) | [ ] |
-| SHR-3 | Default sharing scope is `file` on fresh install | [ ] |
-| SHR-4 | When sharing is started, a modal shows the scope selector pre-filled from defaults but editable per-session | [ ] |
-| SHR-5 | Scope `file`: share link serves only the single current document | [ ] |
-| SHR-6 | Scope `directory`: share link serves a manifest of all `.md` files in the same directory, plus their contents | [ ] |
-| SHR-7 | Scope `workspace`: share link serves all `.md` files in the workspace recursively | [ ] |
-| SHR-8 | Each share session generates a unique token; old tokens become invalid after `stopShare` | [ ] |
-| SHR-9 | The share server responds with HTTP 403 to requests with a missing or incorrect token | [ ] |
-| SHR-10 | Share modal displays which files will be shared (names only, not content) before the user confirms | [ ] |
-| SHR-11 | When scope is `directory` or `workspace`, the share link opens a file-list view in the browser, not a single document | [ ] |
-| SHR-12 | Directories can be excluded from sharing via a `.canonicignore` file (same syntax as `.gitignore`) | [ ] |
-| SHR-13 | Stop sharing invalidates the token; subsequent requests to that link return 404 | [ ] |
+- scenario: workspace creation — default branch
+    given: any template was used to create a workspace
+    when: the workspace opens
+    then: the active branch is main
+
+- scenario: re-opening existing workspace
+    given: a workspace already exists with git initialized
+    when: the user opens it
+    then: the template selection screen does not appear
 
 ---
 
-## Feature: AI Assistant Configuration (AI)
+## Sharing Scope & Permissions (SHR)
 
-### Description
-The AI assistant in the right panel is configured to help users think, not to write for them.
-Its behavior is adjustable in Settings.
+> Users share content via a token-secured Cloudflare Tunnel link. Scope (none / file / directory / workspace) and access level (read / comment) are configurable globally and per-session.
 
-### Acceptance Criteria
+- scenario: sharing defaults in settings
+    given: Settings is open
+    when: the user views the Sharing section
+    then: a scope selector (none / file / directory / workspace) and an access level selector (read / comment) are present
 
-| ID | Criterion | Status |
-|---|---|---|
-| AI-1 | AI chat uses the API key from `~/.canonic/config.json` (not from `.env`) | [ ] |
-| AI-2 | AI chat uses the model selected in Settings | [ ] |
-| AI-3 | AI responses stream character-by-character (not a single block) | [ ] |
-| AI-4 | AI has the full current document content as context in every message | [ ] |
-| AI-5 | AI system prompt prevents it from generating document content directly | [ ] |
-| AI-6 | If API key is missing or invalid, the AI panel shows a clear error with a link to Settings | [ ] |
-| AI-7 | Chat history is not persisted between app restarts (fresh session per launch) | [ ] |
+- scenario: default sharing scope on fresh install
+    given: the app has never been configured
+    when: the user opens Settings
+    then: the default sharing scope is file
 
----
+- scenario: per-session scope override
+    given: the user starts sharing
+    when: the share modal opens
+    then: the scope selector is pre-filled from defaults but can be changed for this session
 
-## Feature: Git Version Control (GIT)
+- scenario: scope file — served content
+    given: sharing is active with scope file
+    when: a recipient opens the share link
+    then: only the single currently open document is served
 
-### Description
-Every workspace is a git repository. Version control operations are exposed via
-a document-centric UI — no terminal required.
+- scenario: scope directory — served content
+    given: sharing is active with scope directory
+    when: a recipient opens the share link
+    then: all .md files in the same directory as the current document are served as a manifest
 
-### Acceptance Criteria
+- scenario: scope workspace — served content
+    given: sharing is active with scope workspace
+    when: a recipient opens the share link
+    then: all .md files in the workspace are served recursively
 
-| ID | Criterion | Status |
-|---|---|---|
-| GIT-1 | `git init` runs automatically when a new workspace is created | [ ] |
-| GIT-2 | Creating a new document auto-stages and does NOT auto-commit (user must explicitly commit) | [ ] |
-| GIT-3 | Saving a document (Cmd+S) writes to disk but does NOT create a git commit | [ ] |
-| GIT-4 | The commit modal requires a non-empty message; clicking "Save checkpoint" with empty message shows error | [ ] |
-| GIT-5 | After commit, the History panel shows the new commit at the top of the list | [ ] |
-| GIT-6 | Creating a branch from `main` with a clean working tree succeeds and switches to the new branch | [ ] |
-| GIT-7 | The branch selector in the titlebar always reflects the current branch | [ ] |
-| GIT-8 | Switching branches updates the file tree and editor content to reflect that branch's state | [ ] |
-| GIT-9 | Merging a branch into `main` from the branch menu shows success or a conflict message | [ ] |
-| GIT-10 | The History panel diff view shows added lines in green and removed lines in red | [ ] |
-| GIT-11 | Clicking a commit in the History panel shows a diff of that commit vs. current | [ ] |
+- scenario: scope directory or workspace — link view
+    given: sharing is active with scope directory or workspace
+    when: a recipient opens the share link
+    then: a file-list view appears in the browser rather than a single document
 
----
+- scenario: unique token per session
+    given: a share session is started
+    when: the session ends via stopShare
+    then: the token from that session is invalid and any subsequent requests using it return 404
 
-## Feature: Comments (CMT)
+- scenario: unauthorized access
+    given: a share link is active
+    when: a request arrives with a missing or incorrect token
+    then: the server responds with HTTP 403
 
-### Description
-Inline comments anchored to either selected text or line numbers. Shown in the right panel.
+- scenario: share modal — file preview
+    given: the user opens the share modal before confirming
+    when: they view the modal
+    then: the names of files that will be shared are listed (content not shown)
 
-### Acceptance Criteria
-
-| ID | Criterion | Status |
-|---|---|---|
-| CMT-1 | Selecting text in the editor and releasing the mouse shows a "Add comment" popover | [ ] |
-| CMT-2 | Submitting a comment on selected text saves the quoted text as the anchor | [ ] |
-| CMT-3 | Comments survive app restart (persisted to `~/.canonic/comments/<docId>.json`) | [ ] |
-| CMT-4 | The selected text of an active comment is visually highlighted in the editor | [ ] |
-| CMT-5 | Clicking a comment in the right panel scrolls the editor to its anchor text | [ ] |
-| CMT-6 | Resolved comments are hidden by default; a toggle shows them | [ ] |
-| CMT-7 | Comments are scoped to a document path — switching documents shows only that doc's comments | [ ] |
-| CMT-8 | Author name on comments matches the display name from Settings (CFG-10) | [ ] |
+- scenario: canonicignore exclusions
+    given: a .canonicignore file exists with entries matching certain directories
+    when: the user shares with scope directory or workspace
+    then: the matching directories are excluded from the shared manifest
 
 ---
 
-## Test Infrastructure
+## AI Assistant (AI)
 
-### Manual Test Checklist (run before each release)
-- [ ] Fresh install: no config exists → Setup screen appears
-- [ ] Complete setup with valid API key → proceeds to workspace screen
-- [ ] Create PM Framework workspace → all 12 files present, git log shows 1 commit
-- [ ] Create a document, write text, Cmd+S → file exists on disk, no new git commit
-- [ ] Commit with a message → History panel shows commit
-- [ ] Create branch "feature/test" → branch selector updates, file tree reflects branch
-- [ ] Share a file → modal shows share link → opening link in browser shows document
-- [ ] Add comment on selected text → restart app → comment still present with highlight
-- [ ] AI chat: type "what's missing?" → response streams in, does not rewrite document
+> The AI chat panel is a thinking partner — it helps users reason through their document, not write it for them.
 
-### Automated Test Targets (future)
-The following modules should have unit tests:
-- `electron/git.js` — mock `fs`, assert git operations produce expected repository state
-- `electron/search.js` — index documents, assert search returns ranked results with highlights
-- `electron/share.js` — assert token generation, assert 403 on wrong token, assert 404 after stop
-- `electron/config.js` — assert read/write/validate of config shape
-- `src/store/index.js` — assert state transitions (openFile, addComment, etc.) with mocked IPC
+- scenario: API key source
+    given: an AI chat message is sent
+    when: the request is made to the AI provider
+    then: the API key from ~/.canonic/config.json is used, not any .env file
+
+- scenario: model selection
+    given: the user has selected a model in Settings
+    when: an AI chat message is sent
+    then: that model is used for the request
+
+- scenario: streaming responses
+    given: an AI chat message is sent
+    when: the response arrives
+    then: text streams character-by-character rather than appearing all at once
+
+- scenario: document context
+    given: an AI chat message is sent
+    when: the request is constructed
+    then: the full current document content is included as context
+
+- scenario: AI does not ghostwrite
+    given: the AI system prompt is in effect
+    when: the user asks the AI to write document content directly
+    then: the AI declines to generate the content and redirects to a thinking/questioning role
+
+- scenario: missing or invalid API key
+    given: no API key is configured or the key is invalid
+    when: the user opens the AI chat panel
+    then: a clear error message is shown with a link to Settings
+
+- scenario: chat history not persisted
+    given: the user has an active AI chat session
+    when: the app is restarted
+    then: the previous chat messages are gone and the session starts fresh
 
 ---
 
-*Last updated: 2026-04-30*  
-*Next review: before each major release*
+## Git Version Control (GIT)
+
+> Every workspace is a git repo. Version control is exposed through a document-centric UI — no terminal required.
+
+- scenario: git init on workspace creation
+    given: a new workspace is being created
+    when: creation completes
+    then: git init has been run and the workspace is a valid git repository
+
+- scenario: new document — staged not committed
+    given: the user creates a new document
+    when: the file is saved for the first time
+    then: the file is staged but no commit is made automatically
+
+- scenario: Cmd+S does not commit
+    given: a document is open and the user has unsaved changes
+    when: the user presses Cmd+S
+    then: the file is written to disk and no git commit is created
+
+- scenario: commit — empty message blocked
+    given: the commit modal is open
+    when: the user clicks Save checkpoint with an empty message field
+    then: an inline error is shown and the commit is not made
+
+- scenario: commit — appears in history
+    given: a commit has just been made with a message
+    when: the user opens the History panel
+    then: the new commit appears at the top of the list
+
+- scenario: branch creation
+    given: the working tree is clean on main
+    when: the user creates a branch named feature/test
+    then: the branch is created and the app switches to it
+
+- scenario: branch selector reflects current branch
+    given: the user is on any branch
+    when: they view the titlebar
+    then: the branch selector shows the name of the current branch
+
+- scenario: switching branches updates content
+    given: two branches have different versions of a file
+    when: the user switches branches
+    then: the file tree and editor content update to reflect the newly checked-out branch
+
+- scenario: merge — success or conflict
+    given: a feature branch exists
+    when: the user merges it into main from the branch menu
+    then: a success message is shown if the merge completes cleanly, or a conflict message if it does not
+
+- scenario: history panel — diff colors
+    given: a commit is selected in the History panel
+    when: the diff view renders
+    then: added lines are shown in green and removed lines in red
+
+- scenario: history panel — diff on click
+    given: the user clicks a commit in the History panel
+    when: the diff view opens
+    then: it shows the diff of that commit relative to the current working state
+
+---
+
+## Comments (CMT)
+
+> Inline comments anchored to selected text. Shown in the right panel. Comments persist across restarts.
+
+- scenario: comment trigger on selection
+    given: the user selects text in the editor and releases the mouse
+    when: the selection is non-empty
+    then: an Add comment button or popover appears
+
+- scenario: comment saves quoted text
+    given: the user has selected text and opened the comment input
+    when: the user submits a comment
+    then: the selected text is saved as the anchor for that comment
+
+- scenario: comments persist after restart
+    given: a comment has been added to a document
+    when: the app is restarted and the document is reopened
+    then: the comment is still visible with its anchor intact
+
+- scenario: comment anchor highlighted
+    given: an unresolved comment exists on a document
+    when: the document is open in the editor
+    then: the anchor text is visually highlighted in the editor
+
+- scenario: click comment scrolls to anchor
+    given: a comment is visible in the right panel
+    when: the user clicks on it
+    then: the editor scrolls to the anchor text for that comment
+
+- scenario: resolved comments hidden by default
+    given: a document has both resolved and unresolved comments
+    when: the user opens the comment panel
+    then: resolved comments are hidden and a toggle is available to show them
+
+- scenario: comments scoped to document
+    given: the user switches from document A to document B
+    when: the comment panel updates
+    then: only comments belonging to document B are shown
+
+- scenario: comment author matches display name
+    given: the user adds a comment
+    when: the comment is saved
+    then: the author field matches the display name from Settings
+
+---
+
+## Floating Toolbar (TBR)
+
+> A formatting toolbar that appears when text is selected. Provides bold, italic, strikethrough, link, list, blockquote, and comment actions without leaving the editor.
+
+- scenario: toolbar appears on selection
+    given: the editor contains text
+    when: the user selects one or more characters
+    then: the floating toolbar appears above the selection
+
+- scenario: toolbar hides on deselect
+    given: the floating toolbar is visible
+    when: the user clicks somewhere with no selection
+    then: the toolbar disappears
+
+- scenario: bold toggle
+    given: text is selected and bold is not applied
+    when: the user clicks the bold button
+    then: the selected text becomes bold
+
+- scenario: bold remove
+    given: text is selected and the entire selection is bold
+    when: the user clicks the bold button
+    then: bold is removed from the selection
+
+- scenario: italic toggle
+    given: text is selected
+    when: the user clicks the italic button
+    then: the mark toggles on or off for the selection
+
+- scenario: strikethrough toggle
+    given: text is selected
+    when: the user clicks the strikethrough button
+    then: the mark toggles on or off for the selection
+
+- scenario: link add
+    given: text is selected and no link covers the selection
+    when: the user clicks the link button
+    then: a URL input appears inside the toolbar, auto-focused
+
+- scenario: link submit via Enter
+    given: the URL input is visible and contains a URL
+    when: the user presses Enter
+    then: the link mark is applied to the originally selected text and the input closes
+
+- scenario: link submit via button
+    given: the URL input is visible and contains a URL
+    when: the user clicks Add
+    then: the link mark is applied to the originally selected text and the input closes
+
+- scenario: link cancel
+    given: the URL input is visible
+    when: the user presses Escape
+    then: the input closes and no link is applied
+
+- scenario: link remove
+    given: text is selected and a link already covers the selection
+    when: the user clicks the link button
+    then: the link mark is removed immediately with no input shown
+
+- scenario: comment from toolbar
+    given: text is selected and the toolbar is visible
+    when: the user clicks the comment button
+    then: the comment input opens pre-filled with the selected text as the anchor
+
+- scenario: active mark state
+    given: the cursor is inside bold text
+    when: the floating toolbar is visible
+    then: the bold button appears in its active/highlighted state
+
+---
+
+## Wiki-Links (WKL)
+
+> `[[doc-name]]` syntax renders as inline chips. Chips navigate to or create the referenced document. Anchors (`[[doc#heading]]`) scroll to a matching heading.
+
+- scenario: chip renders — resolved
+    given: a document contains [[product-vision]] and a file named product-vision.md exists
+    when: the editor renders the document
+    then: a chip appears with the doc name in blue styling
+
+- scenario: chip renders — unresolved
+    given: a document contains [[new-idea]] and no file named new-idea.md exists
+    when: the editor renders the document
+    then: a chip appears with the doc name in green styling
+
+- scenario: chip navigation — resolved
+    given: a resolved (blue) chip is visible
+    when: the user clicks it
+    then: the referenced document opens and the view scrolls to the top
+
+- scenario: chip navigation — anchor
+    given: a chip references [[roadmap#next-q3-2026]]
+    when: the user clicks it
+    then: the referenced document opens and the view scrolls to the heading matching the anchor text
+
+- scenario: chip navigation — anchor not found
+    given: a chip references a heading anchor that does not exist in the destination doc
+    when: the user clicks it
+    then: the destination document opens and the view scrolls to the top
+
+- scenario: back navigation — banner appears
+    given: the user navigated to a document by clicking a wiki-link chip
+    when: the destination document loads
+    then: a dismissable Back to [source doc name] banner appears at the top of the editor
+
+- scenario: back navigation — scroll position restored
+    given: the user was scrolled partway through a document before clicking a wiki-link chip
+    when: the user clicks the back banner
+    then: the source document opens and the scroll position is restored to where it was before
+
+- scenario: back navigation — dismiss
+    given: the back banner is visible
+    when: the user clicks the ✕ button on it
+    then: the banner disappears and the back destination is forgotten
+
+- scenario: chip creation — no LLM
+    given: an unresolved (green) chip is visible and no AI provider is configured
+    when: the user clicks it
+    then: a new empty .md file is created with that name and immediately opened
+
+- scenario: chip creation — with LLM
+    given: an unresolved (green) chip is visible and an AI provider is configured
+    when: the user clicks it
+    then: a new file is created, an AI prompt is sent using the current doc as context, and the generated content is saved to the new file
+
+- scenario: autocomplete trigger
+    given: the user is editing a writable document
+    when: the user types [[
+    then: an autocomplete dropdown appears listing all docs in the workspace by name
+
+- scenario: autocomplete selection
+    given: the autocomplete dropdown is open
+    when: the user selects a doc name
+    then: [[doc-name]] is inserted at the cursor as a chip
+
+- scenario: wiki-link survives save and reopen
+    given: a document contains a wiki-link chip
+    when: the document is saved and reopened
+    then: the chip renders correctly and [[name]] appears in the raw markdown without backslash escaping
+
+- scenario: chips hidden in readonly
+    given: a document is open in readonly mode (peer view)
+    when: the editor renders
+    then: wiki-link chips are visible but clicking them does not trigger creation
+
+---
+
+## Mermaid Diagrams (MRM)
+
+> Fenced ` ```mermaid ` blocks render as interactive diagram cards with a live SVG preview and an editable source tab. Supports dark and light themes.
+
+- scenario: diagram renders from fenced block
+    given: a document contains a fenced code block tagged mermaid with valid syntax
+    when: the editor renders the document
+    then: the block appears as an SVG diagram card rather than a raw code block
+
+- scenario: diagram created by typing fence
+    given: the user types ```mermaid and presses Enter in a writable document
+    when: the block is completed
+    then: the block auto-converts to a mermaid diagram card
+
+- scenario: multiple diagrams on same page
+    given: a document contains two or more mermaid blocks
+    when: the editor renders the document
+    then: all diagrams render independently without interfering with each other
+
+- scenario: invalid syntax shows error
+    given: a fenced mermaid block contains invalid diagram syntax
+    when: the editor renders it
+    then: an error message is shown in place of the diagram reading Diagram error: [reason]
+
+- scenario: edit tab — writable doc
+    given: a mermaid card is in a writable document
+    when: the user hovers over the card
+    then: Preview and Edit tab buttons appear at the bottom of the card
+
+- scenario: edit tab — readonly doc
+    given: a mermaid card is in a readonly document (peer view or readonly prop)
+    when: the user hovers over the card
+    then: no tab buttons appear
+
+- scenario: source editing updates diagram
+    given: the user has switched to the Edit tab on a mermaid card and modified the source
+    when: the user clicks Update or the 300ms debounce elapses
+    then: the preview re-renders with the updated diagram and the markdown on disk reflects the change
+
+- scenario: dark mode theme
+    given: the app is in dark mode (any theme that is not paper)
+    when: a mermaid diagram renders
+    then: the diagram uses dark-themed colors matching the app's color palette
+
+- scenario: light mode theme
+    given: the app is in light mode (paper theme)
+    when: a mermaid diagram renders
+    then: the diagram uses light-themed colors matching the app's color palette
+
+- scenario: theme switch re-renders
+    given: a mermaid diagram is visible and the user switches the app theme
+    when: the theme change completes
+    then: the diagram re-renders with the new theme's colors
+
+- scenario: cursor after last diagram
+    given: a mermaid diagram is the last block in a document
+    when: the user clicks below the diagram card
+    then: the cursor can be placed in an empty paragraph below it and the user can type
+
+---
+
+*Last updated: 2026-05-08*

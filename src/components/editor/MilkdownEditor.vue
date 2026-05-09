@@ -4,7 +4,7 @@
 </template>
 
 <script setup>
-import { watch, ref, provide, computed, onUnmounted } from 'vue'
+import { watch, ref, provide, computed, onUnmounted, reactive } from 'vue'
 import { Milkdown, useEditor } from '@milkdown/vue'
 import { useAppStore } from '../../store'
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx, prosePluginsCtx, remarkPluginsCtx } from '@milkdown/core'
@@ -22,6 +22,7 @@ import { $view, $prose } from '@milkdown/utils'
 import { wikiLinkRemarkPlugin, wikiLinkNode } from './wiki-link/index.js'
 import WikiLinkChip from './wiki-link/WikiLinkChip.vue'
 import WikiLinkTooltip from './wiki-link/WikiLinkTooltip.vue'
+import { createInlineCompletionPlugin } from './inline-completion/index.js'
 
 const props = defineProps({ content: String, comments: Array, readonly: Boolean })
 const emit = defineEmits(['update'])
@@ -146,6 +147,33 @@ function insertWikiLink(view, name, bracketStart) {
   dispatch(state.tr.replaceWith(bracketStart, bracketStart + 2, node))
 }
 
+// --- Inline completion plugin ---
+
+const completionConfig = reactive({
+  enabled: false, apiKey: '', baseUrl: '', model: '',
+  debounceMs: 350, maxTokens: 25, wordBoundaryOnly: true, extraInstructions: '',
+})
+
+watch(
+  () => store.config,
+  (cfg) => {
+    if (!cfg) return
+    const c = cfg.completion || {}
+    const provider = cfg.providers?.find((p) => p.id === c.providerId)
+    completionConfig.enabled = c.enabled !== false && !editorReadonly.value && !!provider?.apiKey
+    completionConfig.apiKey = provider?.apiKey || ''
+    completionConfig.baseUrl = provider?.baseUrl || ''
+    completionConfig.model = c.model || 'codestral-latest'
+    completionConfig.debounceMs = c.debounceMs ?? 350
+    completionConfig.maxTokens = c.maxTokens ?? 25
+    completionConfig.wordBoundaryOnly = c.wordBoundaryOnly ?? true
+    completionConfig.extraInstructions = c.extraInstructions || ''
+  },
+  { immediate: true, deep: true }
+)
+
+const inlineCompletionPlugin = $prose(() => createInlineCompletionPlugin(completionConfig))
+
 // --- Trailing paragraph plugin ---
 // ProseMirror atom nodes (mermaid_block, wiki_link) at the end of the doc leave no
 // place to put the cursor. This plugin ensures there is always a trailing paragraph.
@@ -216,6 +244,7 @@ const { loading, get } = useEditor((root) =>
     )
     .use(wikiLinkNode)
     .use(wikiTriggerPlugin)
+    .use(inlineCompletionPlugin)
     .use(
       $view(wikiLinkNode, () =>
         nodeViewFactory({

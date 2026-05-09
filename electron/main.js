@@ -967,6 +967,68 @@ function setupIpcHandlers() {
     },
   );
 
+  // --- Inline completion ---
+  ipcMain.handle("ai:complete", async (_, { prefix, suffix, model, apiKey, baseUrl, maxTokens, extraInstructions }) => {
+    if (!apiKey || !baseUrl) return { text: "" };
+    const base = baseUrl.replace(/\/+$/, "");
+    try {
+      let text = "";
+      if (base.includes("codestral.mistral.ai")) {
+        const response = await fetch(`${base}/fim/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            prompt: prefix,
+            suffix,
+            max_tokens: maxTokens ?? 25,
+            stop: ["\n", "\n\n", "  "],
+          }),
+        });
+        if (!response.ok) return { text: "" };
+        const data = await response.json();
+        text = (data.choices?.[0]?.text || "").replace(/^\n+/, "");
+      } else {
+        const response = await fetch(`${base}/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are an inline text completion assistant for a markdown editor. " +
+                  "Complete the text at the cursor. Return ONLY the completion — no explanation, " +
+                  "no fences, no preamble. Keep it concise (1–2 sentences max). " +
+                  "Match the document tone. If no good completion exists, return empty string." +
+                  (extraInstructions ? `\n\nAdditional instructions:\n${extraInstructions}` : ""),
+              },
+              {
+                role: "user",
+                content: `<prefix>\n${prefix}\n</prefix>\n<suffix>\n${suffix}\n</suffix>\nComplete the text immediately after </prefix>.`,
+              },
+            ],
+            stream: false,
+            max_tokens: maxTokens ?? 25,
+          }),
+        });
+        if (!response.ok) return { text: "" };
+        const data = await response.json();
+        text = (data.choices?.[0]?.message?.content || "").replace(/^\n+/, "");
+      }
+      return { text: text.trim() };
+    } catch {
+      return { text: "" };
+    }
+  });
+
   // --- Agent session ---
   ipcMain.handle("agent:submit", async (_, { sessionId, prompt, content }) => {
     return await apiServer.submitAction(sessionId, prompt, content);

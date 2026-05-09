@@ -74,13 +74,14 @@ async function createDoc() {
   const name = node.value.attrs.name
   await store.createFile(name)
 
-  const hasLlm = !!store.config?.aiProvider
-  if (hasLlm) {
-    await generateContent(name)
+  const cfg = store.config
+  const provider = cfg?.providers?.find((p) => p.id === cfg?.assistant?.providerId)
+  if (provider?.apiKey) {
+    await generateContent(name, provider, cfg?.assistant?.model)
   }
 }
 
-async function generateContent(name) {
+async function generateContent(name, provider, model) {
   try {
     window.canonic.ai.removeListeners()
     const parentContent = store.currentContent || ''
@@ -97,8 +98,9 @@ async function generateContent(name) {
 
     await window.canonic.ai.chat({
       messages: [{ role: 'user', content: prompt }],
-      provider: store.config.aiProvider,
-      model: store.config.aiModel,
+      apiKey: provider.apiKey,
+      baseUrl: provider.baseUrl,
+      model: model || 'anthropic/claude-sonnet-4-5',
     })
   } catch {
     window.canonic.ai.removeListeners()

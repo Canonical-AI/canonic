@@ -32,6 +32,12 @@
                     Privacy
                 </button>
                 <button
+                    :class="['tab', activeTab === 'updates' && 'active']"
+                    @click="activeTab = 'updates'"
+                >
+                    Updates
+                </button>
+                <button
                     :class="['tab', activeTab === 'danger' && 'active']"
                     @click="activeTab = 'danger'"
                 >
@@ -121,32 +127,6 @@
                     </p>
                 </div>
 
-                <div
-                    class="field"
-                    style="
-                        margin-top: 32px;
-                        padding-top: 24px;
-                        border-top: 1px solid var(--border);
-                    "
-                >
-                    <label class="field-label">Application</label>
-                    <div class="update-check">
-                        <button
-                            class="btn-ghost"
-                            @click="checkUpdates"
-                            :disabled="checkingUpdates"
-                        >
-                            {{
-                                checkingUpdates
-                                    ? "Checking for updates..."
-                                    : "Check for updates"
-                            }}
-                        </button>
-                        <span v-if="updateStatus" class="update-status">{{
-                            updateStatus
-                        }}</span>
-                    </div>
-                </div>
             </div>
 
             <!-- Sharing tab -->
@@ -202,6 +182,67 @@
                         Monitoring/<br />
                         Implementation/technical-spec.md
                     </div>
+                </div>
+            </div>
+
+            <!-- Updates tab -->
+            <div v-if="activeTab === 'updates'" class="tab-content">
+                <div class="field">
+                    <label class="field-label">Automatic updates</label>
+                    <div
+                        class="telemetry-card"
+                        :class="{ active: form.autoUpdate }"
+                        @click="form.autoUpdate = !form.autoUpdate"
+                    >
+                        <div class="telemetry-header">
+                            <span class="telemetry-label">Download updates automatically</span>
+                            <div class="toggle" :class="{ on: form.autoUpdate }">
+                                <div class="toggle-thumb"></div>
+                            </div>
+                        </div>
+                        <p class="telemetry-desc">
+                            When a new version is available, Canonic downloads it in the
+                            background and shows a notification when it's ready to install.
+                            Turn this off to download updates manually.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="field-label">Update channel</label>
+                    <div
+                        class="telemetry-card"
+                        :class="{ active: form.updateChannel === 'experimental' }"
+                        @click="form.updateChannel = form.updateChannel === 'experimental' ? 'stable' : 'experimental'"
+                    >
+                        <div class="telemetry-header">
+                            <span class="telemetry-label">Experimental builds</span>
+                            <div class="toggle" :class="{ on: form.updateChannel === 'experimental' }">
+                                <div class="toggle-thumb"></div>
+                            </div>
+                        </div>
+                        <p class="telemetry-desc">
+                            Opt into pre-release builds with the latest features. These may
+                            be less stable. <strong>Requires restart to take effect.</strong>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="field" style="padding-top: 16px; border-top: 1px solid var(--border);">
+                    <label class="field-label">Check for updates</label>
+                    <div class="update-check">
+                        <button
+                            class="btn-ghost"
+                            @click="checkUpdates"
+                            :disabled="checkingUpdates"
+                        >
+                            {{ checkingUpdates ? "Checking…" : "Check now" }}
+                        </button>
+                        <span v-if="updateStatus" class="update-status">{{ updateStatus }}</span>
+                    </div>
+                    <p class="field-hint" style="margin-top: 8px">
+                        Canonic also checks automatically on launch and every 4 hours.
+                    </p>
                 </div>
             </div>
 
@@ -454,6 +495,8 @@ const form = reactive({
     model: "anthropic/claude-sonnet-4-5",
     defaultWorkspacePath: "",
     telemetryEnabled: false,
+    autoUpdate: true,
+    updateChannel: "stable",
     sharingDefaults: { scope: "file", accessLevel: "read" },
 });
 
@@ -519,6 +562,8 @@ onMounted(async () => {
         form.model = cfg.model || "anthropic/claude-sonnet-4-5";
         form.defaultWorkspacePath = cfg.defaultWorkspacePath || "";
         form.telemetryEnabled = !!cfg.telemetryEnabled;
+        form.autoUpdate = cfg.autoUpdate !== false;
+        form.updateChannel = cfg.updateChannel || "stable";
         form.sharingDefaults = JSON.parse(
             JSON.stringify({
                 ...form.sharingDefaults,

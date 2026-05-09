@@ -13,6 +13,8 @@ const DEFAULTS = {
   model: "anthropic/claude-sonnet-4-5",
   defaultWorkspacePath: path.join(os.homedir(), "canonic"),
   telemetryEnabled: false,
+  autoUpdate: true,
+  updateChannel: "stable",
   sharingDefaults: {
     scope: "file",        // file | directory | workspace
     permission: "view",   // view | comment | copy

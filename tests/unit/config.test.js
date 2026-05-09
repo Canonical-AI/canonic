@@ -68,4 +68,26 @@ describe("config", () => {
     const { valid } = config.validate({ displayName: "Bob", apiKey: "" });
     expect(valid).toBe(true);
   });
+
+  it("read() includes autoUpdate: true by default", () => {
+    config.write({ displayName: "Test" });
+    const cfg = config.read();
+    expect(cfg.autoUpdate).toBe(true);
+  });
+
+  it("read() includes updateChannel: 'stable' by default", () => {
+    config.write({ displayName: "Test" });
+    const cfg = config.read();
+    expect(cfg.updateChannel).toBe("stable");
+  });
+
+  it("write() persists autoUpdate: false and read() returns it", () => {
+    config.write({ displayName: "Test", autoUpdate: false });
+    expect(config.read().autoUpdate).toBe(false);
+  });
+
+  it("write() persists updateChannel: 'experimental' and read() returns it", () => {
+    config.write({ displayName: "Test", updateChannel: "experimental" });
+    expect(config.read().updateChannel).toBe("experimental");
+  });
 });

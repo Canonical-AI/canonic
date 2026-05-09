@@ -116,6 +116,50 @@ button:focus:not(:focus-visible) { outline: none; }
 .modal-backdrop { isolation: isolate; }
 
 /* Inline completions */
+/* ── Task list checkboxes ── */
+.editor ul li[data-item-type="task"] {
+  list-style: none;
+  margin-left: -1.25em;
+  padding-left: 1.75em;
+  position: relative;
+}
+
+.editor ul li[data-item-type="task"]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  width: 0.85em;
+  height: 0.85em;
+  border: 1.5px solid var(--text-muted, #6b7280);
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.12s, border-color 0.12s;
+  cursor: pointer;
+}
+
+.editor ul li[data-item-type="task"][data-checked="true"]::before {
+  background: var(--accent, #6366f1);
+  border-color: var(--accent, #6366f1);
+}
+
+.editor ul li[data-item-type="task"][data-checked="true"]::after {
+  content: '';
+  position: absolute;
+  left: 0.17em;
+  top: 0.42em;
+  width: 0.52em;
+  height: 0.28em;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg);
+}
+
+.editor ul li[data-item-type="task"][data-checked="true"] > p {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
 .inline-completion-ghost {
   display: inline;
   color: var(--text-muted, #6b7280);

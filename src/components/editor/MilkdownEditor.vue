@@ -174,6 +174,38 @@ watch(
 
 const inlineCompletionPlugin = $prose(() => createInlineCompletionPlugin(completionConfig))
 
+// --- Task list checkbox click-to-toggle ---
+const taskCheckboxPlugin = $prose(() => new Plugin({
+  props: {
+    handleClick(view, pos, event) {
+      if (!view.editable) return false
+      const target = event.target
+      if (!(target instanceof HTMLElement)) return false
+      const li = target.closest('li[data-item-type="task"]')
+      if (!li) return false
+
+      // Only toggle when clicking the checkbox zone (left ~24px)
+      const liRect = li.getBoundingClientRect()
+      if (event.clientX - liRect.left > 24) return false
+
+      const $pos = view.state.doc.resolve(pos)
+      for (let d = $pos.depth; d >= 0; d--) {
+        const node = $pos.node(d)
+        if (node.type.name === 'list_item' && node.attrs.checked != null) {
+          view.dispatch(
+            view.state.tr.setNodeMarkup($pos.before(d), null, {
+              ...node.attrs,
+              checked: !node.attrs.checked,
+            })
+          )
+          return true
+        }
+      }
+      return false
+    }
+  }
+}))
+
 // --- Trailing paragraph plugin ---
 // ProseMirror atom nodes (mermaid_block, wiki_link) at the end of the doc leave no
 // place to put the cursor. This plugin ensures there is always a trailing paragraph.
@@ -231,6 +263,7 @@ const { loading, get } = useEditor((root) =>
     .use(history)
     .use(listener)
     .use(floatingToolbarPlugin)
+    .use(taskCheckboxPlugin)
     .use(trailingParagraphPlugin)
     .use(mermaidConvertPlugin)
     .use(mermaidNode)

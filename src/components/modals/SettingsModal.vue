@@ -261,6 +261,7 @@
                     <p class="field-hint">Hints appended to the completion system prompt.</p>
                 </div>
 
+
             </div>
 
             <!-- Sharing tab -->

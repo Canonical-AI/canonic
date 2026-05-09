@@ -7,10 +7,6 @@ when complete move stuff to complete. its just that easy
 
 ## Bugs
 
-* \[ ] when you type '[ ]' its dissapearing
-
-* \[ ] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
-
 * \[ ] something funky in the saves...
 
 * the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
@@ -90,6 +86,10 @@ when complete move stuff to complete. its just that easy
 * [x] **Scoped commit** — `commit()` in `electron/git.js` saves and restores pre-staged files around each Canonic commit so external staged changes are never bundled in
 
 ## Completed
+
+* \[X] [bug] when you type '[ ]' its dissapearing
+
+* \[X] [bug] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
 
 * \[X] should work with existing git repos. and shouldnt blow stuff up
 

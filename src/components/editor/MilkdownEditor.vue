@@ -240,6 +240,88 @@ const mermaidConvertPlugin = $prose(() => new Plugin({
   }
 }))
 
+// --- Line numbers plugin ---
+
+const lineNumbersPlugin = $prose(() => new Plugin({
+  view(view) {
+    const gutter = document.createElement('div')
+    gutter.className = 'editor-gutter'
+    view.dom.parentNode.insertBefore(gutter, view.dom)
+
+    function update(view) {
+      gutter.innerHTML = ''
+      const { doc } = view.state
+      let lineNumber = 1
+      
+      const domRect = view.dom.getBoundingClientRect()
+
+      function renderLine(pos, num) {
+        const line = document.createElement('div')
+        line.className = 'gutter-line'
+        
+        // Use view.coordsAtPos to find the vertical position of the start of the block
+        try {
+          const coords = view.coordsAtPos(pos)
+          line.style.top = `${coords.top - domRect.top}px`
+          line.style.height = `${coords.bottom - coords.top}px`
+          line.textContent = num
+          gutter.appendChild(line)
+        } catch (e) {
+          // Ignore errors if pos is not valid/mappable yet
+        }
+      }
+
+      doc.descendants((node, pos) => {
+        if (node.isBlock) {
+          // If it's a leaf block (like a paragraph, heading, or list item)
+          // or a code block (which we treat as a single block for now, but could split)
+          const isLeafBlock = node.childCount === 0 || (node.firstChild && (node.firstChild.isText || node.firstChild.isInline))
+          const isListItem = node.type.name === 'list_item'
+          
+          if (isLeafBlock || isListItem) {
+            // list_item often contains a paragraph, so we only number the list_item itself
+            // to avoid double numbering if it's a "simple" list item.
+            // However, if the paragraph is the first child, coordsAtPos(pos) will be the same.
+            
+            // Logic: number if it's a paragraph, heading, list_item, etc.
+            // But skip the container if we are numbering the contents.
+            const typesToNumber = ['paragraph', 'heading', 'list_item', 'blockquote', 'code_block', 'hr']
+            if (typesToNumber.includes(node.type.name)) {
+                // Special check for list_item to avoid double-counting its internal paragraph
+                if (node.type.name === 'paragraph' && view.state.doc.resolve(pos).parent.type.name === 'list_item') {
+                    return true 
+                }
+
+                if (node.type.name === 'code_block') {
+                    // Number each line inside the code block
+                    const lines = node.textContent.split('\n')
+                    const startPos = pos + 1
+                    let currentOffset = 0
+                    
+                    lines.forEach((_, i) => {
+                        // We find the position of the start of this line of text
+                        renderLine(startPos + currentOffset, lineNumber++)
+                        currentOffset += lines[i].length + 1
+                    })
+                } else {
+                    renderLine(pos, lineNumber++)
+                }
+            }
+          }
+          return true // Always go deeper to find nested blocks
+        }
+        return false
+      })
+    }
+
+    update(view)
+    return {
+      update,
+      destroy() { gutter.remove() }
+    }
+  }
+}))
+
 // --- Editor setup ---
 
 const { loading, get } = useEditor((root) =>
@@ -279,6 +361,7 @@ const { loading, get } = useEditor((root) =>
     .use(wikiLinkNode)
     .use(wikiTriggerPlugin)
     .use(inlineCompletionPlugin)
+    .use(lineNumbersPlugin)
     .use(
       $view(wikiLinkNode, () =>
         nodeViewFactory({

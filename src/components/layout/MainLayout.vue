@@ -48,15 +48,41 @@
                         <Palette :size="15" />
                     </button>
                     <div v-if="themeOpen" class="theme-popover">
-                        <button
-                            v-for="t in allThemes"
-                            :key="t.name"
-                            class="theme-chip"
-                            :class="{ active: activeTheme === t.name }"
-                            @click="setTheme(t.name)"
-                        >
-                            {{ t.name }}
-                        </button>
+                        <div class="theme-search-wrap">
+                            <input
+                                v-model="themeSearch"
+                                type="text"
+                                placeholder="Filter themes..."
+                                class="theme-search-input"
+                                @click.stop
+                            />
+                        </div>
+                        <div class="theme-list">
+                            <button
+                                v-for="t in filteredThemes.slice(0, 10)"
+                                :key="t.name"
+                                class="theme-chip"
+                                :class="{ active: activeTheme === t.name }"
+                                @click="setTheme(t.name)"
+                            >
+                                {{ t.name }}
+                            </button>
+                            <div v-if="filteredThemes.length > 10" class="theme-more-hint">
+                                +{{ filteredThemes.length - 10 }} more...
+                            </div>
+                        </div>
+
+                        <div class="theme-divider"></div>
+                        <div class="theme-controls">
+                            <label class="theme-control-item" @click.stop>
+                                <span>Line numbers</span>
+                                <input
+                                    type="checkbox"
+                                    v-model="showLineNumbers"
+                                    @change="toggleLineNumbers"
+                                />
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -277,6 +303,8 @@ const BUILTIN_THEMES = ["hal2001", "auteur", "paper"];
 const activeTheme = ref(localStorage.getItem(THEME_KEY) || "hal2001");
 const themeOpen = ref(false);
 const themePickerRef = ref(null);
+const themeSearch = ref("");
+const showLineNumbers = ref(localStorage.getItem("canonic:line-numbers") === "true");
 
 // Config-extensible custom themes injected as <style> tags
 const customThemeNames = ref([]);
@@ -286,11 +314,27 @@ const allThemes = computed(() => {
     return names.map((name) => ({ name }));
 });
 
+const filteredThemes = computed(() => {
+    if (!themeSearch.value) return allThemes.value;
+    const s = themeSearch.value.toLowerCase();
+    // exact case-insensitive match for the filter
+    return allThemes.value.filter(t => t.name.toLowerCase() === s);
+});
+
 function applyTheme(name) {
     if (!name || name === "hal2001") {
         document.documentElement.removeAttribute("data-theme");
     } else {
         document.documentElement.setAttribute("data-theme", name);
+    }
+}
+
+function toggleLineNumbers() {
+    localStorage.setItem("canonic:line-numbers", showLineNumbers.value);
+    if (showLineNumbers.value) {
+        document.documentElement.setAttribute("data-line-numbers", "true");
+    } else {
+        document.documentElement.removeAttribute("data-line-numbers");
     }
 }
 
@@ -336,6 +380,9 @@ onMounted(async () => {
     // Apply persisted font & theme immediately
     applyFont(fontMode.value);
     applyTheme(activeTheme.value);
+    if (showLineNumbers.value) {
+        document.documentElement.setAttribute("data-line-numbers", "true");
+    }
 
     // Load config to register any custom themes
     await store.loadConfig();
@@ -515,26 +562,6 @@ function onResizeStart(e) {
 
 .accent {
     color: var(--accent);
-}
-
-.branch-selector {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: 16px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-    -webkit-app-region: no-drag;
-    position: relative;
-    transition: background 0.15s;
-}
-
-.branch-selector:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
 }
 
 .titlebar-right {
@@ -743,12 +770,6 @@ function onResizeStart(e) {
     order: -1;
 }
 
-.menu-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 199;
-}
-
 /* ── Titlebar update indicator ── */
 .update-ready-btn {
     display: flex;
@@ -843,10 +864,71 @@ function onResizeStart(e) {
     padding: 6px;
     display: flex;
     flex-direction: column;
-    gap: 3px;
     z-index: 300;
-    min-width: 110px;
+    min-width: 140px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.theme-search-wrap {
+    padding: 4px;
+    margin-bottom: 4px;
+}
+
+.theme-search-input {
+    width: 100%;
+    background: var(--bg-body);
+    border: 1px solid var(--border-mid);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    outline: none;
+}
+
+.theme-search-input:focus {
+    border-color: var(--accent-muted);
+}
+
+.theme-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.theme-more-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    padding: 4px 12px;
+    font-style: italic;
+}
+
+.theme-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 6px 4px;
+}
+
+.theme-controls {
+    padding: 4px;
+}
+
+.theme-control-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 8px;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.theme-control-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .theme-chip {

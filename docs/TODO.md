@@ -7,19 +7,17 @@ when complete move stuff to complete. its just that easy
 
 ## Bugs
 
-* \[ ] something funky in the saves...
+* [ ] \[bug] I dont see network discovery tab when not in demo mode
 
-* the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
+* [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
 
-  <br />
+* [ ] <br />
 
 ***
 
 ## Features
 
-* [ ] comprehensive editor testing. so we need to test all inputs like ' [[' ' ```mermaid' ect
-
-* [X] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
+* [x] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 
 * [ ] **PR / review workflow** — after copying a peer's file and making changes, "Propose changes" diffs against peer's HEAD and POSTs to their share server; owner reviews in a new Review panel (accept/request changes/reject).
 
@@ -27,7 +25,15 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-* [ ] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
+* [ ] Ability to backup with cloud by hooking up to provider. think about if user wants to backup to S3 or maybe they need to backup to Icloud. also needs to be encrypted
+
+* [ ] need to make sure peer sharing is end-to-end encrypted
+
+* [ ] Add back in the milkdown handles
+
+* [ ] add in line numbering
+
+* [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
 
 * \[ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
 
@@ -87,15 +93,11 @@ when complete move stuff to complete. its just that easy
 
 ## Completed
 
-* \[X] [bug] when you type '[ ]' its dissapearing
-
-* \[X] [bug] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
-
 * \[X] should work with existing git repos. and shouldnt blow stuff up
 
-* [ ] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
+* [x] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-* [ ] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
+* [x] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
 
 * \[x] Basic workspace setup + git backend (isomorphic-git)
 
@@ -124,6 +126,12 @@ when complete move stuff to complete. its just that easy
 * \[x] Demo mode with config-driven peer data (`public/demo/config.json`)
 
 * \[x] Comprehensive test suite (unit + integration, 60 tests)
+
+* [x] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
+
+  \[X] persist unsaved changes between document switches\[X] something funky in the saves...
+
+* the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
 
 * [x] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
 

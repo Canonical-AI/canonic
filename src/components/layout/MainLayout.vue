@@ -149,7 +149,6 @@
                         ]"
                         @click="handleTabClick('peers')"
                         title="Shared with me"
-                        v-if="store.isDemoMode || store.demoPeers.length"
                     >
                         <Users :size="15" />
                     </button>

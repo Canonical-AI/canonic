@@ -297,95 +297,109 @@ function isHotkeyMatch(event, hotkey) {
 
 // --- Custom Drag Handle plugin (Lists only) ---
 
-const dragHandlePlugin = $prose(() => new Plugin({
+function makeDragHandleSvg() {
+  const NS = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('width', '14'); svg.setAttribute('height', '14')
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2')
+  svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round')
+  const pts = [[9,12],[9,5],[9,19],[15,12],[15,5],[15,19]]
+  pts.forEach(([cx, cy]) => {
+    const c = document.createElementNS(NS, 'circle')
+    c.setAttribute('cx', String(cx)); c.setAttribute('cy', String(cy)); c.setAttribute('r', '1')
+    svg.appendChild(c)
+  })
+  return svg
+}
+
+const dragHandlePlugin = $prose(() => {
+  // Shared drag state between view() and props.handleDrop
+  let dragSrcStart    = -1     // position before the dragged list_item's opening tag
+  let dropTargetPos   = -1     // list_item position last seen under the indicator
+  let dropTargetBelow = false  // whether to insert after (true) or before (false) that item
+
+  return new Plugin({
   view(view) {
     const handle = document.createElement('div')
     handle.className = 'custom-block-handle list-handle'
     handle.draggable = true
-    handle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>'
+    handle.appendChild(makeDragHandleSvg())
     
     const dropIndicator = document.createElement('div')
     dropIndicator.className = 'drop-indicator'
-    
+
     view.dom.parentNode.style.position = 'relative'
     view.dom.parentNode.appendChild(handle)
     view.dom.parentNode.appendChild(dropIndicator)
 
     let activePos = -1
+    let isDragging = false
 
     const onMouseMove = (e) => {
-      if (!view.editable) return
+      if (!view.editable || isDragging) return
       const editorRect = view.dom.getBoundingClientRect()
-      const x = editorRect.left + 20
-      const y = e.clientY
-      
-      const pos = view.posAtCoords({ left: x, top: y })
+      const pos = view.posAtCoords({ left: editorRect.left + 20, top: e.clientY })
       if (!pos) return
-      
+
       const $pos = view.state.doc.resolve(pos.inside >= 0 ? pos.inside : pos.pos)
-      
       let listItem = null
       for (let d = $pos.depth; d > 0; d--) {
         if ($pos.node(d).type.name === 'list_item') {
-          listItem = { pos: $pos.before(d), node: $pos.node(d) }
+          listItem = { pos: $pos.before(d) }
           break
         }
       }
 
-      if (!listItem) {
-        handle.style.display = 'none'
-        activePos = -1
-        return
-      }
-
+      if (!listItem) { handle.style.display = 'none'; activePos = -1; return }
       if (listItem.pos === activePos) return
-      
+
       activePos = listItem.pos
       const nodeDOM = view.nodeDOM(listItem.pos)
       if (nodeDOM instanceof HTMLElement) {
         const rect = nodeDOM.getBoundingClientRect()
         handle.style.top = `${rect.top - editorRect.top}px`
-        const hasLineNumbers = document.documentElement.getAttribute('data-line-numbers') === 'true'
-        handle.style.left = hasLineNumbers ? '-54px' : '-24px'
+        handle.style.left = document.documentElement.getAttribute('data-line-numbers') === 'true' ? '-54px' : '-24px'
         handle.style.display = 'flex'
       }
     }
 
     const onMouseLeave = (e) => {
-      if (e.relatedTarget === handle) return
+      if (isDragging || e.relatedTarget === handle) return
       handle.style.display = 'none'
       activePos = -1
     }
 
     const onDragOver = (e) => {
+      if (!isDragging) return
       const editorRect = view.dom.getBoundingClientRect()
       const pos = view.posAtCoords({ left: e.clientX, top: e.clientY })
       if (!pos) return
-      
+
       const $pos = view.state.doc.resolve(pos.inside >= 0 ? pos.inside : pos.pos)
-      if ($pos.depth < 1) return
-      
-      const nodePos = $pos.before(1)
-      const nodeDOM = view.nodeDOM(nodePos)
-      
+      let itemPos = -1
+      for (let d = $pos.depth; d > 0; d--) {
+        if ($pos.node(d).type.name === 'list_item') { itemPos = $pos.before(d); break }
+      }
+      const targetPos = itemPos >= 0 ? itemPos : ($pos.depth >= 1 ? $pos.before(1) : -1)
+      if (targetPos < 0) return
+
+      const nodeDOM = view.nodeDOM(targetPos)
       if (nodeDOM instanceof HTMLElement) {
         const rect = nodeDOM.getBoundingClientRect()
         const isBottom = e.clientY > rect.top + rect.height / 2
+        // Store for handleDrop to use — avoids re-resolving at gap positions
+        if (itemPos >= 0) { dropTargetPos = itemPos; dropTargetBelow = isBottom }
         dropIndicator.style.top = `${(isBottom ? rect.bottom : rect.top) - editorRect.top}px`
-        dropIndicator.style.left = '0'
-        dropIndicator.style.width = `${editorRect.width}px`
+        dropIndicator.style.left = `${rect.left - editorRect.left}px`
+        dropIndicator.style.width = `${rect.width}px`
         dropIndicator.style.display = 'block'
       }
       e.preventDefault()
     }
 
-    const onDragLeave = () => {
-      dropIndicator.style.display = 'none'
-    }
-
-    const onDrop = () => {
-      dropIndicator.style.display = 'none'
-    }
+    const onDragLeave = () => { dropIndicator.style.display = 'none'; dropTargetPos = -1 }
+    const onDrop     = () => { dropIndicator.style.display = 'none' }
 
     view.dom.addEventListener('mousemove', onMouseMove)
     view.dom.addEventListener('mouseleave', onMouseLeave)
@@ -394,41 +408,30 @@ const dragHandlePlugin = $prose(() => new Plugin({
     view.dom.addEventListener('drop', onDrop)
 
     handle.addEventListener('dragstart', (e) => {
+      if (activePos === -1) return
       const { state } = view
-      const { selection } = state
-      
-      if (!selection.empty && activePos >= selection.from && activePos <= selection.to) {
-        const slice = selection.content()
-        e.dataTransfer.effectAllowed = 'move'
-        const { dom, text } = view.serializeForClipboard(slice)
-        e.dataTransfer.setData('text/html', dom.innerHTML)
-        e.dataTransfer.setData('text/plain', text)
-        view.dispatch(state.tr.setMeta('ui-drag-slice', slice))
-      } else if (activePos !== -1) {
-        const $pos = state.doc.resolve(activePos + 1)
-        let listItemPos = -1
-        for (let d = $pos.depth; d > 0; d--) {
-          if ($pos.node(d).type.name === 'list_item') {
-            listItemPos = $pos.before(d)
-            break
-          }
-        }
-
-        const targetPos = listItemPos !== -1 ? listItemPos : activePos
-        const nodeSelection = NodeSelection.create(state.doc, targetPos)
-        view.dispatch(state.tr.setSelection(nodeSelection))
-        
-        const slice = nodeSelection.content()
-        e.dataTransfer.effectAllowed = 'move'
-        const { dom, text } = view.serializeForClipboard(slice)
-        e.dataTransfer.setData('text/html', dom.innerHTML)
-        e.dataTransfer.setData('text/plain', text)
+      const $pos = state.doc.resolve(activePos + 1)
+      let itemDepth = -1
+      for (let d = $pos.depth; d > 0; d--) {
+        if ($pos.node(d).type.name === 'list_item') { itemDepth = d; break }
       }
-      
+      if (itemDepth < 0) return
+
+      dragSrcStart = $pos.before(itemDepth)
+      isDragging = true
+
+      const nodeSel = NodeSelection.create(state.doc, dragSrcStart)
+      view.dispatch(state.tr.setSelection(nodeSel))
+      const { dom, text } = view.serializeForClipboard(nodeSel.content())
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/html', dom.outerHTML)
+      e.dataTransfer.setData('text/plain', text)
       view.dom.classList.add('is-dragging')
     })
 
     handle.addEventListener('dragend', () => {
+      isDragging = false
+      dragSrcStart = -1
       view.dom.classList.remove('is-dragging')
       handle.style.display = 'none'
       dropIndicator.style.display = 'none'
@@ -447,6 +450,47 @@ const dragHandlePlugin = $prose(() => new Plugin({
     }
   },
   props: {
+    handleDrop(view, event) {
+      if (dragSrcStart === -1 || dropTargetPos === -1) return false
+      event.preventDefault()
+
+      const { state, dispatch } = view
+      const $tgt = state.doc.resolve(dropTargetPos + 1)
+      let tgtDepth = -1
+      for (let d = $tgt.depth; d > 0; d--) {
+        if ($tgt.node(d).type.name === 'list_item') { tgtDepth = d; break }
+      }
+      if (tgtDepth < 0) { dragSrcStart = -1; dropTargetPos = -1; return false }
+
+      const tgtStart = $tgt.before(tgtDepth)
+      const tgtEnd   = $tgt.after(tgtDepth)
+      if (tgtStart === dragSrcStart) { dragSrcStart = -1; dropTargetPos = -1; return true }
+
+      const $src = state.doc.resolve(dragSrcStart + 1)
+      let srcDepth = -1
+      for (let d = $src.depth; d > 0; d--) {
+        if ($src.node(d).type.name === 'list_item') { srcDepth = d; break }
+      }
+      if (srcDepth < 0) { dragSrcStart = -1; dropTargetPos = -1; return false }
+
+      const srcStart  = $src.before(srcDepth)
+      const srcEnd    = $src.after(srcDepth)
+      const srcNode   = $src.node(srcDepth)
+      const srcSize   = srcEnd - srcStart
+      const insertPos = dropTargetBelow ? tgtEnd : tgtStart
+
+      const tr = state.tr
+      if (srcStart < tgtStart) {
+        tr.delete(srcStart, srcEnd)
+        tr.insert(insertPos - srcSize, srcNode)
+      } else {
+        tr.insert(insertPos, srcNode)
+        tr.delete(srcStart + srcSize, srcEnd + srcSize)
+      }
+      dispatch(tr)
+      dragSrcStart = -1; dropTargetPos = -1
+      return true
+    },
     handleKeyDown(view, event) {
       const keys = hotkeys.value
 
@@ -456,8 +500,15 @@ const dragHandlePlugin = $prose(() => new Plugin({
         const { selection } = state
         const $from = state.doc.resolve(selection.from)
         const $to = state.doc.resolve(selection.to)
-        const start = $from.before(1)
-        const end = $to.after(1)
+
+        let itemDepth = -1
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === 'list_item') { itemDepth = d; break }
+        }
+
+        const depth = itemDepth > 0 ? itemDepth : 1
+        const start = $from.before(depth)
+        const end = $to.after(depth)
         dispatch(state.tr.setSelection(TextSelection.create(state.doc, start, end)))
         return true
       }
@@ -471,12 +522,63 @@ const dragHandlePlugin = $prose(() => new Plugin({
         if (selection.empty) return false
 
         const dir = isUp ? -1 : 1
-        const $from = state.doc.resolve(selection.from)
+        // Resolve one position inside to step past any node boundary.
+        // After Cmd+L, selection.from is before the list_item opening tag (inside bullet_list);
+        // +1 puts us inside the list_item so node(d) finds it correctly.
+        const $from = state.doc.resolve(Math.min(selection.from + 1, selection.to))
+
+        // Check if selection is within a list_item
+        let itemDepth = -1
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === 'list_item') { itemDepth = d; break }
+        }
+
+        if (itemDepth > 0) {
+          const itemStart = $from.before(itemDepth)
+          const itemEnd   = $from.after(itemDepth)
+          const listStart = $from.before(itemDepth - 1)
+          const listEnd   = $from.after(itemDepth - 1)
+          const currNode  = $from.node(itemDepth)
+
+          if (dir === -1) {
+            if (itemStart === listStart + 1) return true  // first item
+            const $prev     = state.doc.resolve(itemStart - 1)
+            const prevNode  = $prev.node(itemDepth)
+            const prevStart = $prev.before(itemDepth)
+            const currSize  = itemEnd - itemStart
+            const tr = state.tr
+            tr.delete(prevStart, itemEnd)
+            tr.insert(prevStart, currNode)
+            tr.insert(prevStart + currSize, prevNode)
+            tr.setSelection(TextSelection.create(tr.doc,
+              prevStart + (selection.from - itemStart),
+              prevStart + (selection.to   - itemStart)))
+            dispatch(tr)
+          } else {
+            if (itemEnd === listEnd - 1) return true  // last item
+            const $next    = state.doc.resolve(itemEnd + 1)
+            const nextNode = $next.node(itemDepth)
+            const nextEnd  = $next.after(itemDepth)
+            const nextSize = nextEnd - itemEnd
+            const tr = state.tr
+            tr.delete(itemStart, nextEnd)
+            tr.insert(itemStart, nextNode)
+            tr.insert(itemStart + nextSize, currNode)
+            const newStart = itemStart + nextSize
+            tr.setSelection(TextSelection.create(tr.doc,
+              newStart + (selection.from - itemStart),
+              newStart + (selection.to   - itemStart)))
+            dispatch(tr)
+          }
+          return true
+        }
+
+        // Fallback: block-level move for non-list blocks
         const $to = state.doc.resolve(selection.to)
         const start = $from.before(1)
         const end = $to.after(1)
         const size = end - start
-        
+
         if (dir === -1) {
           if (start === 0) return true
           const $prev = state.doc.resolve(start - 1)
@@ -506,7 +608,8 @@ const dragHandlePlugin = $prose(() => new Plugin({
       return false
     }
   }
-}))
+  }) // closes new Plugin({...})
+}) // closes $prose(() => { ... })
 
 // --- Editor setup ---
 

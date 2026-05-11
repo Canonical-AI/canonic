@@ -307,9 +307,19 @@ function onContentUpdate(markdown) {
         store.currentContent = markdown;
         return;
     }
+
     if (markdown !== store.currentContent) {
-        store.currentContent = markdown;
-        store.isDirty = true;
+        // Only mark dirty if the editor has focus (user typing) or if the change 
+        // is significant (more than just whitespace/normalization).
+        if (store.isDirty) {
+            store.currentContent = markdown;
+        } else if (editorHasFocus() || markdown.trim() !== store.currentContent.trim()) {
+            store.currentContent = markdown;
+            store.isDirty = true;
+        } else {
+            // Silently sync background normalization (whitespace, etc) without marking dirty
+            store.currentContent = markdown;
+        }
     }
 }
 

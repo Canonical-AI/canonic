@@ -7,21 +7,27 @@ when complete move stuff to complete. its just that easy
 
 ## Bugs
 
-* [ ] \[bug] I dont see network discovery tab when not in demo mode
+* [ ] \[bug -arguably] when I click a comment should show open the sidebar if sidebar closed
 
 * [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
-
-* [ ] \[bug -arguably] when I click a comment should show open the sidebar if sidebar closed
 
 ***
 
 ## Features
 
-* [ ] need to be able to "favorite" or star docs
+* [ ] \[feature] if a md has a lot of #headings create a navigation for those
+
+* [x] \[feature] storing inline images
+
+* [ ] <br />
 
 * [x] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 
+* [ ] need to be able to "favorite" or star docs
+
 * [ ] **PR / review workflow** — after copying a peer's file and making changes, "Propose changes" diffs against peer's HEAD and POSTs to their share server; owner reviews in a new Review panel (accept/request changes/reject).
+
+* [ ] \[bug] I dont see network discovery tab when not in demo mode
 
 * [ ] **Network safety setting** — toggle in Settings > Sharing: "Pause sharing when network changes" (on by default); protects against accidentally sharing on public networks like coffee shops.
 

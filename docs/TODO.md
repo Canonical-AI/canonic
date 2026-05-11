@@ -7,13 +7,11 @@ when complete move stuff to complete. its just that easy
 
 ## Bugs
 
-* [ ] something funky in the saves...
+* \[ ] something funky in the saves...
 
-* [ ] [bug -arguably] when I click a comment should show open the sidebar if sidebar closed
+* the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
 
-* [ ] [bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
-
-* [ ] the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
+  <br />
 
 ***
 
@@ -21,43 +19,25 @@ when complete move stuff to complete. its just that easy
 
 * [ ] comprehensive editor testing. so we need to test all inputs like ' [[' ' ```mermaid' ect
 
-* [ ] [feature] if a md has a lot of #headings create a navigation for those
-
-* [x] sidebar should be closed by defaulf but should remember your last settings
-
-* [ ] [feature] be able to revert to old versions or at least view them
-
-* [x] [feature] storing inline images
-
-* [x] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
-
-* [ ] need to be able to "favorite" or star docs
+* [X] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 
 * [ ] **PR / review workflow** — after copying a peer's file and making changes, "Propose changes" diffs against peer's HEAD and POSTs to their share server; owner reviews in a new Review panel (accept/request changes/reject).
-
-* [ ] [bug] I dont see network discovery tab when not in demo mode
 
 * [ ] **Network safety setting** — toggle in Settings > Sharing: "Pause sharing when network changes" (on by default); protects against accidentally sharing on public networks like coffee shops.
 
 * [ ] **sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-* [ ] Ability to backup with cloud by hooking up to provider. think about if user wants to backup to S3 or maybe they need to backup to Icloud. also needs to be encrypted
+* [ ] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
 
-* [ ] need to make sure peer sharing is end-to-end encrypted
+* \[ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
 
-* [ ] Add back in the milkdown handles
+* \[ ] make it "hackable" like atom and zed
 
-* [ ] add in line numbering
-
-* [ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
-
-* [ ] make it "hackable" like atom and zed
-
-* [ ] figure out how to prevent DDOS on your comp.
+* \[ ] figure out how to prevent DDOS on your comp.
 
 * [ ] **add a terminal** in the ui that lets you run cli commands for the workspace.
 
-* [ ] **[AI AGENT] kick off claude code** be able start/continue claude code session with the changes you made to the doucment. i.e. hey I changed this requirements can you update the app to reflect it?
+* [ ] **\[AI AGENT] kick off claude code** be able start/continue claude code session with the changes you made to the doucment. i.e. hey I changed this requirements can you update the app to reflect it?
 
 * [ ] **Usage logging** — explicitly turned off by default; user prompted at setup to opt-in/out. Track key interactions to improve UX.
 
@@ -85,112 +65,102 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **security and ops** - need to be able to notify users with a big banner saying their version has a vulnerability and either update or roll back versions
 
-* [ ] idk if this is natively handled, but need to be able to cmd + and change text size rendering
+* \[ ] idk if this is natively handled, but need to be able to cmd + and change text size rendering
 
-* [ ] we're going to need some kind of centralized infrastructure for admin of above and logging. i wonder if github or brew or wherever we host this as a downloadable will do some of that for us?
+* \[ ] we're going to need some kind of centralized infrastructure for admin of above and logging. i wonder if github or brew or wherever we host this as a downloadable will do some of that for us?
 
-* [ ] if you're making lists when you hit enter auto fils the next line with another list (again might natively be handled)
+* \[ ] if you're making lists when you hit enter auto fils the next line with another list (again might natively be handled)
 
-* [ ] P1 - security and vulenerability.
+* \[ ] P1 - security and vulenerability.
 
-* [ ] theme switching
+* \[ ] theme switching
 
-* [ ] ok wild idea. what if we could at the top of a doc have an "inports" where you can import context from other docs. and reference specific sections?
+* \[ ] ok wild idea. what if we could at the top of a doc have an "inports" where you can import context from other docs. and reference specific sections?
 
 * [ ] **TODO FEATURE** keep track of //todo: that get sprinkled through documents
 
-* [ ] animations? mascot?
+* \[ ] switch from arial to serif font (ala claude code)
+
+* \[ ] animations? mascot?
 
 * [x] **Scoped commit** — `commit()` in `electron/git.js` saves and restores pre-staged files around each Canonic commit so external staged changes are never bundled in
 
 ## Completed
 
-* [x] [bug] when you click on a comment the sidebar doesnt open
+* \[X] [bug] when you type '[ ]' its dissapearing
 
-* [x] [bug] when you type '[ ]' its dissapearing
+* \[X] [bug] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
 
-* [x] [bug] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
+* \[X] should work with existing git repos. and shouldnt blow stuff up
 
-* [x] should work with existing git repos. and shouldnt blow stuff up
+* [ ] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-- [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
+* [ ] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
 
-- [x] [x] switch from arial to serif font (ala claude code)
+* \[x] Basic workspace setup + git backend (isomorphic-git)
 
-- [x] **[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
+* \[x] PM Framework template
 
-- [x] **[X] Shared / connected doucments can be viewed in web browser** - generate a link
+* \[x] HAL2001 theme
 
-- [x] Basic workspace setup + git backend (isomorphic-git)
+* \[x] AI chat (thinking partner, not content generator) routed through main process
 
-- [x] PM Framework template
+* \[x] Milkdown WYSIWYG editor
 
-- [x] HAL2001 theme
+* \[x] Lucide icons throughout
 
-- [x] AI chat (thinking partner, not content generator) routed through main process
+* \[x] Settings modal with cleanup/uninstall
 
-- [x] Milkdown WYSIWYG editor
+* \[x] Auto-update via electron-updater (production builds)
 
-- [x] Lucide icons throughout
+* [x] GitHub repo at <https://github.com/johnjazzi/canonic>
 
-- [x] Settings modal with cleanup/uninstall
+* \[x] Canonical logo in UI
 
-- [x] Auto-update via electron-updater (production builds)
+* [x] Inline comments (selection + line-anchored) persisted to `~/.canonic/comments/`
 
-- [x] GitHub repo at <https://github.com/johnjazzi/canonic>
+* \[x] Search with workspace isolation
 
-- [x] Canonical logo in UI
+* \[x] Demo mode with config-driven peer data (`public/demo/config.json`)
 
-- [x] Inline comments (selection + line-anchored) persisted to `~/.canonic/comments/`
+* \[x] Comprehensive test suite (unit + integration, 60 tests)
 
-- [x] Search with workspace isolation
+* [x] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
 
-- [x] Demo mode with config-driven peer data (`public/demo/config.json`)
+* [x] **Create directories** — "New folder" in FileTree header + inline in TreeNode; rename/delete/move all work on directory nodes. Soft-delete trash bin with restore + permanent delete.
 
-- [x] Comprehensive test suite (unit + integration, 60 tests)
+* [x] **Move folders into other folders** — expand move functionality to support nesting directories within other directories.
 
-- [x] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
+* [x] **Drag and drop support** — make files and folders drag/droppable in the FileTree for intuitive reorganization.
 
-  [X] persist unsaved changes between document switches [X] something funky in the saves...
+* [x] **Manual update check** — "Check for Updates" button in Settings > Profile.
 
-- the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
+* [x] **Periodic update checks** — Check every 4 hours while app is running.
 
-- [x] **[tech]** reffactor the /components so its not all flat. Put them in folders.
+* [x] **Ask before close** — Prompt to "Update and Close" if a download is ready.
 
-- [x] **Create directories** — "New folder" in FileTree header + inline in TreeNode; rename/delete/move all work on directory nodes. Soft-delete trash bin with restore + permanent delete.
+* [x] **Interactive download** — Prompt user to start download when update is available (rather than always silent).
 
-- [x] **Move folders into other folders** — expand move functionality to support nesting directories within other directories.
+* [x] **Download progress** — Show progress bar/status in the update banner.
 
-- [x] **Drag and drop support** — make files and folders drag/droppable in the FileTree for intuitive reorganization.
+* [x] **create branches or versions per doc** per-doc branch manifest; fork/merge scoped to individual documents; version tagging with named snapshots.
 
-- [x] **Manual update check** — "Check for Updates" button in Settings > Profile.
+* [x] **show commits** checkpoint commits per file with history panel; uncommitted/unsaved indicators; branch/merge shown in history; inline diff on click (changed lines only).
 
-- [x] **Periodic update checks** — Check every 4 hours while app is running.
+* [x] [bug] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.
 
-- [x] **Ask before close** — Prompt to "Update and Close" if a download is ready.
+* [x] [bug] **cant move files from directory to directory**
 
-- [x] **Interactive download** — Prompt user to start download when update is available (rather than always silent).
+* \[x] \[bug] cant delete documents
 
-- [x] **Download progress** — Show progress bar/status in the update banner.
+* \[X ] \[ bug] undo/redo doesn't seem to work
 
-- [x] **create branches or versions per doc** per-doc branch manifest; fork/merge scoped to individual documents; version tagging with named snapshots.
+* [x] [bug] **can't create directory**
 
-- [x] **show commits** checkpoint commits per file with history panel; uncommitted/unsaved indicators; branch/merge shown in history; inline diff on click (changed lines only).
+* [x] [bug] **can't delete directory**
 
-- [x] [bug] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.
+* [x] [bug] **cant change filename from title**
 
-- [x] [bug] **cant move files from directory to directory**
+* [x] [bug] **Comment highlights not rendered in editor** — comments are stored and shown in CommentsPanel but the `anchor.quotedText` is never highlighted in the document. Need to apply ProseMirror decorations after `store.comments` loads: scan the doc for each `quotedText`, create a `Decoration.inline` highlight span, and update decorations when comments change or the file switches. Clicking a highlight should scroll the panel to the matching comment. *(Editor.vue + MilkdownEditor.vue — ProseMirror DecorationSet)*
 
-- [x] [bug] **cant delete documents**
-
-- [x] [ bug] undo/redo doesn't seem to work
-
-- [x] [bug] **can't create directory**
-
-- [x] [bug] **can't delete directory**
-
-- [x] [bug] **cant change filename from title**
-
-- [x] [bug] **Comment highlights not rendered in editor** — comments are stored and shown in CommentsPanel but the `anchor.quotedText` is never highlighted in the document. Need to apply ProseMirror decorations after `store.comments` loads: scan the doc for each `quotedText`, create a `Decoration.inline` highlight span, and update decorations when comments change or the file switches. Clicking a highlight should scroll the panel to the matching comment. *(Editor.vue + MilkdownEditor.vue — ProseMirror DecorationSet)*
-
-- [x] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.
+* [x] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.

@@ -7,21 +7,27 @@ when complete move stuff to complete. its just that easy
 
 ## Bugs
 
-* [ ] \[bug -arguably] when I click a comment should show open the sidebar if sidebar closed
+* [ ] something funky in the saves...
 
-* [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
+* [ ] [bug -arguably] when I click a comment should show open the sidebar if sidebar closed
+
+* [ ] [bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
+
+* [ ] the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
 
 ***
 
 ## Features
 
-* [ ] \[feature] if a md has a lot of #headings create a navigation for those
+* [ ] comprehensive editor testing. so we need to test all inputs like ' [[' ' ```mermaid' ect
+
+* [ ] [feature] if a md has a lot of #headings create a navigation for those
 
 * [x] sidebar should be closed by defaulf but should remember your last settings
 
-* [ ] \[feature] be able to revert to old versions or at least view them
+* [ ] [feature] be able to revert to old versions or at least view them
 
-* [x] \[feature] storing inline images
+* [x] [feature] storing inline images
 
 * [x] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 
@@ -29,7 +35,7 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **PR / review workflow** — after copying a peer's file and making changes, "Propose changes" diffs against peer's HEAD and POSTs to their share server; owner reviews in a new Review panel (accept/request changes/reject).
 
-* [ ] \[bug] I dont see network discovery tab when not in demo mode
+* [ ] [bug] I dont see network discovery tab when not in demo mode
 
 * [ ] **Network safety setting** — toggle in Settings > Sharing: "Pause sharing when network changes" (on by default); protects against accidentally sharing on public networks like coffee shops.
 
@@ -43,15 +49,15 @@ when complete move stuff to complete. its just that easy
 
 * [ ] add in line numbering
 
-* \[ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
+* [ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
 
-* \[ ] make it "hackable" like atom and zed
+* [ ] make it "hackable" like atom and zed
 
-* \[ ] figure out how to prevent DDOS on your comp.
+* [ ] figure out how to prevent DDOS on your comp.
 
 * [ ] **add a terminal** in the ui that lets you run cli commands for the workspace.
 
-* [ ] **\[AI AGENT] kick off claude code** be able start/continue claude code session with the changes you made to the doucment. i.e. hey I changed this requirements can you update the app to reflect it?
+* [ ] **[AI AGENT] kick off claude code** be able start/continue claude code session with the changes you made to the doucment. i.e. hey I changed this requirements can you update the app to reflect it?
 
 * [ ] **Usage logging** — explicitly turned off by default; user prompted at setup to opt-in/out. Track key interactions to improve UX.
 
@@ -79,73 +85,77 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **security and ops** - need to be able to notify users with a big banner saying their version has a vulnerability and either update or roll back versions
 
-* \[ ] idk if this is natively handled, but need to be able to cmd + and change text size rendering
+* [ ] idk if this is natively handled, but need to be able to cmd + and change text size rendering
 
-* \[ ] we're going to need some kind of centralized infrastructure for admin of above and logging. i wonder if github or brew or wherever we host this as a downloadable will do some of that for us?
+* [ ] we're going to need some kind of centralized infrastructure for admin of above and logging. i wonder if github or brew or wherever we host this as a downloadable will do some of that for us?
 
-* \[ ] if you're making lists when you hit enter auto fils the next line with another list (again might natively be handled)
+* [ ] if you're making lists when you hit enter auto fils the next line with another list (again might natively be handled)
 
-* \[ ] P1 - security and vulenerability.
+* [ ] P1 - security and vulenerability.
 
-* \[ ] theme switching
+* [ ] theme switching
 
-* \[ ] ok wild idea. what if we could at the top of a doc have an "inports" where you can import context from other docs. and reference specific sections?
+* [ ] ok wild idea. what if we could at the top of a doc have an "inports" where you can import context from other docs. and reference specific sections?
 
 * [ ] **TODO FEATURE** keep track of //todo: that get sprinkled through documents
 
-* \[ ] animations? mascot?
+* [ ] animations? mascot?
 
 * [x] **Scoped commit** — `commit()` in `electron/git.js` saves and restores pre-staged files around each Canonic commit so external staged changes are never bundled in
 
 ## Completed
 
-* [x] \[bug] when you click on a comment the sidebar doesnt open
+* [x] [bug] when you click on a comment the sidebar doesnt open
+
+* [x] [bug] when you type '[ ]' its dissapearing
+
+* [x] [bug] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
+
+* [x] should work with existing git repos. and shouldnt blow stuff up
 
 - [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
 
-- [x] \[X] switch from arial to serif font (ala claude code)
+- [x] [x] switch from arial to serif font (ala claude code)
 
-- \[X] should work with existing git repos. and shouldnt blow stuff up
+- [x] **[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-- [x] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
+- [x] **[X] Shared / connected doucments can be viewed in web browser** - generate a link
 
-- [x] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
+- [x] Basic workspace setup + git backend (isomorphic-git)
 
-- \[x] Basic workspace setup + git backend (isomorphic-git)
+- [x] PM Framework template
 
-- \[x] PM Framework template
+- [x] HAL2001 theme
 
-- \[x] HAL2001 theme
+- [x] AI chat (thinking partner, not content generator) routed through main process
 
-- \[x] AI chat (thinking partner, not content generator) routed through main process
+- [x] Milkdown WYSIWYG editor
 
-- \[x] Milkdown WYSIWYG editor
+- [x] Lucide icons throughout
 
-- \[x] Lucide icons throughout
+- [x] Settings modal with cleanup/uninstall
 
-- \[x] Settings modal with cleanup/uninstall
-
-- \[x] Auto-update via electron-updater (production builds)
+- [x] Auto-update via electron-updater (production builds)
 
 - [x] GitHub repo at <https://github.com/johnjazzi/canonic>
 
-- \[x] Canonical logo in UI
+- [x] Canonical logo in UI
 
 - [x] Inline comments (selection + line-anchored) persisted to `~/.canonic/comments/`
 
-- \[x] Search with workspace isolation
+- [x] Search with workspace isolation
 
-- \[x] Demo mode with config-driven peer data (`public/demo/config.json`)
+- [x] Demo mode with config-driven peer data (`public/demo/config.json`)
 
-- \[x] Comprehensive test suite (unit + integration, 60 tests)
+- [x] Comprehensive test suite (unit + integration, 60 tests)
 
 - [x] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
 
-  \[X] persist unsaved changes between document switches\[X] something funky in the saves...
+  [X] persist unsaved changes between document switches [X] something funky in the saves...
 
 - the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
 
-- [x] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
+- [x] **[tech]** reffactor the /components so its not all flat. Put them in folders.
 
 - [x] **Create directories** — "New folder" in FileTree header + inline in TreeNode; rename/delete/move all work on directory nodes. Soft-delete trash bin with restore + permanent delete.
 
@@ -171,9 +181,9 @@ when complete move stuff to complete. its just that easy
 
 - [x] [bug] **cant move files from directory to directory**
 
-- \[x] \[bug] cant delete documents
+- [x] [bug] **cant delete documents**
 
-- \[X ] \[ bug] undo/redo doesn't seem to work
+- [x] [ bug] undo/redo doesn't seem to work
 
 - [x] [bug] **can't create directory**
 

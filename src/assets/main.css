@@ -169,7 +169,6 @@ button:focus:not(:focus-visible) { outline: none; }
   user-select: none;
   white-space: pre;
 }
-
 /* ── Editor Gutter & Line Numbers ── */
 .editor-gutter {
   display: none;

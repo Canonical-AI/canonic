@@ -276,14 +276,14 @@
                     </div>
                 </div>
 
-                <footer class="modal-footer">
-                    <span v-if="isDirty" class="dirty-hint">Settings apply automatically</span>
-                    <div class="footer-actions">
-                        <button v-if="isDirty" class="btn-text" @click="revertChanges">Discard changes</button>
-                        <button class="btn-primary" @click="$emit('close')">Done</button>
-                    </div>
-                </footer>
-            </main>
+<footer class="modal-footer">
+    <span v-if="isDirty" class="dirty-hint">Settings apply automatically</span>
+    <div class="footer-actions">
+        <button v-if="isDirty" class="btn-text" @click="revertChanges">Discard changes</button>
+        <button class="btn-primary" @click="$emit('close')">Done</button>
+    </div>
+</footer>
+</main>
         </div>
     </div>
 </template>

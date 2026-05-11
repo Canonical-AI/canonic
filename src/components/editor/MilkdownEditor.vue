@@ -192,6 +192,7 @@ const taskCheckboxPlugin = $prose(() => new Plugin({
 }))
 
 // --- Trailing Paragraph ---
+
 const trailingParagraphPlugin = $prose(() => new Plugin({
   appendTransaction(transactions, _oldState, newState) {
     if (!transactions.some(tr => tr.docChanged)) return null

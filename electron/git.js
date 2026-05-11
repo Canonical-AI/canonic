@@ -1,4 +1,14 @@
 const git = require('isomorphic-git')
+
+function resolveSafePath(base, target) {
+  const path = require('path');
+  const resolvedBase = path.resolve(base);
+  const resolvedTarget = path.resolve(base, target);
+  if (!resolvedTarget.startsWith(resolvedBase)) {
+    throw new Error("Path traversal blocked: " + target);
+  }
+  return resolvedTarget;
+}
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
@@ -27,7 +37,7 @@ async function initWorkspace(workspacePath, template = 'blank') {
   }
 
   // Check if already a git repo
-  const gitDir = path.join(workspacePath, '.git')
+  const gitDir = resolveSafePath(workspacePath, '.git')
   if (fs.existsSync(gitDir)) {
     return { path: workspacePath, alreadyExists: true, isExternal: true }
   }
@@ -41,7 +51,7 @@ async function initWorkspace(workspacePath, template = 'blank') {
     if (template === 'pm-framework') {
       const pmFiles = getPMFrameworkFiles()
       for (const [relPath, content] of Object.entries(pmFiles)) {
-        const fullPath = path.join(workspacePath, relPath)
+        const fullPath = resolveSafePath(workspacePath, relPath)
         fs.mkdirSync(path.dirname(fullPath), { recursive: true })
         fs.writeFileSync(fullPath, content, 'utf-8')
         filesToCommit.push(relPath)
@@ -49,7 +59,7 @@ async function initWorkspace(workspacePath, template = 'blank') {
     } else if (template === 'canonic-demo') {
       const demoFiles = getCanonicdemoFiles()
       for (const [relPath, content] of Object.entries(demoFiles)) {
-        const fullPath = path.join(workspacePath, relPath)
+        const fullPath = resolveSafePath(workspacePath, relPath)
         fs.mkdirSync(path.dirname(fullPath), { recursive: true })
         fs.writeFileSync(fullPath, content, 'utf-8')
         filesToCommit.push(relPath)
@@ -57,7 +67,7 @@ async function initWorkspace(workspacePath, template = 'blank') {
     }
 
     const readmePath = 'README.md'
-    fs.writeFileSync(path.join(workspacePath, readmePath), getReadmeContent(), 'utf-8')
+    fs.writeFileSync(resolveSafePath(workspacePath, readmePath), getReadmeContent(), 'utf-8')
     filesToCommit.push(readmePath)
   } catch (err) {
     throw new Error(`Failed to create template files: ${err.message}`)
@@ -538,7 +548,7 @@ async function diff(workspacePath, filePath, oid) {
   try {
     // Get content at commit oid vs HEAD
     const commitContent = await readCommit(workspacePath, filePath, oid)
-    const currentPath = path.join(workspacePath, filePath)
+    const currentPath = resolveSafePath(workspacePath, filePath)
     const currentContent = fs.existsSync(currentPath) ? fs.readFileSync(currentPath, 'utf-8') : ''
     return { before: commitContent, after: currentContent }
   } catch (err) {

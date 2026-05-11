@@ -4,6 +4,15 @@ const { WebSocketServer } = require('ws')
 const { marked } = require('marked')
 const { EventEmitter } = require('events')
 const path = require('path')
+
+function resolveSafePath(base, target) {
+  const resolvedBase = path.resolve(base);
+  const resolvedTarget = path.resolve(base, target);
+  if (!resolvedTarget.startsWith(resolvedBase)) {
+    throw new Error("Path traversal blocked: " + target);
+  }
+  return resolvedTarget;
+}
 const fs = require('fs')
 const os = require('os')
 const crypto = require('crypto')
@@ -53,7 +62,7 @@ function savePeer(peer) {
 }
 
 function loadIgnorePatterns(workspacePath) {
-  const ignoreFile = path.join(workspacePath, '.canonicignore')
+  const ignoreFile = resolveSafePath(workspacePath, '.canonicignore')
   if (!fs.existsSync(ignoreFile)) return []
   return fs.readFileSync(ignoreFile, 'utf-8')
     .split('\n')
@@ -504,7 +513,7 @@ async function startShare(workspacePath, filePath, options = {}) {
     }
   }
 
-  const fullPath = path.join(workspacePath, filePath)
+  const fullPath = resolveSafePath(workspacePath, filePath)
   if (!fs.existsSync(fullPath)) {
     return { success: false, error: 'File not found' }
   }

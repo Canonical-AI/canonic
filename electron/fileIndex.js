@@ -38,19 +38,28 @@ function startWatcher(workspacePath, onUpdate) {
 
   watcher = chokidar.watch(workspacePath, {
     ignoreInitial: true,
-    ignored: /(^|[/\\])\.|node_modules/,
+    ignored: (path) => {
+      // Allow .git/HEAD but ignore other hidden files/folders and node_modules
+      if (path.includes('.git/HEAD')) return false;
+      return /(^|[/\\])\.|node_modules/.test(path);
+    },
     persistent: true,
   })
 
-  const refresh = () => {
-    currentIndex = buildIndex(workspacePath)
-    onUpdateCallback?.(currentIndex)
+  const refresh = (path) => {
+    if (path && path.includes('.git/HEAD')) {
+      onUpdateCallback?.(currentIndex, true) // true means git changed
+    } else {
+      currentIndex = buildIndex(workspacePath)
+      onUpdateCallback?.(currentIndex, false)
+    }
   }
 
   watcher.on('add', refresh)
   watcher.on('unlink', refresh)
   watcher.on('addDir', refresh)
   watcher.on('unlinkDir', refresh)
+  watcher.on('change', refresh)
 
   watcher.on('error', (err) => {
     console.error('[fileIndex] watcher error:', err)

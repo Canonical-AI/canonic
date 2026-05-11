@@ -11,11 +11,15 @@ when complete move stuff to complete. its just that easy
 
 * [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
 
+* [ ] \[bug] when you click on a comment the sidebar doesnt open
+
 ***
 
 ## Features
 
 * [ ] \[feature] if a md has a lot of #headings create a navigation for those
+
+* [ ] sidebar should be closed by defaulf but should remember your last settings
 
 * [x] \[feature] storing inline images
 
@@ -38,8 +42,6 @@ when complete move stuff to complete. its just that easy
 * [ ] Add back in the milkdown handles
 
 * [ ] add in line numbering
-
-* [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
 
 * \[ ] meta todo, for my own development, work out of a dev branch not all main. for claude have it merge to dev. then merge to main for prod deplo
 
@@ -91,13 +93,15 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **TODO FEATURE** keep track of //todo: that get sprinkled through documents
 
-* \[ ] switch from arial to serif font (ala claude code)
-
 * \[ ] animations? mascot?
 
 * [x] **Scoped commit** — `commit()` in `electron/git.js` saves and restores pre-staged files around each Canonic commit so external staged changes are never bundled in
 
 ## Completed
+
+* [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
+
+* [x] \[X] switch from arial to serif font (ala claude code)
 
 * \[X] should work with existing git repos. and shouldnt blow stuff up
 

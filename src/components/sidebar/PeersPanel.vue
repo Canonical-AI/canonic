@@ -171,7 +171,7 @@
 import { ref, reactive } from 'vue'
 import { useAppStore } from '../../store'
 import { FileText, Star, AlertTriangle, Loader, Eye } from 'lucide-vue-next'
-import demoConfig from '../../../public/demo/config.json'
+import demoConfig from "../../demo/config.json"
 
 const store = useAppStore()
 const api = window.canonic

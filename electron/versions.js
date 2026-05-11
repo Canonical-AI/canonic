@@ -1,8 +1,17 @@
 const fs = require('fs')
 const path = require('path')
 
+function resolveSafePath(base, target) {
+  const resolvedBase = path.resolve(base);
+  const resolvedTarget = path.resolve(base, target);
+  if (!resolvedTarget.startsWith(resolvedBase)) {
+    throw new Error("Path traversal blocked: " + target);
+  }
+  return resolvedTarget;
+}
+
 function getVersionsPath(workspacePath) {
-  return path.join(workspacePath, '.canonic', 'versions.json')
+  return resolveSafePath(workspacePath, '.canonic', 'versions.json')
 }
 
 function readAll(workspacePath) {

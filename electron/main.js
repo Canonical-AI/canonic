@@ -124,6 +124,15 @@ if (!fs.existsSync(path.join(CANONIC_DIR, "comments"))) {
 let mainWindow;
 let updateDownloaded = false;
 
+function resolveSafePath(base, target) {
+  const resolvedBase = path.resolve(base);
+  const resolvedTarget = path.resolve(base, target);
+  if (!resolvedTarget.startsWith(resolvedBase)) {
+    throw new Error("Path traversal blocked: " + target);
+  }
+  return resolvedTarget;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -152,6 +161,22 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isDevUrl = isDev && url.startsWith(process.env.VITE_DEV_URL || "http://localhost:5173");
+    const isFileUrl = !isDev && url.startsWith('file://');
+    if (!isDevUrl && !isFileUrl) {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const { shell } = require('electron');
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
 
   // Prompt before closing if an update is ready
   mainWindow.on("close", async (e) => {
@@ -382,13 +407,13 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("files:read", async (_, workspacePath, filePath) => {
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = resolveSafePath(workspacePath, filePath);
     if (!fs.existsSync(fullPath)) return null;
     return fs.readFileSync(fullPath, "utf-8");
   });
 
   ipcMain.handle("files:write", async (_, workspacePath, filePath, content) => {
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = resolveSafePath(workspacePath, filePath);
     const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(fullPath, content, "utf-8");
@@ -398,7 +423,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("files:delete", async (_, workspacePath, filePath) => {
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = resolveSafePath(workspacePath, filePath);
     if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     return true;
   });
@@ -419,7 +444,7 @@ function setupIpcHandlers() {
   }
 
   function getTrashDir(workspacePath) {
-    const d = path.join(workspacePath, ".canonic", "trash");
+    const d = resolveSafePath(workspacePath, ".canonic", "trash");
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
     return d;
   }
@@ -445,7 +470,7 @@ function setupIpcHandlers() {
     async (_, workspacePath, itemPath, isDirectory) => {
       const trashDir = getTrashDir(workspacePath);
       const id = crypto.randomUUID();
-      const src = path.join(workspacePath, itemPath);
+      const src = resolveSafePath(workspacePath, itemPath);
       if (!fs.existsSync(src))
         return { success: false, error: "File not found" };
       moveItem(src, path.join(trashDir, id));
@@ -473,7 +498,7 @@ function setupIpcHandlers() {
     const src = path.join(trashDir, id);
     if (!fs.existsSync(src))
       return { success: false, error: "Trash file missing" };
-    const dest = path.join(workspacePath, item.originalPath);
+    const dest = resolveSafePath(workspacePath, item.originalPath);
     const destDir = path.dirname(dest);
     if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
     moveItem(src, dest);
@@ -503,22 +528,22 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("files:mkdir", async (_, workspacePath, dirPath) => {
-    const fullPath = path.join(workspacePath, dirPath);
+    const fullPath = resolveSafePath(workspacePath, dirPath);
     fs.mkdirSync(fullPath, { recursive: true });
     fs.writeFileSync(path.join(fullPath, ".gitkeep"), "", "utf-8");
     return true;
   });
 
   ipcMain.handle("files:rmdir", async (_, workspacePath, dirPath) => {
-    const fullPath = path.join(workspacePath, dirPath);
+    const fullPath = resolveSafePath(workspacePath, dirPath);
     if (fs.existsSync(fullPath))
       fs.rmSync(fullPath, { recursive: true, force: true });
     return true;
   });
 
   ipcMain.handle("files:move", async (_, workspacePath, oldPath, newPath) => {
-    const oldFull = path.join(workspacePath, oldPath);
-    const newFull = path.join(workspacePath, newPath);
+    const oldFull = resolveSafePath(workspacePath, oldPath);
+    const newFull = resolveSafePath(workspacePath, newPath);
     const dir = path.dirname(newFull);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.renameSync(oldFull, newFull);
@@ -527,7 +552,7 @@ function setupIpcHandlers() {
 
   ipcMain.handle("files:new", async (_, workspacePath, fileName) => {
     const filePath = fileName.endsWith(".md") ? fileName : `${fileName}.md`;
-    const fullPath = path.join(workspacePath, filePath);
+    const fullPath = resolveSafePath(workspacePath, filePath);
     const template = `# ${fileName.replace(".md", "")}\n\n`;
     fs.writeFileSync(fullPath, template, "utf-8");
     return filePath;
@@ -644,7 +669,9 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("share:open-link", async (_, url) => {
-    shell.openExternal(url);
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
   });
 
   ipcMain.handle("share:stats", async (_, filePath) => {
@@ -814,7 +841,7 @@ function setupIpcHandlers() {
   );
 
   ipcMain.handle("doc-branches:get", async (_, workspacePath) => {
-    const p = path.join(workspacePath, ".canonic", "doc-branches.json");
+    const p = resolveSafePath(workspacePath, ".canonic", "doc-branches.json");
     if (!fs.existsSync(p)) return {};
     try {
       return JSON.parse(fs.readFileSync(p, "utf-8"));
@@ -824,7 +851,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("doc-branches:set", async (_, workspacePath, data) => {
-    const dir = path.join(workspacePath, ".canonic");
+    const dir = resolveSafePath(workspacePath, ".canonic");
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "doc-branches.json"),

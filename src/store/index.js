@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, reactive, computed, watch } from "vue";
-import demoConfig from "../../public/demo/config.json";
+import demoConfig from "../demo/config.json";
 
 export const useAppStore = defineStore("app", () => {
   const workspacePath = ref(null);

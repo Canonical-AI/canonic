@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("telemetry:log", event, details),
   },
 
+  // Dialogs
+  dialog: {
+    confirm: (title, message) => ipcRenderer.invoke("dialog:confirm", title, message),
+  },
+
   // Workspace
   workspace: {
     openDialog: () => ipcRenderer.invoke("workspace:open-dialog"),
@@ -81,6 +86,7 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("git:log-all", workspacePath, filePath, branchList),
     fileStatus: (workspacePath, filePath) =>
       ipcRenderer.invoke("git:file-status", workspacePath, filePath),
+    onBranchUpdate: (cb) => ipcRenderer.on('git:branch-updated', () => cb()),
   },
 
   // Comments

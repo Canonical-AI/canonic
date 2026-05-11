@@ -370,7 +370,18 @@ function setupIpcHandlers() {
   // Start 60s comment sync interval
   setInterval(() => flushPeerComments(discoveredPeers), 60000);
 
-  // --- Workspace ---
+  ipcMain.handle("dialog:confirm", async (_, title, message) => {
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      buttons: ["Cancel", "Continue"],
+      defaultId: 0,
+      cancelId: 0,
+      title,
+      message,
+    });
+    return result.response === 1;
+  });
+
   ipcMain.handle("workspace:open-dialog", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ["openDirectory", "createDirectory"],
@@ -384,8 +395,12 @@ function setupIpcHandlers() {
     async (_, workspacePath, template = "blank") => {
       try {
         const result = await gitService.initWorkspace(workspacePath, template);
-        startWatcher(workspacePath, (index) => {
-          mainWindow?.webContents.send('files:index-update', index)
+        startWatcher(workspacePath, (index, gitChanged) => {
+          if (gitChanged) {
+            mainWindow?.webContents.send('git:branch-updated')
+          } else {
+            mainWindow?.webContents.send('files:index-update', index)
+          }
         })
         return result;
       } catch (err) {

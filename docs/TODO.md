@@ -11,8 +11,6 @@ when complete move stuff to complete. its just that easy
 
 * [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
 
-* [x] \[bug] when you click on a comment the sidebar doesnt open
-
 ***
 
 ## Features
@@ -101,86 +99,88 @@ when complete move stuff to complete. its just that easy
 
 ## Completed
 
-* [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
+* [x] \[bug] when you click on a comment the sidebar doesnt open
 
-* [x] \[X] switch from arial to serif font (ala claude code)
+- [x] **Existing git repo support** — if a folder opened as a workspace already has a `.git` directory (e.g. a GitHub repo cloned to edit markdown), use that repo's git history instead of re-initializing. Commits, branches, and history in the UI should reflect the actual repo. Do not `git init` on top of an existing repo.
 
-* \[X] should work with existing git repos. and shouldnt blow stuff up
+- [x] \[X] switch from arial to serif font (ala claude code)
 
-* [x] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
+- \[X] should work with existing git repos. and shouldnt blow stuff up
 
-* [x] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
+- [x] **\[x] sharing** need to show a couple things like network statistics, maybe an animation to show your server is on, activity like who viewed a document.
 
-* \[x] Basic workspace setup + git backend (isomorphic-git)
+- [x] **\[X] Shared / connected doucments can be viewed in web browser** - generate a link
 
-* \[x] PM Framework template
+- \[x] Basic workspace setup + git backend (isomorphic-git)
 
-* \[x] HAL2001 theme
+- \[x] PM Framework template
 
-* \[x] AI chat (thinking partner, not content generator) routed through main process
+- \[x] HAL2001 theme
 
-* \[x] Milkdown WYSIWYG editor
+- \[x] AI chat (thinking partner, not content generator) routed through main process
 
-* \[x] Lucide icons throughout
+- \[x] Milkdown WYSIWYG editor
 
-* \[x] Settings modal with cleanup/uninstall
+- \[x] Lucide icons throughout
 
-* \[x] Auto-update via electron-updater (production builds)
+- \[x] Settings modal with cleanup/uninstall
 
-* [x] GitHub repo at <https://github.com/johnjazzi/canonic>
+- \[x] Auto-update via electron-updater (production builds)
 
-* \[x] Canonical logo in UI
+- [x] GitHub repo at <https://github.com/johnjazzi/canonic>
 
-* [x] Inline comments (selection + line-anchored) persisted to `~/.canonic/comments/`
+- \[x] Canonical logo in UI
 
-* \[x] Search with workspace isolation
+- [x] Inline comments (selection + line-anchored) persisted to `~/.canonic/comments/`
 
-* \[x] Demo mode with config-driven peer data (`public/demo/config.json`)
+- \[x] Search with workspace isolation
 
-* \[x] Comprehensive test suite (unit + integration, 60 tests)
+- \[x] Demo mode with config-driven peer data (`public/demo/config.json`)
 
-* [x] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
+- \[x] Comprehensive test suite (unit + integration, 60 tests)
+
+- [x] need to persist changes when changing between documents. so knowing a doc isn't saved yet but not losing those changes in session
 
   \[X] persist unsaved changes between document switches\[X] something funky in the saves...
 
-* the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
+- the sidebar is a little squeezed needs to be re-sizable and at least wide enough for the icons
 
-* [x] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
+- [x] **\[tech]** reffactor the /components so its not all flat. Put them in folders.
 
-* [x] **Create directories** — "New folder" in FileTree header + inline in TreeNode; rename/delete/move all work on directory nodes. Soft-delete trash bin with restore + permanent delete.
+- [x] **Create directories** — "New folder" in FileTree header + inline in TreeNode; rename/delete/move all work on directory nodes. Soft-delete trash bin with restore + permanent delete.
 
-* [x] **Move folders into other folders** — expand move functionality to support nesting directories within other directories.
+- [x] **Move folders into other folders** — expand move functionality to support nesting directories within other directories.
 
-* [x] **Drag and drop support** — make files and folders drag/droppable in the FileTree for intuitive reorganization.
+- [x] **Drag and drop support** — make files and folders drag/droppable in the FileTree for intuitive reorganization.
 
-* [x] **Manual update check** — "Check for Updates" button in Settings > Profile.
+- [x] **Manual update check** — "Check for Updates" button in Settings > Profile.
 
-* [x] **Periodic update checks** — Check every 4 hours while app is running.
+- [x] **Periodic update checks** — Check every 4 hours while app is running.
 
-* [x] **Ask before close** — Prompt to "Update and Close" if a download is ready.
+- [x] **Ask before close** — Prompt to "Update and Close" if a download is ready.
 
-* [x] **Interactive download** — Prompt user to start download when update is available (rather than always silent).
+- [x] **Interactive download** — Prompt user to start download when update is available (rather than always silent).
 
-* [x] **Download progress** — Show progress bar/status in the update banner.
+- [x] **Download progress** — Show progress bar/status in the update banner.
 
-* [x] **create branches or versions per doc** per-doc branch manifest; fork/merge scoped to individual documents; version tagging with named snapshots.
+- [x] **create branches or versions per doc** per-doc branch manifest; fork/merge scoped to individual documents; version tagging with named snapshots.
 
-* [x] **show commits** checkpoint commits per file with history panel; uncommitted/unsaved indicators; branch/merge shown in history; inline diff on click (changed lines only).
+- [x] **show commits** checkpoint commits per file with history panel; uncommitted/unsaved indicators; branch/merge shown in history; inline diff on click (changed lines only).
 
-* [x] [bug] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.
+- [x] [bug] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.
 
-* [x] [bug] **cant move files from directory to directory**
+- [x] [bug] **cant move files from directory to directory**
 
-* \[x] \[bug] cant delete documents
+- \[x] \[bug] cant delete documents
 
-* \[X ] \[ bug] undo/redo doesn't seem to work
+- \[X ] \[ bug] undo/redo doesn't seem to work
 
-* [x] [bug] **can't create directory**
+- [x] [bug] **can't create directory**
 
-* [x] [bug] **can't delete directory**
+- [x] [bug] **can't delete directory**
 
-* [x] [bug] **cant change filename from title**
+- [x] [bug] **cant change filename from title**
 
-* [x] [bug] **Comment highlights not rendered in editor** — comments are stored and shown in CommentsPanel but the `anchor.quotedText` is never highlighted in the document. Need to apply ProseMirror decorations after `store.comments` loads: scan the doc for each `quotedText`, create a `Decoration.inline` highlight span, and update decorations when comments change or the file switches. Clicking a highlight should scroll the panel to the matching comment. *(Editor.vue + MilkdownEditor.vue — ProseMirror DecorationSet)*
+- [x] [bug] **Comment highlights not rendered in editor** — comments are stored and shown in CommentsPanel but the `anchor.quotedText` is never highlighted in the document. Need to apply ProseMirror decorations after `store.comments` loads: scan the doc for each `quotedText`, create a `Decoration.inline` highlight span, and update decorations when comments change or the file switches. Clicking a highlight should scroll the panel to the matching comment. *(Editor.vue + MilkdownEditor.vue — ProseMirror DecorationSet)*
 
-* [x] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.
+- [x] **a bunch of stuff doesnt work.** fix it, make no mistakes. all the versioning and commit stuff. we version, commit, branch by document not by workspace. none of it is refreshing as i choose different documents.

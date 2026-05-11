@@ -148,19 +148,41 @@ watch(() => node.value?.attrs?.value, (val) => {
 })
 
 async function renderDiagram() {
-  if (!source.value.trim()) return
-  // Use a unique ID per render call so multiple diagrams on the same page never collide
+  if (!source.value.trim()) {
+    renderedSvg.value = ''
+    renderError.value = ''
+    return
+  }
+
   const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   currentRenderId = id
+
   try {
+    // 1. Validate syntax first if possible
+    if (typeof mermaid.parse === 'function') {
+      try {
+        await mermaid.parse(source.value)
+      } catch (parseErr) {
+        throw new Error(parseErr.message || 'Invalid Mermaid syntax')
+      }
+    }
+
+    // 2. Attempt render
     const { svg } = await mermaid.render(id, source.value)
+    
     if (currentRenderId !== id) return
     renderedSvg.value = svg
     renderError.value = ''
   } catch (e) {
     if (currentRenderId !== id) return
+    
+    // Clean up Mermaid's temporary error elements if they exist
+    const errorEl = document.getElementById(id)
+    if (errorEl) errorEl.remove()
+
     renderError.value = e.message || 'Invalid diagram syntax'
     renderedSvg.value = ''
+    console.error('Mermaid render error:', e)
   }
 }
 </script>

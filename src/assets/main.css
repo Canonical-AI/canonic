@@ -202,3 +202,72 @@ button:focus:not(:focus-visible) { outline: none; }
   justify-content: flex-end;
   padding-top: 0.1em;
 }
+
+/* ── Block Handles & Drag-and-Drop ── */
+.milkdown .block-handle-dom {
+  position: absolute;
+  left: -22px; /* Positioned just to the left of content */
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+}
+
+/* If line numbers are on, shift the block handle further left so they don't overlap */
+[data-line-numbers="true"] .milkdown .block-handle-dom {
+  left: -58px; /* Offset to clear the 48px gutter area */
+}
+
+/* Drop indicator styling */
+.milkdown .block-drag-placeholder {
+  height: 2px;
+  background: var(--accent);
+  margin: 4px 0;
+  border-radius: 1px;
+}
+
+/* ── Custom Block Handle (Stable) ── */
+.custom-block-handle {
+  position: absolute;
+  width: 20px;
+  height: 24px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-muted);
+  background: transparent;
+  border-radius: 4px;
+  z-index: 100;
+  pointer-events: auto;
+  transition: background 0.1s, color 0.1s;
+}
+
+.custom-block-handle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.custom-block-handle:active {
+  cursor: grabbing;
+}
+
+.custom-block-handle svg {
+  opacity: 0.7;
+}
+
+/* Selection highlight for active dragging */
+.milkdown.is-dragging {
+  cursor: grabbing;
+}
+
+.drop-indicator {
+  position: absolute;
+  height: 2px;
+  background: var(--accent);
+  z-index: 1000;
+  pointer-events: none;
+  display: none;
+  border-radius: 1px;
+  box-shadow: 0 0 4px var(--accent);
+}

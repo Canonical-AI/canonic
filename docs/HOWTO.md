@@ -211,6 +211,9 @@ Access settings via the **gear icon** in the top-right.
 |---|---|
 | `Cmd+S` | Save document |
 | `Cmd+Shift+S` | Commit checkpoint |
+| `Cmd+L` | Select current line/block |
+| `Shift+ArrowUp` | Move selected block(s) up |
+| `Shift+ArrowDown` | Move selected block(s) down |
 | `Cmd++` / `Cmd+-` | Increase / decrease font size |
 | `Cmd+F` | Focus search |
 

@@ -11,11 +11,13 @@ when complete move stuff to complete. its just that easy
 
 * [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
 
-* [ ] <br />
+* [ ] \[bug -arguably] when I click a comment should show open the sidebar if sidebar closed
 
 ***
 
 ## Features
+
+* [ ] need to be able to "favorite" or star docs
 
 * [x] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 

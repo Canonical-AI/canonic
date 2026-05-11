@@ -41,7 +41,7 @@ export const useAppStore = defineStore("app", () => {
     localStorage.setItem("canonic:sidebarCollapsed", String(val));
   });
   const rightPanelCollapsed = ref(
-    localStorage.getItem("canonic:rightPanelCollapsed") === "true",
+    localStorage.getItem("canonic:rightPanelCollapsed") !== "false",
   );
   watch(rightPanelCollapsed, (val) => {
     localStorage.setItem("canonic:rightPanelCollapsed", String(val));

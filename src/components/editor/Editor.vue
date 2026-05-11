@@ -275,7 +275,11 @@ watch(
 // Editor → Sidebar: clicking a comment highlight activates it.
 function onEditorClick(e) {
     const span = e.target.closest("[data-comment-id]");
-    if (span) store.setActiveComment(span.dataset.commentId);
+    if (span) {
+        store.setActiveComment(span.dataset.commentId);
+        store.rightPanelTab = "comments";
+        store.rightPanelCollapsed = false;
+    }
 }
 
 // Sidebar → Editor: when activeCommentId changes, scroll to the highlight and flash it.

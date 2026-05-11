@@ -108,6 +108,21 @@
             >
                 <div class="sidebar-tabs">
                     <button
+                        class="tab sidebar-toggle"
+                        :title="
+                            store.sidebarCollapsed
+                                ? 'Expand sidebar'
+                                : 'Collapse sidebar'
+                        "
+                        @click="store.sidebarCollapsed = !store.sidebarCollapsed"
+                    >
+                        <PanelLeftClose
+                            v-if="!store.sidebarCollapsed"
+                            :size="15"
+                        />
+                        <PanelLeftOpen v-else :size="15" />
+                    </button>
+                    <button
                         :class="[
                             'tab',
                             store.sidebarTab === 'files' && 'active',
@@ -137,21 +152,6 @@
                         v-if="store.isDemoMode || store.demoPeers.length"
                     >
                         <Users :size="15" />
-                    </button>
-                    <button
-                        class="tab sidebar-toggle"
-                        :title="
-                            store.sidebarCollapsed
-                                ? 'Expand sidebar'
-                                : 'Collapse sidebar'
-                        "
-                        @click="store.sidebarCollapsed = !store.sidebarCollapsed"
-                    >
-                        <PanelLeftClose
-                            v-if="!store.sidebarCollapsed"
-                            :size="15"
-                        />
-                        <PanelLeftOpen v-else :size="15" />
                     </button>
                 </div>
 
@@ -627,11 +627,11 @@ function onResizeStart(e) {
 }
 
 .sidebar-toggle {
-    margin-left: auto;
+    margin-right: auto;
 }
 
 .sidebar--collapsed .sidebar-toggle {
-    margin-left: 0;
+    margin-right: 0;
 }
 
 .tab {
@@ -762,11 +762,11 @@ function onResizeStart(e) {
 }
 
 .panel-toggle {
-    margin-left: auto;
+    margin-right: auto;
 }
 
 .panel-tabs--collapsed .panel-toggle {
-    margin-left: 0;
+    margin-right: 0;
     order: -1;
 }
 

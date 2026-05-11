@@ -11,7 +11,7 @@ when complete move stuff to complete. its just that easy
 
 * [ ] \[bug] couple things missed in the auto update functionality. no way to click to update. also doesnt show the current version although it does show the current release
 
-* [ ] \[bug] when you click on a comment the sidebar doesnt open
+* [x] \[bug] when you click on a comment the sidebar doesnt open
 
 ***
 
@@ -19,7 +19,9 @@ when complete move stuff to complete. its just that easy
 
 * [ ] \[feature] if a md has a lot of #headings create a navigation for those
 
-* [ ] sidebar should be closed by defaulf but should remember your last settings
+* [x] sidebar should be closed by defaulf but should remember your last settings
+
+* [ ] \[feature] be able to revert to old versions or at least view them
 
 * [x] \[feature] storing inline images
 

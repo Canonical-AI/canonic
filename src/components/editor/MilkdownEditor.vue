@@ -297,22 +297,6 @@ function isHotkeyMatch(event, hotkey) {
 
 // --- Custom Drag Handle plugin ---
 
-function makeDragHandleSvg() {
-  const NS = 'http://www.w3.org/2000/svg'
-  const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('width', '14'); svg.setAttribute('height', '14')
-  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none')
-  svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2')
-  svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round')
-  const pts = [[9,12],[9,5],[9,19],[15,12],[15,5],[15,19]]
-  pts.forEach(([cx, cy]) => {
-    const c = document.createElementNS(NS, 'circle')
-    c.setAttribute('cx', String(cx)); c.setAttribute('cy', String(cy)); c.setAttribute('r', '1')
-    svg.appendChild(c)
-  })
-  return svg
-}
-
 const dragHandlePlugin = $prose(() => {
   let dragSrcStart    = -1
   let dragSrcEnd      = -1
@@ -342,11 +326,6 @@ const dragHandlePlugin = $prose(() => {
 
   return new Plugin({
     view(view) {
-      const handle = document.createElement('div')
-      handle.className = 'custom-block-handle list-handle'
-      handle.draggable = true
-      handle.appendChild(makeDragHandleSvg())
-      
       const dropIndicator = document.createElement('div')
       dropIndicator.className = 'drop-indicator'
       // Hardcode high visibility CSS
@@ -359,96 +338,11 @@ const dragHandlePlugin = $prose(() => {
       indicatorEl = dropIndicator
 
       view.dom.parentNode.style.position = 'relative'
-      view.dom.parentNode.appendChild(handle)
       document.body.appendChild(dropIndicator)
-
-      let activePos = -1
-
-      const onMouseMove = (e) => {
-        if (!view.editable || isDragging) return
-        const editorRect = view.dom.getBoundingClientRect()
-        const x = Math.max(editorRect.left + 5, Math.min(editorRect.right - 5, e.clientX))
-        const pos = view.posAtCoords({ left: x, top: e.clientY })
-        if (!pos) return
-
-        const $pos = view.state.doc.resolve(pos.inside >= 0 ? pos.inside : pos.pos)
-        let listItemPos = -1
-        for (let d = $pos.depth; d > 0; d--) {
-          if ($pos.node(d).type.name === 'list_item') { listItemPos = $pos.before(d); break }
-        }
-
-        if (listItemPos < 0) { handle.style.display = 'none'; activePos = -1; return }
-        if (listItemPos === activePos) return
-        activePos = listItemPos
-        const nodeDOM = view.nodeDOM(listItemPos)
-        if (nodeDOM instanceof HTMLElement) {
-          const rect = nodeDOM.getBoundingClientRect()
-          handle.style.top = `${rect.top - editorRect.top}px`
-          handle.style.left = `${rect.left - editorRect.left - 28}px`
-          handle.style.display = 'flex'
-        }
-      }
-
-      const onMouseLeave = (e) => {
-        if (isDragging || e.relatedTarget === handle) return
-        handle.style.display = 'none'; activePos = -1
-      }
-
-      view.dom.addEventListener('mousemove', onMouseMove)
-      view.dom.addEventListener('mouseleave', onMouseLeave)
-
-      handle.addEventListener('dragstart', (e) => {
-        const { state } = view
-        const { selection } = state
-        
-        if (!selection.empty && activePos >= selection.from && activePos <= selection.to) {
-          const $from = state.doc.resolve(selection.from)
-          const $to = state.doc.resolve(selection.to)
-          const bounds = getDragBounds($from, $to)
-          dragSrcStart = bounds.start
-          dragSrcEnd = bounds.end
-          isDragging = true
-          
-          const slice = state.doc.slice(dragSrcStart, dragSrcEnd)
-          const { dom, text } = view.serializeForClipboard(slice)
-          e.dataTransfer.effectAllowed = 'move'
-          e.dataTransfer.setData('text/html', dom.outerHTML)
-          e.dataTransfer.setData('text/plain', text)
-        } else if (activePos !== -1) {
-          const $pos = state.doc.resolve(activePos + 1)
-          const bounds = getDragBounds($pos, $pos)
-          dragSrcStart = bounds.start
-          dragSrcEnd = bounds.end
-          isDragging = true
-
-          const nodeSel = NodeSelection.create(state.doc, dragSrcStart)
-          view.dispatch(state.tr.setSelection(nodeSel))
-          
-          const nodeDOM = view.nodeDOM(dragSrcStart)
-          if (nodeDOM instanceof HTMLElement && e.dataTransfer) {
-            e.dataTransfer.setDragImage(nodeDOM, 0, 0)
-            const { dom, text } = view.serializeForClipboard(nodeSel.content())
-            e.dataTransfer.effectAllowed = 'move'
-            e.dataTransfer.setData('text/html', dom.outerHTML)
-            e.dataTransfer.setData('text/plain', text)
-          }
-        }
-        view.dom.classList.add('is-dragging')
-        e.stopPropagation() 
-      })
-
-      handle.addEventListener('dragend', () => {
-        resetDragState()
-        view.dom.classList.remove('is-dragging')
-        handle.style.display = 'none'
-      })
 
       return {
         destroy() {
-          handle.remove()
           if (indicatorEl && indicatorEl.parentNode) indicatorEl.parentNode.removeChild(indicatorEl)
-          view.dom.removeEventListener('mousemove', onMouseMove)
-          view.dom.removeEventListener('mouseleave', onMouseLeave)
         }
       }
     },
@@ -610,36 +504,79 @@ const dragHandlePlugin = $prose(() => {
           const $to = state.doc.resolve(selection.to)
           const bounds = getDragBounds($from, $to)
 
-          const start = bounds.start
-          const end = bounds.end
-          const size = end - start
-          const slice = state.doc.slice(start, end)
+          let deleteStart = bounds.start
+          let deleteEnd = bounds.end
+
+          // Expand deletion to parent wrappers if we are moving the ONLY child(ren).
+          // This prevents leaving empty <bullet_list> tags behind.
+          while (true) {
+            const $s = state.doc.resolve(deleteStart)
+            const $e = state.doc.resolve(deleteEnd)
+            if ($s.depth > 0 && !$s.nodeBefore && !$e.nodeAfter) {
+              deleteStart = $s.before($s.depth)
+              deleteEnd = $e.after($e.depth)
+            } else {
+              break
+            }
+          }
+
+          // A "moveable" block is any leaf block we want to step over (e.g. paragraphs, list items).
+          // We intentionally EXCLUDE wrapper blocks like bullet_list so the loop steps *into* them.
+          const isMoveable = (node) => {
+            if (!node || !node.isBlock) return false
+            if (['bullet_list', 'ordered_list', 'blockquote'].includes(node.type.name)) return false
+            return true
+          }
+
+          let insertPos = null;
+          if (dir === -1) { // Move UP
+            let pos = deleteStart
+            while (pos > 0) {
+              const node = state.doc.resolve(pos).nodeBefore
+              if (isMoveable(node)) {
+                insertPos = pos - node.nodeSize
+                break
+              }
+              pos--
+            }
+            if (insertPos === null) return true // Hit top of document
+          } else { // Move DOWN
+            let pos = deleteEnd
+            while (pos < state.doc.content.size) {
+              const node = state.doc.nodeAt(pos)
+              if (isMoveable(node)) {
+                insertPos = pos + node.nodeSize
+                break
+              }
+              pos++
+            }
+            if (insertPos === null) return true // Hit bottom of document
+          }
+
+          const slice = state.doc.slice(bounds.start, bounds.end)
+          const sizeToDelete = deleteEnd - deleteStart
           const tr = state.tr
 
-          if (dir === -1) {
-            if (start === 0) return true
-            const $prevPos = state.doc.resolve(start - 1)
-            let insertPos = $prevPos.before(bounds.depth)
-            if ($prevPos.depth < bounds.depth) {
-                insertPos = $prevPos.before(Math.max(1, $prevPos.depth))
-            }
-
-            tr.delete(start, end).replace(insertPos, insertPos, slice)
-            tr.setSelection(TextSelection.create(tr.doc, insertPos + (selection.from - start), insertPos + (selection.to - start)))
-            dispatch(tr)
-          } else {
-            if (end === state.doc.content.size) return true
-            const $nextPos = state.doc.resolve(end + 1)
-            let insertPos = $nextPos.after(bounds.depth)
-            if ($nextPos.depth < bounds.depth) {
-                insertPos = $nextPos.after(Math.max(1, $nextPos.depth))
-            }
-            insertPos -= size
-            
-            tr.delete(start, end).replace(insertPos, insertPos, slice)
-            tr.setSelection(TextSelection.create(tr.doc, insertPos + (selection.from - start), insertPos + (selection.to - start)))
-            dispatch(tr)
-          }
+          tr.delete(deleteStart, deleteEnd)
+          
+          let mappedInsertPos = insertPos
+          if (insertPos > deleteStart) mappedInsertPos -= sizeToDelete
+          
+          const docSizeBefore = tr.doc.content.size
+          tr.insert(mappedInsertPos, slice.content)
+          const insertedSize = tr.doc.content.size - docSizeBefore
+          
+          // ProseMirror might auto-wrap the content (e.g., adding <bullet_list> tags).
+          // We adjust the selection offset based on how many structural tokens were injected.
+          const wrapperOffset = Math.floor((insertedSize - sizeToDelete) / 2)
+          const selFrom = mappedInsertPos + (selection.from - deleteStart) + wrapperOffset
+          const selTo = mappedInsertPos + (selection.to - deleteStart) + wrapperOffset
+          
+          const safeFrom = Math.max(0, Math.min(tr.doc.content.size, selFrom))
+          const safeTo = Math.max(0, Math.min(tr.doc.content.size, selTo))
+          tr.setSelection(TextSelection.create(tr.doc, safeFrom, safeTo))
+          
+          dispatch(tr)
           return true
         }
         return false

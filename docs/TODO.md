@@ -19,8 +19,6 @@ when complete move stuff to complete. its just that easy
 
 * [x] \[feature] storing inline images
 
-* [ ] <br />
-
 * [x] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.
 
 * [ ] need to be able to "favorite" or star docs

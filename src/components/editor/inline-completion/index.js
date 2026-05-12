@@ -33,6 +33,11 @@ function atWordBoundary(prefix) {
   return BOUNDARY_RE.test(prefix)
 }
 
+function isAtEndOfLine(suffix) {
+  if (!suffix) return true
+  return /^\s*(\n|$)/.test(suffix)
+}
+
 function buildGhostDecoration(doc, pos, text) {
   const widget = document.createElement('span')
   widget.className = 'inline-completion-ghost'
@@ -184,6 +189,7 @@ export function createInlineCompletionPlugin(config) {
             if (!ctx) return
             if (ctx.prefix.trim().length < 3) return
             if (config.wordBoundaryOnly && !atWordBoundary(ctx.prefix)) return
+            if (!isAtEndOfLine(ctx.suffix)) return
             debounceTimer = setTimeout(() => triggerCompletion(view, ctx), config.debounceMs ?? 350)
           }
         },

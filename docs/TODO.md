@@ -17,6 +17,8 @@ when complete move stuff to complete. its just that easy
 
 ## Features
 
+* [ ] need to add stuff in the top menu like opening a workspace. outside the app window
+
 * [ ] comprehensive editor testing. so we need to test all inputs like ' [[' ' ```mermaid' ect
 
 * [X] **Discover workspaces/files on the network** — mDNS-based LAN discovery of active shares; Peers panel shows favorited collaborators by default with a Discover button to see everyone broadcasting; two-axis permission model (content scope + view/comment/copy level); comment sync back to owner. See `docs/specs/2026-05-05-network-discovery-design.md`.

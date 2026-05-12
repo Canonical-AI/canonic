@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -152,8 +152,69 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      spellcheck: true,
     },
     backgroundColor: "#0C0E12",
+  });
+
+  mainWindow.webContents.on("context-menu", (event, params) => {
+    const menu = new Menu();
+
+    // Add spelling suggestions
+    for (const suggestion of params.dictionarySuggestions) {
+      menu.append(
+        new MenuItem({
+          label: suggestion,
+          click: () => mainWindow.webContents.replaceMisspelling(suggestion),
+        }),
+      );
+    }
+
+    // Allow adding to dictionary
+    if (params.misspelledWord) {
+      menu.append(
+        new MenuItem({
+          label: `Add "${params.misspelledWord}" to Dictionary`,
+          click: () =>
+            mainWindow.webContents.session.addWordToSpellCheckerDictionary(
+              params.misspelledWord,
+            ),
+        }),
+      );
+    }
+
+    if (menu.items.length > 0) menu.append(new MenuItem({ type: "separator" }));
+
+    // macOS Writing Tools (Apple Intelligence)
+    if (process.platform === "darwin") {
+      menu.append(new MenuItem({ role: "writingTools" }));
+      menu.append(new MenuItem({ type: "separator" }));
+    }
+
+    // Standard Edit actions
+    menu.append(new MenuItem({ role: "cut", enabled: params.editFlags.canCut }));
+    menu.append(new MenuItem({ role: "copy", enabled: params.editFlags.canCopy }));
+    menu.append(new MenuItem({ role: "paste", enabled: params.editFlags.canPaste }));
+    menu.append(new MenuItem({ type: "separator" }));
+
+    // macOS Spelling & Grammar
+    if (process.platform === "darwin") {
+      menu.append(
+        new MenuItem({
+          label: "Spelling and Grammar",
+          submenu: [
+            { role: "showSpellingPanel" },
+            { role: "checkSpellingLayout" },
+            { type: "separator" },
+            { role: "checkSpelling" },
+          ],
+        }),
+      );
+    } else {
+      // Windows/Linux spelling toggle if needed (Electron doesn't have a role for this, handled by OS/Web)
+    }
+
+    menu.popup();
   });
 
   if (isDev) {
@@ -242,6 +303,125 @@ app.on("will-quit", () => {
   stopWatcher();
 });
 
+function createMenu() {
+  const template = [
+    ...(process.platform === "darwin"
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              {
+                label: "Settings...",
+                accelerator: "CmdOrCtrl+,",
+                click: () => {
+                  mainWindow?.webContents.send("menu:open-settings");
+                },
+              },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "New Workspace...",
+          accelerator: "CmdOrCtrl+N",
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow, {
+              properties: ["openDirectory", "createDirectory"],
+              title: "Create a new Canonic workspace",
+            });
+            if (!result.canceled && result.filePaths[0]) {
+              mainWindow?.webContents.send("menu:open-workspace", result.filePaths[0]);
+            }
+          },
+        },
+        {
+          label: "Open Workspace...",
+          accelerator: "CmdOrCtrl+O",
+          click: async () => {
+            const result = await dialog.showOpenDialog(mainWindow, {
+              properties: ["openDirectory", "createDirectory"],
+              title: "Open or create a Canonic workspace",
+            });
+            if (!result.canceled && result.filePaths[0]) {
+              mainWindow?.webContents.send("menu:open-workspace", result.filePaths[0]);
+            }
+          },
+        },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        ...(process.platform === "darwin"
+          ? [
+              { type: "separator" },
+              { role: "front" },
+              { type: "separator" },
+              { role: "window" },
+            ]
+          : [{ role: "close" }]),
+      ],
+    },
+    {
+      role: "help",
+      submenu: [
+        {
+          label: "Learn More",
+          click: async () => {
+            await shell.openExternal("https://canonic.local");
+          },
+        },
+      ],
+    },
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 app.whenReady().then(async () => {
   log("[main] app ready");
   try {
@@ -251,9 +431,35 @@ app.whenReady().then(async () => {
     logError("[main] setupIpcHandlers failed:", err);
   }
   
+  createMenu();
   createWindow();
   setupAutoUpdater();
   
+  // Auto-share workspace if previously enabled
+  const cfg = configService.read();
+  if (cfg?.autoShareWorkspace && cfg.defaultWorkspacePath && fs.existsSync(cfg.defaultWorkspacePath)) {
+    log("[main] auto-sharing workspace:", cfg.defaultWorkspacePath);
+    const options = {
+      ...(cfg.sharingDefaults || {}),
+      excludedPaths: cfg.sharingExcludedPaths || []
+    };
+    shareService.startWorkspaceShare(cfg.defaultWorkspacePath, options).then(result => {
+      if (result.success) {
+        const author = cfg.displayName || os.userInfo().username;
+        discoveryService.announceShare({
+          port: result.port,
+          token: result.token,
+          scope: "workspace",
+          permission: result.permission,
+          author,
+        });
+        startNetworkWatcher();
+      }
+    }).catch(err => {
+      logError("[main] auto-share failed:", err);
+    });
+  }
+
   await apiServer
     .start((event) => {
       if (event.type === "session-start") {
@@ -716,13 +922,25 @@ function setupIpcHandlers() {
         author,
       });
       startNetworkWatcher();
+
+      // Persist auto-share preference
+      if (cfg) {
+        configService.write({ ...cfg, autoShareWorkspace: true });
+      }
     }
     return result;
   });
 
   ipcMain.handle("share:stop-workspace", async () => {
     const result = shareService.stopWorkspaceShare();
-    if (result.success) discoveryService.unpublishShare(result.port);
+    if (result.success) {
+      discoveryService.unpublishShare(result.port);
+      // Persist auto-share preference
+      const cfg = configService.read();
+      if (cfg) {
+        configService.write({ ...cfg, autoShareWorkspace: false });
+      }
+    }
     return result;
   });
 
@@ -767,11 +985,15 @@ function setupIpcHandlers() {
       const { default: fetch } = await import("node-fetch");
       const res = await fetch(
         `http://${peer.host}:${peer.port}/manifest?token=${peer.token}`,
-        { timeout: 5000 }
+        { timeout: 10000 }
       );
-      if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+      if (!res.ok) {
+        logError(`[peers] manifest fetch failed for ${peerId}: HTTP ${res.status}`);
+        return { success: false, error: `HTTP ${res.status}` };
+      }
       return { success: true, ...(await res.json()) };
     } catch (err) {
+      logError(`[peers] manifest fetch error for ${peerId}:`, err);
       return { success: false, error: err.message };
     }
   });
@@ -783,11 +1005,15 @@ function setupIpcHandlers() {
       const { default: fetch } = await import("node-fetch");
       const res = await fetch(
         `http://${peer.host}:${peer.port}/file?path=${encodeURIComponent(relPath)}&token=${peer.token}`,
-        { timeout: 8000, headers: { Accept: "application/json" } }
+        { timeout: 15000, headers: { Accept: "application/json" } }
       );
-      if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+      if (!res.ok) {
+        logError(`[peers] file fetch failed for ${peerId}/${relPath}: HTTP ${res.status}`);
+        return { success: false, error: `HTTP ${res.status}` };
+      }
       return { success: true, ...(await res.json()) };
     } catch (err) {
+      logError(`[peers] file fetch error for ${peerId}/${relPath}:`, err);
       return { success: false, error: err.message };
     }
   });

@@ -78,8 +78,7 @@
                                 <span>Line numbers</span>
                                 <input
                                     type="checkbox"
-                                    v-model="showLineNumbers"
-                                    @change="toggleLineNumbers"
+                                    v-model="store.showLineNumbers"
                                 />
                             </label>
                         </div>
@@ -303,7 +302,6 @@ const activeTheme = ref(localStorage.getItem(THEME_KEY) || "hal2001");
 const themeOpen = ref(false);
 const themePickerRef = ref(null);
 const themeSearch = ref("");
-const showLineNumbers = ref(localStorage.getItem("canonic:line-numbers") === "true");
 
 // Config-extensible custom themes injected as <style> tags
 const customThemeNames = ref([]);
@@ -325,15 +323,6 @@ function applyTheme(name) {
         document.documentElement.removeAttribute("data-theme");
     } else {
         document.documentElement.setAttribute("data-theme", name);
-    }
-}
-
-function toggleLineNumbers() {
-    localStorage.setItem("canonic:line-numbers", showLineNumbers.value);
-    if (showLineNumbers.value) {
-        document.documentElement.setAttribute("data-line-numbers", "true");
-    } else {
-        document.documentElement.removeAttribute("data-line-numbers");
     }
 }
 
@@ -379,7 +368,7 @@ onMounted(async () => {
     // Apply persisted font & theme immediately
     applyFont(fontMode.value);
     applyTheme(activeTheme.value);
-    if (showLineNumbers.value) {
+    if (store.showLineNumbers) {
         document.documentElement.setAttribute("data-line-numbers", "true");
     }
 
@@ -395,6 +384,24 @@ onMounted(async () => {
     }
 
     document.addEventListener("click", onDocClick, true);
+
+    // Listen for menu events
+    if (window.canonic?.menu) {
+        window.canonic.menu.onOpenSettings(() => {
+            showSettings.value = true;
+        });
+
+        window.canonic.menu.onOpenWorkspace(async (workspacePath) => {
+            if (workspacePath) {
+                try {
+                    await store.openWorkspace(workspacePath, "blank");
+                    router.push("/workspace");
+                } catch (err) {
+                    console.error("Failed to open workspace from menu:", err);
+                }
+            }
+        });
+    }
 
     if (!store.workspacePath) {
         const last = store.recentWorkspaces[0];

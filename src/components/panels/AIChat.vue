@@ -35,8 +35,10 @@
             </div>
 
             <div v-if="streaming" class="message assistant">
-                <div class="message-content streaming">
-                    {{ streamBuffer }}<span class="cursor">▌</span>
+                <div class="message-content thinking">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
                 </div>
             </div>
         </div>
@@ -519,19 +521,26 @@ onUnmounted(() => {
     border: 1px solid var(--border);
 }
 
-.streaming {
-    color: var(--text-primary);
+.thinking {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px !important;
 }
 
-.cursor {
-    animation: blink 1s step-end infinite;
-    color: var(--accent);
+.thinking .dot {
+    width: 6px;
+    height: 6px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    animation: bounce 1.4s infinite ease-in-out both;
 }
 
-@keyframes blink {
-    50% {
-        opacity: 0;
-    }
+.thinking .dot:nth-child(1) { animation-delay: -0.32s; }
+.thinking .dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1.0); }
 }
 
 .usage-bar {

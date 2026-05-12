@@ -2,7 +2,7 @@
 
 This is the complete usage guide for Canonic. If you're new, start at the top. If you're looking for something specific, jump to the relevant section.
 
-![2001 monkey gif - Bad Books, Good Times](https://www.startpage.com/av/proxy-image?piurl=https%3A%2F%2Fi1.wp.com%2Fbadbooksgoodtimes.com%2Fwp-content%2Fuploads%2F2017%2F03%2F2001-monkey-gif.gif%3Ffit%3D540%252C250%26ssl%3D1\&sp=1778471545Tc9e7edd86387c75b72d201ac3e6c5654cd5404dcc3d6d7cf5914396bc4727c72 "2001 monkey gif - Bad Books, Good Times")
+![2001 monkey gif - Bad Books, Good Times](https://www.startpage.com/av/proxy-image?piurl=https%3A%2F%2Fi1.wp.com%2Fbadbooksgoodtimes.com%2Fwp-content%2Fuploads%2F2017%2F03%2F2001-monkey-gif.gif%3Ffit%3D540%252C250%26ssl%3D1\&sp=1778471545Tc9e7edd86387c75b72d201ac3e6c5654cd5404dcc3d6d7cf5914396bc4727c72)
 
 ***
 

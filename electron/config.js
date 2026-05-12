@@ -12,6 +12,8 @@ const DEFAULTS = {
   telemetryEnabled: false,
   autoUpdate: true,
   updateChannel: "stable",
+  autoShareWorkspace: false,
+  sharingExcludedPaths: [],
   sharingDefaults: {
     scope: "file",
     permission: "view",

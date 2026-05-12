@@ -14,6 +14,15 @@
 
     <!-- FAVORITES VIEW -->
     <div v-if="view === 'favorites'" class="panel-body">
+      <div class="discover-header">
+        <div class="discover-meta">
+          {{ store.favoritedPeers.length }} favorite{{ store.favoritedPeers.length !== 1 ? 's' : '' }}
+        </div>
+        <button class="refresh-btn" @click="refreshDiscover" :disabled="discovering">
+          <RefreshCw :size="13" :class="{ spin: discovering }" />
+        </button>
+      </div>
+
       <!-- Demo mode: show favorited peers (demoPeers + any favorited from Discover) -->
       <template v-if="store.isDemoMode">
         <div v-if="!store.demoPeers.length && !store.favoritedPeers.length" class="empty-hint">
@@ -22,7 +31,7 @@
 
         <!-- Legacy demo peers (Priya, Ben) -->
         <div v-for="peer in store.demoPeers" :key="peer.id" class="peer-group">
-          <div class="peer-header">
+          <div class="peer-header" @click="togglePeerFiles(peer)">
             <div class="peer-avatar">{{ initials(peer.name) }}</div>
             <div class="peer-info">
               <span class="peer-name">{{ peer.name }}</span>
@@ -31,28 +40,30 @@
             <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
               <span class="status-dot" />
             </div>
-            <button class="icon-btn unfav-btn" title="Unfavorite" @click="unfavoriteDemoPeer(peer.id)">
+            <button class="icon-btn unfav-btn" title="Unfavorite" @click.stop="unfavoriteDemoPeer(peer.id)">
               <Star :size="13" fill="currentColor" />
             </button>
           </div>
-          <div class="peer-workspace-name">{{ peer.workspaceName }}</div>
-          <div class="peer-files">
-            <button
-              v-for="file in peer.files"
-              :key="file.path"
-              class="peer-file"
-              @click="openDemoFile(peer, file)"
-            >
-              <FileText :size="13" />
-              <span class="file-name">{{ file.name }}</span>
-              <span class="perm-badge" :class="file.permission ?? 'view'">{{ file.permission ?? 'view' }}</span>
-            </button>
+          <div v-if="peerFilesExpanded[peer.id]" class="peer-files-container">
+            <div class="peer-workspace-name">{{ peer.workspaceName }}</div>
+            <div class="peer-files">
+              <button
+                v-for="file in peer.files"
+                :key="file.path"
+                class="peer-file"
+                @click="openDemoFile(peer, file)"
+              >
+                <FileText :size="13" />
+                <span class="file-name">{{ file.name }}</span>
+                <span class="perm-badge" :class="file.permission ?? 'view'">{{ file.permission ?? 'view' }}</span>
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Discovered peers that were favorited -->
         <div v-for="peer in store.favoritedPeers" :key="peer.id" class="peer-group">
-          <div class="peer-header">
+          <div class="peer-header" @click="togglePeerFiles(peer)">
             <div class="peer-avatar">{{ initials(peer.name) }}</div>
             <div class="peer-info">
               <span class="peer-name">{{ peer.name }}</span>
@@ -61,11 +72,11 @@
             <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
               <span class="status-dot" />
             </div>
-            <button class="icon-btn unfav-btn" title="Unfavorite" @click="toggleFavorite(peer)">
+            <button class="icon-btn unfav-btn" title="Unfavorite" @click.stop="toggleFavorite(peer)">
               <Star :size="13" fill="currentColor" />
             </button>
           </div>
-          <div class="peer-offline-hint">{{ peer.online ? 'Online — not sharing files' : 'Offline' }}</div>
+          <div v-if="peerFilesExpanded[peer.id]" class="peer-offline-hint">{{ peer.online ? 'Online — not sharing files' : 'Offline' }}</div>
         </div>
       </template>
 
@@ -76,7 +87,7 @@
         </div>
 
         <div v-for="peer in store.favoritedPeers" :key="peer.id" class="peer-group">
-          <div class="peer-header">
+          <div class="peer-header" @click="togglePeerFiles(peer)">
             <div class="peer-avatar">{{ initials(peer.name) }}</div>
             <div class="peer-info">
               <span class="peer-name">{{ peer.name }}</span>
@@ -85,14 +96,14 @@
             <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
               <span class="status-dot" />
             </div>
-            <button class="icon-btn unfav-btn" title="Unfavorite" @click="store.unfavoritePeer(peer.id)">
+            <button class="icon-btn unfav-btn" title="Unfavorite" @click.stop="store.unfavoritePeer(peer.id)">
               <Star :size="13" fill="currentColor" />
             </button>
           </div>
 
-          <div v-if="peer.online">
+          <div v-if="peerFilesExpanded[peer.id] && peer.online">
             <div v-if="peerFiles[peer.id] === undefined" class="peer-files-loading">
-              <button class="load-files-btn" @click="loadFiles(peer)">Load files…</button>
+              <Loader :size="12" class="spin" /> Loading files…
             </div>
             <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
               Could not load files.
@@ -111,15 +122,23 @@
               </button>
             </div>
           </div>
-          <div v-else class="peer-offline-hint">Offline — can't load files</div>
+          <div v-else-if="peerFilesExpanded[peer.id]" class="peer-offline-hint">Offline — can't load files</div>
         </div>
       </template>
     </div>
 
     <!-- DISCOVER VIEW -->
     <div v-if="view === 'discover'" class="panel-body">
-      <div v-if="discovering" class="discover-spinner">
-        <Loader :size="14" class="spin" /> Scanning network…
+      <div class="discover-header">
+        <div v-if="discovering" class="discover-spinner">
+          <Loader :size="14" class="spin" /> Scanning…
+        </div>
+        <div v-else class="discover-meta">
+          {{ allDiscovered.length }} peer{{ allDiscovered.length !== 1 ? 's' : '' }} found
+        </div>
+        <button class="refresh-btn" @click="refreshDiscover" :disabled="discovering">
+          <RefreshCw :size="13" :class="{ spin: discovering }" />
+        </button>
       </div>
 
       <div v-if="!discovering && allDiscovered.length === 0" class="empty-hint">
@@ -170,7 +189,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useAppStore } from '../../store'
-import { FileText, Star, AlertTriangle, Loader, Eye } from 'lucide-vue-next'
+import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw } from 'lucide-vue-next'
 import demoConfig from "../../demo/config.json"
 
 const store = useAppStore()
@@ -180,6 +199,7 @@ const view = ref('favorites')
 const discovering = ref(false)
 const allDiscovered = ref([])
 const peerFiles = reactive({}) // peerId -> string[] | null | undefined
+const peerFilesExpanded = reactive({}) // peerId -> boolean
 
 function initials(name) {
   return (name || '?').split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -192,6 +212,10 @@ function basename(relPath) {
 async function switchToDiscover() {
   view.value = 'discover'
   if (allDiscovered.value.length > 0) return
+  await refreshDiscover()
+}
+
+async function refreshDiscover() {
   if (store.isDemoMode) {
     allDiscovered.value = demoConfig.discoveredPeers || []
     return
@@ -205,6 +229,15 @@ async function switchToDiscover() {
   }
 }
 
+async function togglePeerFiles(peer) {
+  const isExpanded = !!peerFilesExpanded[peer.id]
+  peerFilesExpanded[peer.id] = !isExpanded
+
+  if (!isExpanded && peerFiles[peer.id] === undefined && !store.isDemoMode) {
+    await loadFiles(peer)
+  }
+}
+
 async function loadFiles(peer) {
   peerFiles[peer.id] = undefined // show loading state
   const result = await api.peers.fetchManifest(peer.id)
@@ -212,9 +245,15 @@ async function loadFiles(peer) {
 }
 
 async function openFile(peer, relPath) {
-  const result = await api.peers.openFile(peer.id, relPath)
-  if (result.success) {
-    store.openPeerFile({ peer, relPath, content: result.content })
+  try {
+    const result = await api.peers.openFile(peer.id, relPath)
+    if (result.success) {
+      store.openPeerFile({ peer, relPath, content: result.content })
+    } else {
+      alert(`Could not open file: ${result.error || 'Unknown error'}`)
+    }
+  } catch (err) {
+    alert(`Could not open file: ${err.message}`)
   }
 }
 
@@ -299,10 +338,38 @@ function toggleFavorite(peer) {
 .tab:hover { color: var(--text-secondary); }
 .tab.active { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 500; }
 
+.discover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.discover-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.refresh-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
 .panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0 12px;
+  padding: 0 0 12px;
 }
 
 .empty-hint {
@@ -321,7 +388,11 @@ function toggleFavorite(peer) {
   align-items: center;
   gap: 7px;
   padding: 6px 10px;
+  cursor: pointer;
+  transition: background 0.1s;
+  user-select: none;
 }
+.peer-header:hover { background: var(--bg-hover); }
 
 .peer-avatar {
   width: 26px;

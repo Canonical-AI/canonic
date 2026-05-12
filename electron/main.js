@@ -276,7 +276,7 @@ function setupAutoUpdater() {
 
   // Read channel preference at boot (changing channel requires restart)
   const cfg = configService.read();
-  autoUpdater.currentVersion = app.getVersion() || require("../package.json").version;
+  autoUpdater.currentVersion = semver.parse(app.getVersion() || require("../package.json").version);
   autoUpdater.autoDownload = false; // downloads are controlled manually
   autoUpdater.allowPrerelease = cfg?.updateChannel === "experimental";
 

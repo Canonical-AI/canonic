@@ -383,6 +383,11 @@ onMounted(async () => {
         document.documentElement.setAttribute("data-line-numbers", "true");
     }
 
+    // Load version info
+    if (window.canonic?.app?.getVersion) {
+        store.appVersion = await window.canonic.app.getVersion();
+    }
+
     // Load config to register any custom themes
     await store.loadConfig();
     if (store.config?.themes) {

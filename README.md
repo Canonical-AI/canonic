@@ -11,7 +11,7 @@
 ---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.2--alpha-orange.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.0.4--alpha-orange.svg)](package.json)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#installation)
 
 </div>

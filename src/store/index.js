@@ -70,6 +70,7 @@ export const useAppStore = defineStore("app", () => {
   const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
   const fileIndex = ref({});
+  const appVersion = ref(__APP_VERSION__ || "");
 
   const api = window.canonic;
 
@@ -1016,5 +1017,6 @@ export const useAppStore = defineStore("app", () => {
     setActiveComment,
     copyPeerFileToWorkspace,
     fileIndex,
+    appVersion,
   };
 });

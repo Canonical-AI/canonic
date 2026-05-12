@@ -17,6 +17,8 @@ when complete move stuff to complete. its just that easy
 
 ## Features
 
+* [ ] need a backup setting where it auto backs up to a hidden directoru. again maybe user can set that to an icloud location? or windows or dropbox or whatever
+
 * [ ] need to add stuff in the top menu like opening a workspace. outside the app window
 
 * [ ] comprehensive editor testing. so we need to test all inputs like ' [[' ' ```mermaid' ect

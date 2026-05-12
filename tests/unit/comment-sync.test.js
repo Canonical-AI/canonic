@@ -8,7 +8,7 @@
  * Key invariant: sync only happens when the peer is online (present in onlinePeers).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -16,6 +16,15 @@ import path from 'path'
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const tmpBase = path.join(os.tmpdir(), `canonic-sync-test-${process.pid}`)
+
+// Mock os.homedir to use our temp directory instead of the real one
+vi.mock('os', async () => {
+  const actual = await vi.importActual('os')
+  return {
+    ...actual,
+    homedir: () => tmpBase
+  }
+})
 
 function makePeerCommentsDir(base) {
   const dir = path.join(base, 'peers')

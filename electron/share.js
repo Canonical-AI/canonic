@@ -481,7 +481,7 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   }, 30000)
   share.heartbeat = heartbeat
 
-  server.listen(PORT, '0.0.0.0')
+  server.listen(PORT, '127.0.0.1')
   activeShares.set(WORKSPACE_KEY, share)
 
   const lanIP = getLanIP()
@@ -676,7 +676,7 @@ async function startShare(workspacePath, filePath, options = {}) {
   }, 30000)
   share.heartbeat = heartbeat
 
-  server.listen(PORT, '0.0.0.0')
+  server.listen(PORT, '127.0.0.1')
   activeShares.set(filePath, share)
 
   const lanIP = getLanIP()

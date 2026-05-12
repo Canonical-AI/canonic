@@ -1,9 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
 const tmpDir = path.join(os.tmpdir(), `canonic-share-test-${process.pid}`)
+
+// Mock os.homedir to use our temp directory instead of the real one
+vi.mock('os', async () => {
+  const actual = await vi.importActual('os')
+  return {
+    ...actual,
+    homedir: () => tmpDir
+  }
+})
+
 const workspaceDir = path.join(tmpDir, 'workspace')
 fs.mkdirSync(workspaceDir, { recursive: true })
 fs.writeFileSync(path.join(workspaceDir, 'doc.md'), '# Hello', 'utf-8')

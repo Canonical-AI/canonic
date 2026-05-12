@@ -9,6 +9,11 @@ contextBridge.exposeInMainWorld("canonic", {
     validate: (config) => ipcRenderer.invoke("config:validate", config),
   },
 
+  // App
+  app: {
+    getVersion: () => ipcRenderer.invoke("app:version"),
+  },
+
   // Telemetry
   telemetry: {
     log: (event, details) =>

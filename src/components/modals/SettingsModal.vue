@@ -256,6 +256,9 @@
                             </button>
                             <span v-if="updateStatus" class="update-status">{{ updateStatus }}</span>
                         </div>
+                        <div class="field" style="margin-top: 32px; opacity: 0.6">
+                            <p class="field-hint">Current version: v{{ store.appVersion }}</p>
+                        </div>
                     </div>
 
                     <!-- Reset tab -->

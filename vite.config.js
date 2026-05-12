@@ -21,6 +21,7 @@ export default defineConfig({
     __BUILD_COMMIT__: JSON.stringify(commit),
     __BUILD_BRANCH__: JSON.stringify(branch),
     __BUILD_DATE__: JSON.stringify(buildDate),
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || require('./package.json').version),
   },
   plugins: [vue()],
   base: './',

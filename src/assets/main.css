@@ -169,3 +169,82 @@ button:focus:not(:focus-visible) { outline: none; }
   user-select: none;
   white-space: pre;
 }
+/* ── Editor Gutter & Line Numbers ── */
+.editor-gutter {
+  display: none;
+  position: absolute;
+  left: -32px; /* Pull gutter closer to sidebar */
+  top: 0;
+  width: 24px; /* Slightly narrower gutter */
+  user-select: none;
+  pointer-events: none;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+[data-line-numbers="true"] .editor-gutter {
+  display: block;
+}
+
+[data-line-numbers="true"] .milkdown {
+  position: relative;
+}
+
+.gutter-line {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 0.1em;
+}
+
+/* ── Block Handles & Drag-and-Drop ── */
+.milkdown .block-handle-dom {
+  position: absolute;
+  left: -22px; /* Positioned just to the left of content */
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+}
+
+/* If line numbers are on, shift the block handle further left so they don't overlap */
+[data-line-numbers="true"] .milkdown .block-handle-dom {
+  left: -58px; /* Offset to clear the 48px gutter area */
+}
+
+/* Drop indicator styling */
+.milkdown .block-drag-placeholder {
+  height: 2px;
+  background: var(--accent);
+  margin: 4px 0;
+  border-radius: 1px;
+}
+
+/* Selection highlight for active dragging */
+.milkdown.is-dragging {
+  cursor: grabbing;
+}
+
+/* Fix spacing between adjacent lists created by block reordering */
+.milkdown ul + ul,
+.milkdown ol + ol,
+.milkdown ul + ol,
+.milkdown ol + ul {
+  margin-top: -1em;
+}
+
+.drop-indicator {
+  position: absolute;
+  height: 2px;
+  background: var(--accent);
+  z-index: 1000;
+  pointer-events: none;
+  display: none;
+  border-radius: 1px;
+  box-shadow: 0 0 4px var(--accent);
+}

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, reactive, computed, watch } from "vue";
-import demoConfig from "../../public/demo/config.json";
+import demoConfig from "../demo/config.json";
 
 export const useAppStore = defineStore("app", () => {
   const workspacePath = ref(null);
@@ -41,7 +41,7 @@ export const useAppStore = defineStore("app", () => {
     localStorage.setItem("canonic:sidebarCollapsed", String(val));
   });
   const rightPanelCollapsed = ref(
-    localStorage.getItem("canonic:rightPanelCollapsed") === "true",
+    localStorage.getItem("canonic:rightPanelCollapsed") !== "false",
   );
   watch(rightPanelCollapsed, (val) => {
     localStorage.setItem("canonic:rightPanelCollapsed", String(val));
@@ -105,6 +105,16 @@ export const useAppStore = defineStore("app", () => {
 
   if (api.files.onIndexUpdate) {
     api.files.onIndexUpdate((idx) => { fileIndex.value = idx });
+  }
+
+  if (api.git.onBranchUpdate) {
+    api.git.onBranchUpdate(() => {
+      refreshBranches();
+      if (currentFile.value) {
+        checkFileStatus();
+        loadCommitLog();
+      }
+    });
   }
 
 
@@ -190,6 +200,14 @@ export const useAppStore = defineStore("app", () => {
       comments.value = [];
       await refreshFiles();
       await refreshBranches();
+
+      // Restore last used branch if it exists in the workspace
+      const cfg = await loadConfig();
+      if (cfg?.lastBranch && branches.value.includes(cfg.lastBranch)) {
+        await api.git.checkout(workspacePath.value, cfg.lastBranch);
+        currentBranch.value = cfg.lastBranch;
+      }
+
       await loadDocBranchMap();
       await loadTrash();
       if (api.peers?.list) {
@@ -370,11 +388,13 @@ export const useAppStore = defineStore("app", () => {
       unsavedBuffer[currentFile.value] = currentContent.value;
     }
 
-    // Switch to the branch this document is on
-    const docBranch = docBranchMap.value[filePath]?.activeBranch || "main";
-    if (docBranch !== currentBranch.value) {
-      const result = await api.git.checkout(workspacePath.value, docBranch);
-      if (result.success) currentBranch.value = docBranch;
+    // Switch to the branch this document is on (only in internal branching mode)
+    if (!isExternalRepo.value) {
+      const docBranch = docBranchMap.value[filePath]?.activeBranch || "main";
+      if (docBranch !== currentBranch.value) {
+        const result = await api.git.checkout(workspacePath.value, docBranch);
+        if (result.success) currentBranch.value = docBranch;
+      }
     }
 
     const diskContent = await api.files.read(workspacePath.value, filePath);
@@ -510,9 +530,24 @@ export const useAppStore = defineStore("app", () => {
 
   async function switchWorkspaceBranch(name) {
     if (!workspacePath.value) return;
+
+    // Safety check for uncommitted changes
+    const { modified } = await api.git.status(workspacePath.value);
+    if (modified.length > 0 || isDirty.value) {
+      const confirmed = await api.dialog.confirm(
+        "Uncommitted changes",
+        "You have uncommitted changes. Switching branches may lose these changes or cause conflicts. Continue?"
+      );
+      if (!confirmed) return { success: false, cancelled: true };
+    }
+
     const result = await api.git.checkout(workspacePath.value, name);
     if (result.success) {
       currentBranch.value = name;
+      // Persist workspace branch choice
+      const currentConfig = await loadConfig();
+      await saveConfig({ ...currentConfig, lastBranch: name });
+
       await refreshFiles();
       if (currentFile.value) {
         const content = await api.files.read(workspacePath.value, currentFile.value);

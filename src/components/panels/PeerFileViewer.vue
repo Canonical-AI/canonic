@@ -217,7 +217,11 @@ function onMarkClick(e) {
   e.stopPropagation()
   const qt = mark.dataset.anchor
   const comment = store.peerFileComments.find(c => c.anchor?.quotedText === qt)
-  if (comment) store.setActiveComment(comment.id)
+  if (comment) {
+    store.setActiveComment(comment.id)
+    store.rightPanelTab = 'comments'
+    store.rightPanelCollapsed = false
+  }
 }
 
 // When activeCommentId changes (e.g. user clicked a sidebar card),

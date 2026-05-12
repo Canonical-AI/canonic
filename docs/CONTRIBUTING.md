@@ -14,13 +14,13 @@ Before creating bug reports, please check the existing issues as you might find 
 
 * Use a clear and descriptive title.
 
-* Describe the exact steps to reproduce the problem.
-
 * Provide specific examples or screenshots to demonstrate the steps.
 
 * Describe the behavior you observed and point out what exactly is the problem with that behavior.
 
 * Explain which behavior you expected to see instead.
+
+* Describe the exact steps to reproduce the problem.
 
 ### Suggesting Enhancements
 

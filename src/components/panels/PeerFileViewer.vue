@@ -25,7 +25,12 @@
 
     <!-- Document body -->
     <div class="viewer-body" ref="bodyEl" @mouseup="onMouseUp" @click="onBodyClick" @click.capture="onMarkClick">
-      <div class="viewer-prose" v-html="renderedContent" />
+      <div class="viewer-layout">
+        <div class="viewer-gutter">
+          <div v-for="n in lineCount" :key="n" class="gutter-line">{{ n }}</div>
+        </div>
+        <div class="viewer-prose" v-html="renderedContent" />
+      </div>
     </div>
 
     <!-- Selection popover — "Add comment" button -->
@@ -103,6 +108,11 @@ const permIcon = computed(() => ({ view: Eye, comment: MessageSquare, copy: Copy
 
 const selectionPopover = ref({ visible: false, x: 0, y: 0, text: '' })
 const commentInput = ref({ visible: false, text: '' })
+
+const lineCount = computed(() => {
+  if (!content.value) return 0
+  return content.value.split('\n').length
+})
 
 const renderedContent = computed(() => {
   try { return marked.parse(content.value) } catch { return `<pre>${content.value}</pre>` }
@@ -412,17 +422,50 @@ async function copyToWorkspace() {
 .viewer-body {
   flex: 1;
   overflow-y: auto;
-  padding: 40px 60px;
+  padding: 40px 0;
   position: relative;
   user-select: text;
 }
 
-.viewer-prose {
-  max-width: 680px;
+.viewer-layout {
+  display: flex;
+  max-width: 800px;
   margin: 0 auto;
+  position: relative;
+}
+
+.viewer-gutter {
+  width: 48px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 16px;
+  padding-top: 0.1em;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  user-select: none;
+  opacity: 0.5;
+  border-right: 1px solid var(--border);
+  display: none;
+}
+
+:global([data-line-numbers="true"]) .viewer-gutter {
+  display: block;
+}
+
+.gutter-line {
+  line-height: 1.7; /* Match viewer-prose line-height */
+  height: 1.7em;
+}
+
+.viewer-prose {
+  flex: 1;
+  padding-left: 40px;
+  padding-right: 40px;
   color: var(--text-primary);
   line-height: 1.7;
   font-size: 0.9375rem;
+  min-width: 0;
 }
 
 .viewer-prose :deep(h1) { font-size: 1.75rem; font-weight: 700; margin: 0 0 8px; }

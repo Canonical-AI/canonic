@@ -6,15 +6,17 @@
 
     "Vision/north-star-metric.md": "# North Star Metric\n\n> The one metric that best captures whether we're delivering value.\n\n## Our North Star\n\n**Committed documents per active workspace per month** — how many documents a user saves a checkpoint commit on.\n\nCurrent baseline: 0 (pre-launch). Target at 90 days: 3+ committed docs per active workspace per month.\n\n## Why This Metric\n\nA commit is a meaningful act. It means the user trusted the document enough to snapshot it. It's the PM equivalent of merging a PR. If users aren't committing, they're using Canonic like a notes app — which means we haven't solved the alignment problem, we've just replaced Notion with a different notes app.\n\nHigh commit frequency signals: the user understands the value of version control, they have something worth preserving, and they're building a habit around it.\n\n## Leading Indicators\n\n- Time-to-first-commit per new workspace (are they getting it?)\n- Sessions per week per user (are they coming back?)\n- AI messages per session (are they thinking harder before committing?)\n- Comments added per document (are they collaborating?)\n",
 
-    "Strategy/strategy.md": "# Strategy\n\n> How we'll achieve the vision given our constraints.\n\n## Strategic Bets\n\n**1. Win the solo PM first.** No collaboration features required to get value. The version history alone is better than anything a PM has today. Land the solo use case, then expand to teams. Don't build team features before solo is loved.\n\n**2. Git vocabulary, PM framing.** Don't hide the model — explain it in context. \"Branch\" is a draft. \"Commit\" is a checkpoint. \"Merge\" is graduating a draft to main. PMs who understand the metaphor become evangelists. The README in every workspace explains this. Every modal explains this.\n\n**3. AI as thinking partner, not ghostwriter.** Every other AI writing tool competes on output quality. We compete on decision quality. The AI asks questions, challenges assumptions, points out what's missing. It doesn't write your PRD — it makes your PRD worth building from. The system prompt is tuned specifically for this.\n\n**4. Open source → paid hosting.** Release the desktop app free and open source. Sell the infrastructure later — hosted relay, sync server, team access management. This keeps the core trustworthy and gives us a credible enterprise path without pressure to monetize day one.\n\n## What We're NOT Doing\n\n- Building a project tracker. Canonic is for pre-build alignment, not sprint management. The moment we add assignees and due dates, we become Notion.\n- Building a web app (v1). Local-first means local-first. The desktop app is the product. A web app would require us to store data, which breaks the trust model.\n- Real-time collaborative editing. Async review is the right model for pre-build documents. Google Docs already does real-time better than we could.\n- Replacing GitHub for engineers. This is PM-layer tooling. It sits above the code.\n\n## Key Assumptions\n\n- PMs will adopt a new tool if it clearly solves version history — the pain is high enough to justify switching.\n- The Git mental model is learnable by non-engineers if the UI explains it clearly and in context.\n- AI that pushes back is more valuable than AI that agrees with you and writes for you.\n- Open source creates enough trust and distribution to make a paid hosting tier viable later.\n",
+    "Strategy/strategy.md": "# Strategy\n\n> How we'll achieve the vision given our constraints.\n\n## Strategic Bets\n\n**1. Win the solo PM first.** No collaboration features required to get value. The version history alone is better than anything a PM has today. Land the solo use case, then expand to teams. Don't build team features before solo is loved.\n\n**2. Git vocabulary, PM framing.** Don't hide the model — explain it in context. \"Branch\" is a draft. \"Commit\" is a checkpoint. \"Merge\" is graduating a draft to main. PMs who understand the metaphor become evangelists. The README in every workspace explains this. Every modal explains this.\n\n**3. AI as thinking partner, not ghostwriter.** Every other AI writing tool competes on output quality. We compete on decision quality. The AI asks questions, challenges assumptions, points out what's missing. It doesn't write your PRD — it makes your PRD worth building from. The system prompt is tuned specifically for this.\n\n**4. Open source → paid hosting.** Release the desktop app free and open source. Sell the infrastructure later — hosted relay, sync server, team access management. This keeps the core trustworthy and gives us a credible enterprise path without pressure to monetize day one.\n\n## What We're NOT Doing\n\n- Building a project tracker. Canonic is for pre-build alignment, not sprint management. The moment we add assignees and due dates, we become Notion.\n- Building a web app (v1). Local-first means local-first. The desktop app is the product. A web app would require us to store data, which breaks the trust model.\n- Real-time collaborative editing. Async review is the right model for pre-build documents. Google Docs already does real-time better than we could.\n- Replacing GitHub for engineers. This is PM-layer tooling. It sits above the code.\n\n## Key Assumptions\n\n- PMs will adopt a new tool if it clearly solves version history — the pain is high enough to justify switching.\n- The Git mental model is learnable by non-engineers if the UI explains it clearly and in context.\n- AI-assisted critical thinking is more valuable to a PM than AI-assisted drafting.\n",
 
     "Strategy/competitive-analysis.md": "# Competitive Analysis\n\n## Landscape Overview\n\nThe PM document space is dominated by general-purpose collaboration tools (Notion, Google Docs, Confluence) and task managers that bolt on docs (Linear, Jira). Nobody is building specifically for the problem of document versioning and pre-build alignment. That's the opening.\n\n## Competitors\n\n| Competitor | Strengths | Weaknesses | Our Differentiation |\n|---|---|---|---|\n| **Notion** | Flexible, widely adopted, good for wikis | No real version history, comments get lost, no branching concept | Git-native history + named versions + branch drafts |\n| **Google Docs** | Real-time collab, version history exists | Version history auto-saves every few seconds — useless for \"what did we decide\" | Meaningful commits you choose, not noise |\n| **Confluence** | Enterprise adoption, structured pages | Terrible UX, no AI, nobody actually reads Confluence docs | Modern editor, AI that challenges, not just stores |\n| **Linear** | Excellent engineering workflow | Documents are second-class citizens, no deep PM tooling | Documents as first-class artifacts with full git history |\n| **Obsidian** | Local-first, powerful, markdown | No collaboration, no PM templates, no AI | Collaboration + PM-specific templates + AI thinking partner |\n\n## Where We Win\n\nGit under the hood means a real history model — branching, merging, named versions, diffs. No other PM tool has this because they built on databases, not files. That's not a feature gap we can close with a changelog modal — it's a fundamental architectural difference.\n\nThe AI angle is genuinely different: we tune the system prompt to ask questions, not generate answers. Most AI writing tools make you lazier. We're trying to make PMs think harder before they commit.\n\nLocal-first is a real differentiator for privacy-conscious teams. Your strategy never leaves your machine unless you choose to share it.\n",
 
-    "Planning/roadmap.md": "# Roadmap\n\n> What we're building and roughly when. See [[product-vision]] for where this is headed and [[strategy]] for how we're getting there.\n\n## Now (Q2 2026)\n\nActive work — in flight or next up.\n\n- [x] Git version control per document: commit, branch, merge, history\n- [x] Named versions with restore (snapshot any commit as \"v1.0\", \"approved\", \"sent-to-eng\")\n- [x] Fork document to a new branch draft\n- [x] History panel with commit log and diff view\n- [x] AI chat sidebar (thinking partner, not ghostwriter)\n- [x] Inline comments anchored to selected text\n- [x] Sharing via Cloudflare Tunnel (token-secured links, one click)\n- [x] Demo mode\n- [ ] Show uncommitted changes indicator clearly in editor\n- [ ] Collapsible sidebar\n\n## Next (Q3 2026)\n\nCommitted, not yet started. Building toward team collaboration.\n\n- [ ] Peer document sync — view a teammate's workspace read-only, synced via git fetch\n- [ ] Agent web search — AI can pull in external research on demand during a conversation\n- [ ] Agent inline suggestions — ghost diff lines the user can accept or reject without leaving the doc\n- [ ] Terminal pane — run CLI commands in the context of the workspace\n- [ ] **Claude Code integration** — \"update the app to reflect this PRD\" launches a Claude Code session pointed at the committed document\n\n## Later\n\nDirectional. Subject to change based on what we learn.\n\n- Hosted relay (paid tier) — team sync without self-hosting\n- Team access management — share workspaces with ACLs\n- Git hooks for document quality (e.g., require filled sections before a commit can be saved)\n- Mobile read-only client\n\n## Deprioritized\n\n- Real-time collaborative editing: async review is the right model; Google Docs already does real-time better than we could, and building it would require a server\n- Web app: local-first is the differentiator; hosting docs breaks the trust model\n- Jira/Linear/Notion integrations: distraction until the core loop is loved\n\n## Delivery Timeline\n\n```mermaid\ngantt\n  title Q2–Q3 2026\n  dateFormat YYYY-MM-DD\n  section Now\n  Uncommitted indicator :done, 2026-05-01, 2026-05-15\n  Collapsible sidebar   :active, 2026-05-10, 2026-05-20\n  section Next\n  Peer doc sync         :2026-06-01, 2026-07-15\n  Agent inline edits    :2026-07-01, 2026-08-15\n  Claude Code integration :2026-08-01, 2026-09-30\n```\n",
+    "Planning/roadmap.md": "# Roadmap\n\n> What we're building and roughly when. See [[product-vision]] for where this is headed and [[strategy]] for how we're getting there.\n\n## Now (Q2 2026)\n\nActive work — in flight or next up.\n\n- [x] Git version control per document: commit, branch, merge, history\n- [x] Named versions with restore (snapshot any commit as \"v1.0\", \"approved\", \"sent-to-eng\")\n- [x] Fork document to a new branch draft\n- [x] History panel with commit log and diff view\n- [x] AI chat sidebar (thinking partner, not ghostwriter)\n- [x] Inline comments anchored to selected text\n- [x] Native system menu with workspace & settings actions\n- [x] Persistent workspace sharing (auto-resume on start)\n- [x] Excluded directories for sharing\n- [x] Improved peer workspace browsing\n- [x] AI \"thinking\" animation with pop-in response\n- [x] Line numbers in peer viewer\n\n## Next (Q3 2026)\n\nCommitted, not yet started. Building toward team collaboration.\n\n- [ ] Agent web search — AI can pull in external research on demand during a conversation\n- [ ] Agent inline suggestions — ghost diff lines the user can accept or reject without leaving the doc\n- [ ] Terminal pane — run CLI commands in the context of the workspace\n- [ ] **Claude Code integration** — \"update the app to reflect this PRD\" launches a Claude Code session pointed at the committed document\n",
 
-    "Discovery/problem-statement.md": "# Problem Statement\n\n> A crisp definition of the problem we're solving.\n\n## The Problem\n\nProduct managers struggle to create a shared, authoritative version of a document that the team trusts enough to build from — because the tools they use treat documents as living notes rather than versioned artifacts. This means engineering teams often start building before the PM is done thinking, and \"alignment\" is achieved through Slack threads instead of reviewed, committed documents.\n\n## Evidence\n\n- `Final_v3_APPROVED.docx` is a real naming convention used at companies with $1B+ ARR\n- Notion's version history records every keystroke — so it's technically there, but useless for reconstructing a decision\n- Engineers regularly describe getting requirement changes mid-sprint via Slack DM\n- In user interviews: \"I can tell you what the doc says today but I can't tell you what changed last week or why we changed it\"\n- The workaround (manual versioning in filenames) is universal and universally hated\n\n## Current Workarounds\n\n- Manual version naming in the filename: v1, v2, FINAL, FINAL_APPROVED, FINAL_FINAL\n- Google Docs version history — exists but not actionable (no branches, no named snapshots, no diffs between meaningful moments)\n- Printing to PDF at key moments and attaching to Jira tickets\n- Keeping duplicate files (`Strategy_old.md`) as informal archives\n\n## Success Criteria\n\nA PM opens Canonic, writes a requirements document, commits it at two stages of review, and can show an engineer the exact diff between \"first draft\" and \"approved\" — without any of those words being in the filename, without any Slack thread, and without asking anyone \"which version is the real one?\"\n",
+    "Private/hiring-plan.md": "# Unreleased Hiring Plan\n\n> ⚠ This directory is excluded from sharing by default in the demo configuration.\n\n## Next Hires\n\n1.  **Product Designer (Senior)**: Focus on complex state management in the UI.\n2.  **Growth Engineer**: Viral loops for local sharing.\n3.  **Customer Success (PM background)**: High-touch onboarding for teams.\n",
 
-    "Discovery/user-research.md": "# User Research\n\n> What we've learned directly from users.\n\n## Research Questions\n\n1. How do PMs currently manage document versions and track decisions over time?\n2. What does \"this document is ready to build from\" mean to them — and how do they signal it to engineering?\n\n## Methods\n\n10 founder interviews with B2B PMs at companies ranging from 20–400 employees. Informal survey of 40 PMs in a product community Slack.\n\n## Key Findings\n\n### Finding 1: Version history is the #1 unmet need\n\nEvery PM interviewed had a story about a decision they couldn't reconstruct. \"I know we changed this requirement but I can't find where we landed or why.\" None of them trusted their current tool's version history. Google Docs' history was described as \"too noisy to be useful\" — it saves every keystroke, so finding a meaningful moment requires scrolling through hundreds of auto-saves.\n\n### Finding 2: The \"draft → review → approved\" ritual is informal and fragile\n\nMost teams have an implicit flow but no tooling to support it. Approval happens via a Slack message or a \"LGTM\" comment in Notion. There is no authoritative moment of \"this is the committed version.\" Engineers don't know when a doc is done.\n\n### Finding 3: PMs are open to Git concepts when explained in their language\n\n\"Branch\" and \"commit\" land when you call them \"draft\" and \"checkpoint.\" Three of ten PMs in early interviews said they'd wanted something like this for years but assumed it didn't exist for non-engineers.\n\n### Finding 4: AI skepticism is high — but the framing changes everything\n\nMost PMs have tried AI writing tools and found them underwhelming. They produce generic output that still requires heavy editing. When we described AI that *asks questions instead of writes answers*, the reaction was consistently positive: \"That's actually what I need before I commit to something.\"\n\n## What This Means\n\nThe core loop is: **write → commit → review → approve.** Everything we build should make that loop faster and more trustworthy. The AI belongs at the review step, not the writing step — it should challenge the doc before the PM commits it, not help them write it faster.\n"
+    "Discovery/problem-statement.md": "# Problem Statement\n\n> A crisp definition of the problem we're solving.\n\n## The Problem\n\nProduct managers struggle to create a shared, authoritative version of a document that the team trusts enough to build from — because the tools they use treat documents as living notes rather than versioned artifacts. This means engineering teams often start building before the PM is done thinking, and \"alignment\" is achieved through Slack threads instead of reviewed, committed documents.\n\n## Evidence\n\n- `Final_v3_APPROVED.docx` is a real naming convention used at companies with $1B+ ARR\n- Notion's version history records every keystroke — so it's technically there, but useless for reconstructing a decision\n- Engineers regularly describe getting requirement changes mid-sprint via Slack DM\n- In user interviews: \"I can tell you what the doc says today but I can't tell you what changed last week or why we changed it\"\n- The workaround (manual versioning in filenames) is universal and universally hated\n",
+
+    "Discovery/user-research.md": "# User Research\n\n> What we've learned directly from users.\n\n## Key Findings\n\n### Finding 1: Version history is the #1 unmet need\n\nEvery PM interviewed had a story about a decision they couldn't reconstruct. \"I know we changed this requirement but I can't find where we landed or why.\"\n\n### Finding 2: The \"draft → review → approved\" ritual is informal and fragile\n\nMost teams have an implicit flow but no tooling to support it. Approval happens via a Slack message or a \"LGTM\" comment in Notion.\n\n### Finding 3: PMs are open to Git concepts when explained in their language\n\n\"Branch\" and \"commit\" land when you call them \"draft\" and \"checkpoint.\"\n"
   },
   "peers": [
     {
@@ -34,8 +36,7 @@
       "id": "ben-okafor",
       "name": "Ben Okafor",
       "role": "Engineering Lead",
-      "online": false,
-      "lastSeen": "3h ago",
+      "online": true,
       "workspaceName": "Ben's Platform Docs",
       "files": [
         { "path": "Discovery/problem-statement.md", "name": "problem-statement", "type": "file", "permission": "comment" },
@@ -47,17 +48,17 @@
   "discoveredPeers": [
     {
       "id": "maya-chen@maya-mbp.local",
-      "name": "maya-chen",
+      "name": "Maya Chen",
       "online": true
     },
     {
       "id": "luca-russo@luca-studio.local",
-      "name": "luca-russo",
+      "name": "Luca Russo",
       "online": true
     },
     {
       "id": "sofia-reyes@sofia-air.local",
-      "name": "sofia-reyes",
+      "name": "Sofia Reyes",
       "online": false
     }
   ],
@@ -85,146 +86,30 @@
         "text": "The upper bound worries me a bit — 200-person companies often already have process. I'd tighten to 20–100 and add 'no dedicated program manager layer' as a qualifier. That's the person who's actually in pain.",
         "resolved": false,
         "isDemo": true
-      },
-      {
-        "id": "demo-priya-2",
-        "author": "Priya Nair",
-        "authorInitials": "PN",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "Remote-first teams normalized async review. The \"walk over and ask\" fallback is gone."
-        },
-        "text": "Strong. Also worth adding: remote-first means the doc has to stand alone. When it doesn't, there's no hallway conversation to recover from it — you find out at sprint planning that eng built the wrong thing.",
-        "resolved": false,
-        "isDemo": true
-      }
-    ],
-    "Strategy/strategy.md": [
-      {
-        "id": "demo-ben-1",
-        "author": "Ben Okafor",
-        "authorInitials": "BO",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "Git vocabulary, PM framing."
-        },
-        "text": "From the eng side: the PMs I work with who understand git branching are dramatically easier to collaborate with. They stop treating docs as mutable state. Worth leaning into harder — maybe a short interactive explainer on first launch so it's not just a README.",
-        "resolved": false,
-        "isDemo": true
-      },
-      {
-        "id": "demo-priya-3",
-        "author": "Priya Nair",
-        "authorInitials": "PN",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "Open source → paid hosting."
-        },
-        "text": "The trust angle here is underrated. Half the reason PMs don't put sensitive strategy docs in SaaS tools is fear of breaches or acquisitions. 'Your files never leave your machine' is a real selling point — especially for Series A+ companies with a board that asks about data handling.",
-        "resolved": false,
-        "isDemo": true
-      },
-      {
-        "id": "demo-ben-2",
-        "author": "Ben Okafor",
-        "authorInitials": "BO",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "The Git mental model is learnable by non-engineers if the UI explains it clearly and in context."
-        },
-        "text": "This is a real assumption worth instrumenting. Suggest we track time-to-first-commit per new user and treat >48h as a signal the onboarding isn't landing. If this assumption is wrong, we need to know in week 2 not month 3.",
-        "resolved": false,
-        "isDemo": true
-      }
-    ],
-    "Strategy/competitive-analysis.md": [
-      {
-        "id": "demo-priya-4",
-        "author": "Priya Nair",
-        "authorInitials": "PN",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "Git under the hood means a real history model — branching, merging, named versions, diffs. No other PM tool has this because they built on databases, not files."
-        },
-        "text": "This is the actual moat and it's buried at the bottom. Should be the opening line of every positioning conversation. Every other PM tool is fighting over UI polish — we're fighting on a different dimension entirely.",
-        "resolved": false,
-        "isDemo": true
-      },
-      {
-        "id": "demo-ben-3",
-        "author": "Ben Okafor",
-        "authorInitials": "BO",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "Local-first is a real differentiator for privacy-conscious teams."
-        },
-        "text": "Also: local-first means the app works offline and doesn't go down when AWS has an incident. I've been burned by Notion being down during planning sessions more times than I can count. That's a feature, not just a trust story.",
-        "resolved": false,
-        "isDemo": true
       }
     ],
     "Planning/roadmap.md": [
       {
-        "id": "demo-ben-4",
+        "id": "demo-ben-6",
         "author": "Ben Okafor",
         "authorInitials": "BO",
         "type": "selection",
         "anchor": {
-          "quotedText": "Claude Code integration — \"update the app to reflect this PRD\" launches a Claude Code session pointed at the committed document"
+          "quotedText": "Persistent workspace sharing (auto-resume on start)"
         },
-        "text": "This is the feature I'm most excited about and I think it could be the breakout moment. If a PM can commit a requirements change and immediately kick off an agent that implements it — that closes the loop in a way nothing else does. Please don't let this slip to Later.",
+        "text": "Huge for the team workflow. I hate having to remind people to turn on sharing every morning. Now I can just browse their docs as soon as they're online.",
         "resolved": false,
         "isDemo": true
       },
       {
-        "id": "demo-priya-5",
+        "id": "demo-priya-8",
         "author": "Priya Nair",
         "authorInitials": "PN",
         "type": "selection",
         "anchor": {
-          "quotedText": "Deprioritized"
+          "quotedText": "Excluded directories for sharing"
         },
-        "text": "Love that this section exists and is populated. Most roadmaps don't say what they're NOT doing — then everyone wonders why those things never show up. The real-time editing call-out is especially important, people will definitely ask.",
-        "resolved": false,
-        "isDemo": true
-      }
-    ],
-    "Discovery/problem-statement.md": [
-      {
-        "id": "demo-priya-6",
-        "author": "Priya Nair",
-        "authorInitials": "PN",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "Final_v3_APPROVED.docx"
-        },
-        "text": "I lived this for three years at my last company. The worst part isn't the naming — it's that nobody can tell you which of the four 'APPROVED' versions is actually the one engineering built from. The doc and the code drift apart silently.",
-        "resolved": false,
-        "isDemo": true
-      }
-    ],
-    "Discovery/user-research.md": [
-      {
-        "id": "demo-ben-5",
-        "author": "Ben Okafor",
-        "authorInitials": "BO",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "The core loop is: write → commit → review → approve."
-        },
-        "text": "From the eng side I'd add one more step after approve: **link to ticket**. The thing that breaks down for us is the approved doc lives in Notion and the Jira ticket has a different version of the requirements. If Canonic can own that handoff, it solves a real daily coordination problem.",
-        "resolved": false,
-        "isDemo": true
-      },
-      {
-        "id": "demo-priya-7",
-        "author": "Priya Nair",
-        "authorInitials": "PN",
-        "type": "selection",
-        "anchor": {
-          "quotedText": "AI that asks questions instead of writes answers, the reaction was consistently positive"
-        },
-        "text": "This framing is the marketing. 'AI that asks better questions' is the headline — not 'AI writing assistant'. Should be the first thing on the website, not a finding buried in a research doc.",
+        "text": "I've added the 'Private/' folder to my exclusion list in Settings. It's nice to know my rough hiring notes won't accidentally leak while I'm sharing my roadmap.",
         "resolved": false,
         "isDemo": true
       }

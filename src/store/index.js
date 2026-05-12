@@ -46,6 +46,17 @@ export const useAppStore = defineStore("app", () => {
   watch(rightPanelCollapsed, (val) => {
     localStorage.setItem("canonic:rightPanelCollapsed", String(val));
   });
+  const showLineNumbers = ref(
+    localStorage.getItem("canonic:line-numbers") === "true",
+  );
+  watch(showLineNumbers, (val) => {
+    localStorage.setItem("canonic:line-numbers", String(val));
+    if (val) {
+      document.documentElement.setAttribute("data-line-numbers", "true");
+    } else {
+      document.documentElement.removeAttribute("data-line-numbers");
+    }
+  });
   const docVersions = ref([]);
   const docBranchMap = ref({}); // { 'path/to/file.md': { activeBranch: 'branch', branches: ['branch'] } }
 
@@ -800,7 +811,11 @@ export const useAppStore = defineStore("app", () => {
 
   async function startWorkspaceShare() {
     if (!workspacePath.value) return;
-    const result = await api.share.startWorkspace(workspacePath.value);
+    const cfg = config.value || await loadConfig();
+    const result = await api.share.startWorkspace(workspacePath.value, {
+      permission: cfg?.sharingDefaults?.accessLevel || 'view',
+      excludedPaths: cfg?.sharingExcludedPaths || []
+    });
     if (result.success) {
       sharesByFile[WORKSPACE_KEY] = result;
       shareStatsByFile[WORKSPACE_KEY] = { reads: result.reads ?? 0, connected: 0 };
@@ -945,6 +960,7 @@ export const useAppStore = defineStore("app", () => {
     rightPanelTab,
     sidebarCollapsed,
     rightPanelCollapsed,
+    showLineNumbers,
     isDemoMode,
     demoPeers,
     docVersions,

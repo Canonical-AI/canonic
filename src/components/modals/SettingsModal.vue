@@ -164,6 +164,38 @@
                                 <option value="comment">Can comment</option>
                             </select>
                         </div>
+
+                        <p class="section-heading">Workspace Sharing</p>
+                        <div class="field">
+                            <div class="settings-card" :class="{ active: form.autoShareWorkspace }" @click="form.autoShareWorkspace = !form.autoShareWorkspace">
+                                <div class="card-header">
+                                    <span class="card-label">Auto-share workspace</span>
+                                    <div class="toggle" :class="{ on: form.autoShareWorkspace }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Automatically start sharing your workspace when the app opens.</p>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label class="field-label">Exclude directories from sharing</label>
+                            <p class="field-hint" style="margin-bottom: 12px">These folders will never be visible to peers, even if workspace sharing is on.</p>
+                            <div class="excluded-paths-list">
+                                <div v-for="(path, idx) in form.sharingExcludedPaths" :key="idx" class="excluded-path-row">
+                                    <span class="path-text">{{ path }}</span>
+                                    <button class="remove-path-btn" @click="form.sharingExcludedPaths.splice(idx, 1)">✕</button>
+                                </div>
+                                <div class="add-path-row">
+                                    <input 
+                                        v-model="newExcludedPath" 
+                                        class="field-input" 
+                                        placeholder="e.g. Private/ or Finance/" 
+                                        @keydown.enter="addExcludedPath"
+                                    />
+                                    <button class="add-path-btn" @click="addExcludedPath" :disabled="!newExcludedPath.trim()">Add</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="field">
                             <label class="field-label">Ignored paths</label>
                             <p class="field-hint" style="margin-bottom: 8px">Create a <code>.canonicignore</code> file in a workspace to exclude directories. Same syntax as <code>.gitignore</code>.</p>
@@ -187,36 +219,6 @@
                             <p class="info-label">Current workspace</p>
                             <p class="info-path">{{ store.workspacePath }}</p>
                             <button class="switch-btn" @click="switchWorkspace">Switch workspace</button>
-                        </div>
-
-                        <div class="ws-share-section" v-if="store.workspacePath">
-                            <p class="field-label" style="margin-bottom: 2px">Share workspace</p>
-                            <p class="field-hint" style="margin-bottom: 12px">Serve your entire workspace over the local network.</p>
-                            <div v-if="!store.workspaceShareInfo">
-                                <button class="btn-primary" @click="startWsShare" :disabled="wsShareLoading" style="width: 100%">
-                                    {{ wsShareLoading ? "Starting…" : "Start workspace sharing" }}
-                                </button>
-                                <p v-if="wsShareError" class="field-error">{{ wsShareError }}</p>
-                            </div>
-                            <div v-else class="ws-share-active">
-                                <div class="ws-stat-bar">
-                                    <div class="ws-status-live"><span class="status-dot" /><span>Live</span></div>
-                                    <div class="ws-pills">
-                                        <span class="ws-pill">{{ store.workspaceShareStats.connected }} viewing</span>
-                                        <span class="ws-pill">{{ store.workspaceShareStats.reads }} reads</span>
-                                    </div>
-                                </div>
-                                <div class="ws-link-row">
-                                    <span class="ws-link-text">{{ store.workspaceShareInfo.localUrl }}</span>
-                                    <button class="ws-copy-btn" :class="wsShareCopied && 'copied'" @click="copyWsLink">
-                                        {{ wsShareCopied ? "✓" : "Copy" }}
-                                    </button>
-                                </div>
-                                <div class="ws-actions">
-                                    <button class="btn-secondary" style="flex: 1" @click="openWsInBrowser">Browser</button>
-                                    <button class="btn-danger-outline" style="flex: 1" @click="stopWsShare">Stop</button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -317,12 +319,24 @@ const isDirty = ref(false);
 
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
+    autoShareWorkspace: false,
+    sharingExcludedPaths: [],
     sharingDefaults: { scope: "file", accessLevel: "read" },
     providers: [],
     assistant: { providerId: "", model: "", name: "Spark", extraInstructions: "" },
     completion: { enabled: false, providerId: "", model: "codestral-latest", debounceMs: 350, maxTokens: 25, wordBoundaryOnly: true, extraInstructions: "" },
     hotkeys: { selectLine: "Mod-l", moveUp: "Shift-ArrowUp", moveDown: "Shift-ArrowDown" },
 });
+
+const newExcludedPath = ref("");
+function addExcludedPath() {
+    const p = newExcludedPath.value.trim();
+    if (!p) return;
+    if (!form.sharingExcludedPaths.includes(p)) {
+        form.sharingExcludedPaths.push(p);
+    }
+    newExcludedPath.value = "";
+}
 
 watch(form, (newVal) => {
     if (!initialState) return;
@@ -365,6 +379,8 @@ onMounted(async () => {
             telemetryEnabled: !!cfg.telemetryEnabled,
             autoUpdate: cfg.autoUpdate !== false,
             updateChannel: cfg.updateChannel || "stable",
+            autoShareWorkspace: !!cfg.autoShareWorkspace,
+            sharingExcludedPaths: JSON.parse(JSON.stringify(cfg.sharingExcludedPaths || [])),
             sharingDefaults: { ...form.sharingDefaults, ...(cfg.sharingDefaults || {}) },
             providers: JSON.parse(JSON.stringify(cfg.providers || [])),
             assistant: { ...form.assistant, ...(cfg.assistant || {}) },
@@ -533,6 +549,16 @@ async function confirmReset() {
 .scope-content { display: flex; flex-direction: column; gap: 2px; }
 .scope-name { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
 .scope-desc { font-size: 0.775rem; color: var(--text-muted); line-height: 1.3; }
+
+/* ── Excluded Paths ── */
+.excluded-paths-list { display: flex; flex-direction: column; gap: 8px; background: var(--bg-base); border: 1px solid var(--border-mid); border-radius: 12px; padding: 12px; }
+.excluded-path-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: var(--bg-surface); border: 1px solid var(--border-mid); border-radius: 6px; }
+.path-text { font-size: 0.8125rem; color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.remove-path-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; }
+.remove-path-btn:hover { background: rgba(231, 76, 60, 0.1); color: var(--error); }
+.add-path-row { display: flex; gap: 8px; margin-top: 4px; }
+.add-path-btn { padding: 6px 14px; border-radius: 6px; border: none; background: var(--accent); color: white; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+.add-path-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Providers ── */
 .providers-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }

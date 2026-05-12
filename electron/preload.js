@@ -215,6 +215,12 @@ contextBridge.exposeInMainWorld("canonic", {
     },
   },
 
+  // Menu events
+  menu: {
+    onOpenSettings: (cb) => ipcRenderer.on("menu:open-settings", () => cb()),
+    onOpenWorkspace: (cb) => ipcRenderer.on("menu:open-workspace", (_, path) => cb(path)),
+  },
+
   // Agent session bridge
   agentSession: {
     onSessionStart: (cb) => ipcRenderer.on('agent:session-start', (_, data) => cb(data)),

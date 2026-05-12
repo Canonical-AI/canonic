@@ -64,6 +64,49 @@
 
     </div>
 
+    <!-- Workspace Sharing -->
+    <div class="panel-section">
+      <div class="section-label">
+        <FolderSync :size="11" />
+        Share entire workspace
+      </div>
+      <p class="section-desc">
+        Allow peers to browse all documents in this workspace.
+      </p>
+
+      <div v-if="!store.workspaceShareInfo" class="share-action">
+        <button class="start-btn start-btn--secondary" @click="startWorkspaceShare" :disabled="wsLoading">
+          {{ wsLoading ? 'Starting…' : 'Share workspace' }}
+        </button>
+      </div>
+
+      <div v-else class="share-active share-active--ws">
+        <div class="status-bar">
+          <div class="status-live">
+            <span class="status-dot" />
+            <span class="status-label">Live</span>
+          </div>
+          <div class="stat-pills">
+            <div class="stat-pill" :class="store.workspaceShareStats.connected > 0 && 'stat-pill--active'">
+              <Users :size="10" />
+              {{ store.workspaceShareStats.connected }}
+            </div>
+            <div class="stat-pill">
+              <Eye :size="10" />
+              {{ store.workspaceShareStats.reads }}
+            </div>
+          </div>
+        </div>
+        <div class="link-row link-row--compact">
+          <span class="link-text">{{ store.workspaceShareInfo.localUrl }}</span>
+          <button class="copy-btn" :class="wsCopied && 'copied'" @click="copyWsLink">
+            {{ wsCopied ? '✓' : 'Copy' }}
+          </button>
+        </div>
+        <button class="stop-btn stop-btn--compact" @click="stopWorkspaceShare">Stop workspace sharing</button>
+      </div>
+    </div>
+
     <!-- Peer workspaces -->
     <div class="panel-section peers-section">
       <div class="section-label">
@@ -110,12 +153,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAppStore } from '../../store'
-import { Share2, Users, Eye, ExternalLink } from 'lucide-vue-next'
+import { Share2, Users, Eye, ExternalLink, FolderSync } from 'lucide-vue-next'
 
 const store = useAppStore()
 const loading = ref(false)
+const wsLoading = ref(false)
 const error = ref('')
 const copied = ref(false)
+const wsCopied = ref(false)
 
 const peerUrl = ref('')
 const peerLoading = ref(false)
@@ -136,6 +181,24 @@ async function startShare() {
 
 async function stopShare() {
   await store.stopShare()
+}
+
+async function startWorkspaceShare() {
+  wsLoading.value = true
+  await store.startWorkspaceShare()
+  wsLoading.value = false
+}
+
+async function stopWorkspaceShare() {
+  await store.stopWorkspaceShare()
+}
+
+async function copyWsLink() {
+  if (store.workspaceShareInfo?.localUrl) {
+    await navigator.clipboard.writeText(store.workspaceShareInfo.localUrl)
+    wsCopied.value = true
+    setTimeout(() => { wsCopied.value = false }, 2000)
+  }
 }
 
 async function copy(text) {
@@ -398,6 +461,28 @@ function relativeTime(ms) {
   transition: background 0.15s, color 0.15s;
 }
 .stop-btn:hover { background: rgba(239,68,68,0.1); color: #f87171; border-color: rgba(239,68,68,0.3); }
+
+/* ── Workspace sharing specific ── */
+.share-active--ws {
+  padding: 0;
+  gap: 8px;
+}
+
+.link-row--compact {
+  padding: 4px 8px;
+}
+
+.stop-btn--compact {
+  padding: 4px;
+  font-size: 0.72rem;
+}
+
+.start-btn--secondary {
+  background: transparent;
+  border: 1px solid var(--accent-muted);
+  color: var(--accent);
+}
+.start-btn--secondary:hover { background: var(--accent-muted); }
 
 /* ── Peer input ── */
 .peer-input-row {

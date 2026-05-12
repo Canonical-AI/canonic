@@ -70,7 +70,7 @@ function loadIgnorePatterns(workspacePath) {
     .filter(l => l && !l.startsWith('#'))
 }
 
-function collectMarkdownFiles(rootDir, workspacePath, ignore = []) {
+function collectMarkdownFiles(rootDir, workspacePath, ignore = [], excludedPaths = []) {
   const results = []
   const scan = (dir) => {
     const entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -78,7 +78,10 @@ function collectMarkdownFiles(rootDir, workspacePath, ignore = []) {
       if (entry.name.startsWith('.')) continue
       const full = path.join(dir, entry.name)
       const rel = path.relative(workspacePath, full)
+
       if (ignore.some(p => rel.startsWith(p) || entry.name === p)) continue
+      if (excludedPaths.some(p => rel.startsWith(p) || rel === p.replace(/\/$/, ''))) continue
+
       if (entry.isDirectory()) {
         scan(full)
       } else if (entry.name.endsWith('.md')) {
@@ -379,9 +382,10 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   const PORT = 3800 + Math.floor(Math.random() * 200)
   const permission = options.permission || 'view'
   const ignore = loadIgnorePatterns(workspacePath)
+  const excludedPaths = options.excludedPaths || []
   const author = os.userInfo().username
 
-  const share = { reads: 0, token, port: PORT, permission, wss: null, server: null, heartbeat: null, limiter: null }
+  const share = { reads: 0, token, port: PORT, permission, wss: null, server: null, heartbeat: null, limiter: null, excludedPaths }
 
   const app = express()
   app.set('trust proxy', true)
@@ -422,7 +426,7 @@ async function startWorkspaceShare(workspacePath, options = {}) {
     if (req.query.token !== token) return res.status(403).send('Forbidden')
     share.reads++
     emitStats(WORKSPACE_KEY, share)
-    const files = collectMarkdownFiles(workspacePath, workspacePath, ignore)
+    const files = collectMarkdownFiles(workspacePath, workspacePath, ignore, share.excludedPaths)
     const baseUrl = `${req.protocol}://${req.headers.host}`
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.send(renderBrowsePage(author, files, token, baseUrl))
@@ -431,7 +435,7 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   // JSON manifest for Canonic app
   app.get('/manifest', (req, res) => {
     if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
-    const files = collectMarkdownFiles(workspacePath, workspacePath, ignore)
+    const files = collectMarkdownFiles(workspacePath, workspacePath, ignore, share.excludedPaths)
     res.json({ scope: 'workspace', files, sharedAt: new Date().toISOString(), author })
   })
 
@@ -440,6 +444,12 @@ async function startWorkspaceShare(workspacePath, options = {}) {
     if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
     const relPath = req.query.path
     if (!relPath) return res.status(400).json({ error: 'Missing path' })
+
+    // Check exclusion
+    if (share.excludedPaths.some(p => relPath.startsWith(p) || relPath === p.replace(/\/$/, ''))) {
+      return res.status(403).json({ error: 'Path excluded from sharing' })
+    }
+
     const resolved = path.resolve(workspacePath, relPath)
     if (!resolved.startsWith(workspacePath)) return res.status(403).json({ error: 'Path outside workspace' })
     if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'Not found' })

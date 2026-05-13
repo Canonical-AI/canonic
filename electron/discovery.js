@@ -51,14 +51,6 @@ function stopDiscovery() {
 }
 
 function svcToPeer(svc) {
-  console.log('[Discovery] Raw service found:', JSON.stringify({
-    name: svc.name,
-    host: svc.host,
-    port: svc.port,
-    addresses: svc.addresses,
-    txt: svc.txt
-  }, null, 2));
-  
   // 1. Determine the best host (IP preferred over hostname)
   let resolvedHost = svc.host;
   if (svc.addresses && svc.addresses.length > 0) {
@@ -77,9 +69,9 @@ function svcToPeer(svc) {
 
   const author = svc.txt?.author || svc.name;
   
-  const peer = {
-    // Include port in ID to allow multiple instances on one machine
-    id: `${author}@${resolvedHost}:${svc.port}`,
+  return {
+    // Stable ID based on network address, allows name updates without treating as new peer
+    id: `${resolvedHost}:${svc.port}`,
     name: author,
     host: resolvedHost,
     port: svc.port,
@@ -89,9 +81,6 @@ function svcToPeer(svc) {
     taggedOnly: svc.txt?.taggedOnly === 'true',
     online: true
   }
-  
-  console.log('[Discovery] Resolved peer object:', JSON.stringify(peer, null, 2));
-  return peer
 }
 
 function peerIdFromSvc(svc) {
@@ -106,7 +95,7 @@ function peerIdFromSvc(svc) {
     h = h.replace(/\.$/, '');
     if (!h.includes('.') && !h.includes(':') && h !== 'localhost') h = `${h}.local`;
   }
-  return `${svc.txt?.author || svc.name}@${h}:${svc.port}`
+  return `${h}:${svc.port}`
 }
 
 function _setConstructor(Ctor) { _BonjourCtor = Ctor }

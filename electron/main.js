@@ -473,6 +473,15 @@ app.whenReady().then(async () => {
     });
   }
 
+  if (cfg?.autoShareAllWorkspaces) {
+    const ALL_WS_KEY = '__all_workspaces__';
+    // We don't have recentWorkspaces in main process easily accessible (they are in localStorage).
+    // Actually, let's just trigger a 'menu:sync-all-workspaces' to the renderer or similar?
+    // No, better to read the recentWorkspaces if they were stored in config?
+    // They are not. They are only in localStorage.
+    // So the RENDERER must trigger all-workspace sharing on load.
+  }
+
   await apiServer
     .start((event) => {
       if (event.type === "session-start") {
@@ -1027,13 +1036,8 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("peers:fetch-manifest", async (_, peerId) => {
-    console.log(`[IPC] Received peers:fetch-manifest for ID: "${peerId}"`);
     const peer = discoveredPeers.find((p) => p.id === peerId);
-    if (!peer) {
-      console.log(`[IPC] fetch-manifest: Peer ${peerId} not found in discoveredPeers`);
-      return { success: false, error: "Peer not online" };
-    }
-    console.log(`[IPC] fetch-manifest: Requesting from ${peer.host}:${peer.port}...`);
+    if (!peer) return { success: false, error: "Peer not online" };
     try {
       const { default: fetch } = await import("node-fetch");
       const res = await fetch(
@@ -1041,15 +1045,11 @@ function setupIpcHandlers() {
         { timeout: 10000 }
       );
       if (!res.ok) {
-        console.error(`[IPC] fetch-manifest: HTTP ${res.status} from ${peerId}`);
         logError(`[peers] manifest fetch failed for ${peerId}: HTTP ${res.status}`);
         return { success: false, error: `HTTP ${res.status}` };
       }
-      const data = await res.json();
-      console.log(`[IPC] fetch-manifest: Success. Found ${data.files?.length || 0} files.`);
-      return { success: true, ...data };
+      return { success: true, ...(await res.json()) };
     } catch (err) {
-      console.error(`[IPC] fetch-manifest: Error for ${peerId}:`, err.message);
       logError(`[peers] manifest fetch error for ${peerId}:`, err);
       return { success: false, error: err.message };
     }
@@ -1057,11 +1057,7 @@ function setupIpcHandlers() {
 
   ipcMain.handle("peers:open-peer-file", async (_, peerId, relPath, wsName) => {
     const peer = discoveredPeers.find((p) => p.id === peerId);
-    if (!peer) {
-      console.log(`[IPC] open-peer-file: Peer ${peerId} not found`);
-      return { success: false, error: "Peer not online" };
-    }
-    console.log(`[IPC] open-peer-file: Requesting ${relPath} from ${peer.host}:${peer.port}...`);
+    if (!peer) return { success: false, error: "Peer not online" };
     try {
       const { default: fetch } = await import("node-fetch");
       let url = `http://${peer.host}:${peer.port}/file?path=${encodeURIComponent(relPath)}&token=${peer.token}`;
@@ -1069,15 +1065,11 @@ function setupIpcHandlers() {
       
       const res = await fetch(url, { timeout: 15000, headers: { Accept: "application/json" } });
       if (!res.ok) {
-        console.error(`[IPC] open-peer-file: HTTP ${res.status} from ${peerId}`);
         logError(`[peers] file fetch failed for ${peerId}/${relPath}: HTTP ${res.status}`);
         return { success: false, error: `HTTP ${res.status}` };
       }
-      const data = await res.json();
-      console.log(`[IPC] open-peer-file: Success.`);
-      return { success: true, ...data };
+      return { success: true, ...(await res.json()) };
     } catch (err) {
-      console.error(`[IPC] open-peer-file: Error for ${peerId}:`, err.message);
       logError(`[peers] file fetch error for ${peerId}/${relPath}:`, err);
       return { success: false, error: err.message };
     }
@@ -1112,6 +1104,21 @@ function setupIpcHandlers() {
       name: saved.displayName,
       email: `${saved.displayName.replace(/\s+/g, ".")}@canonic.local`,
     });
+    
+    // Re-announce any active shares so peers see the new name
+    const activeShares = shareService.listActiveShares();
+    for (const share of activeShares) {
+      discoveryService.unpublishShare(share.port);
+      discoveryService.announceShare({
+        port: share.port,
+        token: share.token,
+        scope: share.key === shareService.WORKSPACE_KEY ? 'workspace' : (share.key === '__all_workspaces__' ? 'all-workspaces' : 'file'),
+        permission: share.permission,
+        author: saved.displayName || os.userInfo().username,
+        taggedOnly: share.taggedOnly
+      });
+    }
+
     return { success: true, config: saved };
   });
 

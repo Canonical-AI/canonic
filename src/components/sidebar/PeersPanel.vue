@@ -163,7 +163,6 @@
           <div class="peer-avatar">{{ initials(peer.name) }}</div>
           <div class="peer-info">
             <span class="peer-name">{{ peer.name }}</span>
-            <span class="peer-id">{{ peer.id }}</span>
           </div>
           <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
             <span class="status-dot" />

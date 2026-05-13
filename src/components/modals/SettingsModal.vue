@@ -169,10 +169,10 @@
                         <div class="field">
                             <div class="settings-card" :class="{ active: form.autoShareWorkspace }" @click="form.autoShareWorkspace = !form.autoShareWorkspace">
                                 <div class="card-header">
-                                    <span class="card-label">Auto-share workspace</span>
+                                    <span class="card-label">Auto-share current workspace</span>
                                     <div class="toggle" :class="{ on: form.autoShareWorkspace }"><div class="toggle-thumb"></div></div>
                                 </div>
-                                <p class="card-desc">Automatically start sharing your workspace when the app opens.</p>
+                                <p class="card-desc">Start sharing your active workspace when the app opens.</p>
                             </div>
                             <div v-if="store.workspaceShareInfo" class="sharing-live-status">
                                 <div class="status-pulse-group">
@@ -180,8 +180,28 @@
                                     <span class="status-text-live">Workspace sharing active</span>
                                 </div>
                                 <div class="sharing-stats-row">
-                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.connected }}</b> live connections</span>
-                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.reads }}</b> total reads</span>
+                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.connected }}</b> live</span>
+                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.reads }}</b> reads</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="settings-card" :class="{ active: form.autoShareAllWorkspaces }" @click="form.autoShareAllWorkspaces = !form.autoShareAllWorkspaces">
+                                <div class="card-header">
+                                    <span class="card-label">Auto-share all workspaces</span>
+                                    <div class="toggle" :class="{ on: form.autoShareAllWorkspaces }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Automatically share your {{ store.recentWorkspaces.length }} recent workspaces on startup.</p>
+                            </div>
+                            <div v-if="store.sharesByFile['__all_workspaces__']" class="sharing-live-status">
+                                <div class="status-pulse-group">
+                                    <span class="status-dot-pulse"></span>
+                                    <span class="status-text-live">All-workspace sharing active</span>
+                                </div>
+                                <div class="sharing-stats-row">
+                                    <span class="sharing-stat"><b>{{ store.shareStatsByFile['__all_workspaces__']?.connected || 0 }}</b> live</span>
+                                    <span class="sharing-stat"><b>{{ store.shareStatsByFile['__all_workspaces__']?.reads || 0 }}</b> reads</span>
                                 </div>
                             </div>
                         </div>
@@ -330,6 +350,7 @@ const isDirty = ref(false);
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
     autoShareWorkspace: false,
+    autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
     sharingDefaults: { scope: "file", accessLevel: "read" },
     providers: [],
@@ -390,6 +411,7 @@ onMounted(async () => {
             autoUpdate: cfg.autoUpdate !== false,
             updateChannel: cfg.updateChannel || "stable",
             autoShareWorkspace: !!cfg.autoShareWorkspace,
+            autoShareAllWorkspaces: !!cfg.autoShareAllWorkspaces,
             sharingExcludedPaths: JSON.parse(JSON.stringify(cfg.sharingExcludedPaths || [])),
             sharingDefaults: { ...form.sharingDefaults, ...(cfg.sharingDefaults || {}) },
             providers: JSON.parse(JSON.stringify(cfg.providers || [])),

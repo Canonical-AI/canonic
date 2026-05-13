@@ -83,10 +83,7 @@ function collectMarkdownFiles(workspaces, ignore = [], excludedPaths = [], tagge
   if (!Array.isArray(workspaces)) return results;
   
   for (const ws of workspaces) {
-    if (!ws || !ws.path) {
-      console.warn('[share] Skipping workspace with missing path:', ws);
-      continue;
-    }
+    if (!ws || !ws.path) continue;
     
     const wsVersions = taggedOnly ? versionService.readAll(ws.path) : null
     
@@ -116,7 +113,7 @@ function collectMarkdownFiles(workspaces, ignore = [], excludedPaths = [], tagge
           }
         }
       } catch (err) {
-        console.error(`[share] Failed to scan directory ${dir}:`, err.message);
+        // ignore scan errors
       }
     }
     scan(ws.path)

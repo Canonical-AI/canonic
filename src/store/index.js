@@ -246,10 +246,13 @@ export const useAppStore = defineStore("app", () => {
       comments.value = [];
       await refreshFiles();
       await refreshBranches();
-      await syncActiveShares();
-
       // Restore last used branch if it exists in the workspace
       const cfg = await loadConfig();
+      
+      if (cfg?.autoShareAllWorkspaces && !sharesByFile['__all_workspaces__']) {
+        await startAllWorkspacesShare();
+      }
+
       if (cfg?.lastBranch && branches.value.includes(cfg.lastBranch)) {
         await api.git.checkout(workspacePath.value, cfg.lastBranch);
         currentBranch.value = cfg.lastBranch;
@@ -1105,8 +1108,7 @@ export const useAppStore = defineStore("app", () => {
     appVersion,
     commentingActive: ref(false),
     refreshDiscoveredPeers,
-    discoveredPeers,
-    favoritedPeerIds,
-    favoritedPeers,
+    sharesByFile,
+    shareStatsByFile,
   };
 });

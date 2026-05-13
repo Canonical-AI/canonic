@@ -109,46 +109,29 @@
               Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
             </div>
             <div v-else class="peer-files">
-              <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+              <div v-if="!peerFiles[peer.id] || peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
               
-              <!-- Grouped by Workspace if multiple -->
-              <template v-if="peer.scope === 'all-workspaces'">
-                <div v-for="(group, wsName) in groupedPeerFiles(peer.id)" :key="wsName" class="peer-ws-group">
-                  <div class="peer-ws-header">
-                    <FolderSync :size="10" />
-                    {{ wsName }}
-                  </div>
-                  <button
-                    v-for="file in group"
-                    :key="file.path"
-                    class="peer-file"
-                    @click="openFile(peer, file.path, wsName)"
+              <template v-else>
+                <div v-for="node in getPeerTreeNodes(peer.id)" :key="node.key" v-show="node.visible" class="peer-node-row">
+                  <!-- Directory -->
+                  <div 
+                    v-if="node.type === 'dir' || node.type === 'ws'" 
+                    class="peer-ascii-dir"
+                    @click="toggleDir(peer.id, node.key)"
                   >
-                    <FileText :size="13" />
-                    <div class="peer-file-info">
-                      <span class="file-name">{{ basename(file.path) }}</span>
-                      <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
-                    </div>
-                    <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+                    <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="ascii-name">{{ node.name }}/</span> <span class="ascii-state">{{ isDirExpanded(peer.id, node.key) ? '(-)' : `(+${node.count})` }}</span>
+                  </div>
+
+                  <!-- File -->
+                  <button
+                    v-else
+                    class="peer-ascii-file"
+                    @click="openFile(peer, node.path, node.workspace)"
+                  >
+                    <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="file-name">{{ node.name }}</span>
+                    <span v-if="node.versions" class="file-version-count">{{ node.versions.length }} v</span>
                   </button>
                 </div>
-              </template>
-
-              <!-- Standard flat list (Workspace scope) -->
-              <template v-else>
-                <button
-                  v-for="file in peerFiles[peer.id]"
-                  :key="typeof file === 'string' ? file : file.path"
-                  class="peer-file"
-                  @click="openFile(peer, typeof file === 'string' ? file : file.path, typeof file === 'string' ? null : file.workspace)"
-                >
-                  <FileText :size="13" />
-                  <div class="peer-file-info">
-                    <span class="file-name">{{ basename(typeof file === 'string' ? file : file.path) }}</span>
-                    <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
-                  </div>
-                  <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
-                </button>
               </template>
             </div>
           </div>
@@ -203,46 +186,29 @@
             Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
           </div>
           <div v-else class="peer-files">
-            <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+            <div v-if="!peerFiles[peer.id] || peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
             
-            <!-- Grouped by Workspace if multiple -->
-            <template v-if="peer.scope === 'all-workspaces'">
-              <div v-for="(group, wsName) in groupedPeerFiles(peer.id)" :key="wsName" class="peer-ws-group">
-                <div class="peer-ws-header">
-                  <FolderSync :size="10" />
-                  {{ wsName }}
-                </div>
-                <button
-                  v-for="file in group"
-                  :key="file.path"
-                  class="peer-file"
-                  @click="openFile(peer, file.path, wsName)"
+            <template v-else>
+              <div v-for="node in getPeerTreeNodes(peer.id)" :key="node.key" v-show="node.visible" class="peer-node-row">
+                <!-- Directory -->
+                <div 
+                  v-if="node.type === 'dir' || node.type === 'ws'" 
+                  class="peer-ascii-dir"
+                  @click="toggleDir(peer.id, node.key)"
                 >
-                  <FileText :size="13" />
-                  <div class="peer-file-info">
-                    <span class="file-name">{{ basename(file.path) }}</span>
-                    <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
-                  </div>
-                  <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+                  <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="ascii-name">{{ node.name }}/</span>
+                </div>
+
+                <!-- File -->
+                <button
+                  v-else
+                  class="peer-ascii-file"
+                  @click="openFile(peer, node.path, node.workspace)"
+                >
+                  <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="file-name">{{ node.name }}</span>
+                  <span v-if="node.versions" class="file-version-count">{{ node.versions.length }} v</span>
                 </button>
               </div>
-            </template>
-
-            <!-- Standard flat list (Workspace scope) -->
-            <template v-else>
-              <button
-                v-for="file in peerFiles[peer.id]"
-                :key="typeof file === 'string' ? file : file.path"
-                class="peer-file"
-                @click="openFile(peer, typeof file === 'string' ? file : file.path, typeof file === 'string' ? null : file.workspace)"
-              >
-                <FileText :size="13" />
-                <div class="peer-file-info">
-                  <span class="file-name">{{ basename(typeof file === 'string' ? file : file.path) }}</span>
-                  <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
-                </div>
-                <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
-              </button>
             </template>
           </div>
         </div>
@@ -282,6 +248,7 @@ const view = ref('favorites')
 const discovering = ref(false)
 const peerFiles = reactive({}) // peerId -> string[] | null | undefined
 const peerFilesExpanded = reactive({}) // peerId -> boolean
+const dirExpansion = reactive({}) // peerId:dirKey -> boolean
 
 function initials(name) {
   return (name || '?').split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -289,6 +256,112 @@ function initials(name) {
 
 function basename(relPath) {
   return relPath.split('/').pop()
+}
+
+function getAsciiPrefix(depth) {
+  if (depth === 0) return ''
+  return '│  '.repeat(depth - 1) + '├─ '
+}
+
+function getPeerTreeNodes(peerId) {
+  const files = peerFiles[peerId] || []
+  const nodes = []
+  const expansionPrefix = `${peerId}:`
+
+  // 1. Group by workspace first
+  const workspaces = {}
+  for (const f of files) {
+    const wsName = typeof f === 'string' ? 'Workspace' : (f.workspace || 'Workspace')
+    const fPath = typeof f === 'string' ? f : f.path
+    if (!workspaces[wsName]) workspaces[wsName] = []
+    workspaces[wsName].push(f)
+  }
+
+  for (const [wsName, wsFiles] of Object.entries(workspaces)) {
+    const wsKey = `ws:${wsName}`
+    const wsExpanded = isDirExpanded(peerId, wsKey)
+    
+    // Add Workspace root node
+    nodes.push({
+      key: wsKey,
+      type: 'ws',
+      name: wsName,
+      count: wsFiles.length,
+      depth: 0,
+      visible: true
+    })
+
+    // Add children (directories and files)
+    const tree = {}
+    for (const f of wsFiles) {
+      const fPath = typeof f === 'string' ? f : f.path
+      const parts = fPath.split('/')
+      let curr = tree
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]
+        const isFile = i === parts.length - 1
+        if (isFile) {
+          curr[`f:${part}`] = f
+        } else {
+          if (!curr[`d:${part}`]) curr[`d:${part}`] = { _count: 0, _children: {} }
+          curr[`d:${part}`]._count++
+          curr = curr[`d:${part}`]._children
+        }
+      }
+    }
+
+    const flatten = (obj, depth, parentVisible, parentKey) => {
+      const entries = Object.entries(obj).sort(([a], [b]) => a.localeCompare(b))
+      for (const [key, val] of entries) {
+        const type = key.startsWith('d:') ? 'dir' : 'file'
+        const name = key.slice(2)
+        const nodeKey = `${parentKey}/${key}`
+        const visible = parentVisible && isDirExpanded(peerId, parentKey)
+
+        if (type === 'dir') {
+          nodes.push({
+            key: nodeKey,
+            type: 'dir',
+            name,
+            count: val._count,
+            depth: depth + 1,
+            visible
+          })
+          flatten(val._children, depth + 1, visible, nodeKey)
+        } else {
+          const f = val
+          nodes.push({
+            key: nodeKey,
+            type: 'file',
+            name,
+            path: typeof f === 'string' ? f : f.path,
+            workspace: typeof f === 'string' ? null : f.workspace,
+            versions: f.versions,
+            depth: depth + 1,
+            visible
+          })
+        }
+      }
+    }
+
+    flatten(tree, 0, wsExpanded, wsKey)
+  }
+
+  return nodes
+}
+
+function isDirExpanded(peerId, key) {
+  const compositeKey = `${peerId}:${key}`
+  if (dirExpansion[compositeKey] === undefined) {
+    // Default: expand workspace root, collapse others
+    return key.startsWith('ws:')
+  }
+  return dirExpansion[compositeKey]
+}
+
+function toggleDir(peerId, key) {
+  const compositeKey = `${peerId}:${key}`
+  dirExpansion[compositeKey] = !isDirExpanded(peerId, key)
 }
 
 async function switchToDiscover() {
@@ -315,7 +388,6 @@ async function refreshDiscover() {
 }
 
 async function togglePeerFiles(peer) {
-  console.log('[PeersPanel] togglePeerFiles', peer.id, 'expanded:', !!peerFilesExpanded[peer.id])
   const isExpanded = !!peerFilesExpanded[peer.id]
   peerFilesExpanded[peer.id] = !isExpanded
 
@@ -337,21 +409,17 @@ function groupedPeerFiles(peerId) {
 }
 
 async function loadFiles(peer) {
-  console.log('[PeersPanel] loadFiles starting for', peer.id)
   peerFiles[peer.id] = undefined // show loading state
   try {
     const result = await api.peers.fetchManifest(peer.id)
-    console.log('[PeersPanel] fetchManifest result for', peer.id, ':', result)
     // The manifest now includes scope metadata
     if (result.success) {
       peerFiles[peer.id] = result.files
       peer.scope = result.scope // dynamically update scope from manifest
     } else {
       peerFiles[peer.id] = null
-      console.warn('[PeersPanel] fetchManifest failed:', result.error)
     }
   } catch (err) {
-    console.error('[PeersPanel] fetchManifest error:', err)
     peerFiles[peer.id] = null
   }
 }
@@ -588,38 +656,66 @@ function toggleFavorite(peer) {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 2px 6px 4px 6px;
+  padding: 4px 0;
 }
 
-.peer-file {
+.peer-node-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.peer-ascii-dir {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 6px 4px 36px;
-  border-radius: 6px;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 0.775rem;
+  color: var(--text-muted); /* Muted color for directories */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
+}
+.peer-ascii-dir:hover { background: var(--bg-hover); color: var(--text-secondary); }
+
+.peer-ascii-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
+  color: var(--text-primary); /* Prominent color for files */
+  font-size: 0.8125rem; /* Slightly larger for prominence */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background 0.12s;
+  transition: background 0.1s, color 0.1s;
 }
-.peer-file:hover { background: var(--bg-hover); color: var(--text-primary); }
+.peer-ascii-file:hover { background: var(--bg-hover); color: var(--accent-light); }
 
-.peer-file-info {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
+.ascii-prefix {
+  color: var(--text-muted);
+  opacity: 0.5; /* Slightly fainter prefix */
+  white-space: pre;
+}
+
+.ascii-name {
+  font-weight: 400; /* Regular weight for dirs */
 }
 
 .file-name {
+  font-weight: 500; /* Bold weight for files */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ascii-state {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  opacity: 0.7;
 }
 
 .file-version-count {
@@ -632,34 +728,15 @@ function toggleFavorite(peer) {
   flex-shrink: 0;
 }
 
-.peer-ws-group {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.peer-ws-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 36px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.peer-ws-header :deep(svg) { opacity: 0.6; }
-
 .perm-badge {
-  font-size: 0.625rem;
-  padding: 1px 5px;
+  font-size: 0.6rem;
+  padding: 0 4px;
   border-radius: 3px;
   background: var(--bg-hover);
   color: var(--text-muted);
   flex-shrink: 0;
+  height: 14px;
+  line-height: 14px;
 }
 .perm-badge.comment { color: var(--accent); }
 .perm-badge.copy { color: #22c55e; }

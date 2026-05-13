@@ -196,7 +196,7 @@
                   class="peer-ascii-dir"
                   @click="toggleDir(peer.id, node.key)"
                 >
-                  <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="ascii-name">{{ node.name }}/</span>
+                  <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="ascii-name">{{ node.name }}/</span> <span class="ascii-state">{{ isDirExpanded(peer.id, node.key) ? '(-)' : `(+${node.count})` }}</span>
                 </div>
 
                 <!-- File -->

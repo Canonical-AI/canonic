@@ -352,8 +352,8 @@ function getPeerTreeNodes(peerId) {
 function isDirExpanded(peerId, key) {
   const compositeKey = `${peerId}:${key}`
   if (dirExpansion[compositeKey] === undefined) {
-    // Default: expand workspace root, collapse others
-    return key.startsWith('ws:')
+    // Default: collapse all
+    return false
   }
   return dirExpansion[compositeKey]
 }

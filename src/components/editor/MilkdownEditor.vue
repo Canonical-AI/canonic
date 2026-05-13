@@ -39,6 +39,8 @@ function buildDecorations(doc, comments) {
   if (!comments?.length) return DecorationSet.empty
   const decos = []
 
+  const docText = doc.textContent
+  
   for (const comment of comments) {
     if (comment.resolved) continue
     const text = comment.anchor?.quotedText
@@ -50,18 +52,45 @@ function buildDecorations(doc, comments) {
         ? 'comment-highlight demo-highlight'
         : 'comment-highlight'
 
-    doc.descendants((node, pos) => {
-      if (!node.isText || !node.text) return
-      let idx = node.text.indexOf(text)
-      while (idx >= 0) {
-        decos.push(Decoration.inline(pos + idx, pos + idx + text.length, {
+    // Find all occurrences in the full text string
+    let searchIdx = docText.indexOf(text)
+    while (searchIdx >= 0) {
+      const from = searchIdx
+      const to = searchIdx + text.length
+      
+      // Map global text offsets back to ProseMirror positions
+      let currentTextOffset = 0
+      let pmFrom = -1
+      let pmTo = -1
+      
+      doc.descendants((node, pos) => {
+        if (!node.isText) return true
+        
+        const nodeText = node.text || ""
+        const nodeEndOffset = currentTextOffset + nodeText.length
+        
+        if (pmFrom === -1 && from >= currentTextOffset && from < nodeEndOffset) {
+          pmFrom = pos + (from - currentTextOffset)
+        }
+        
+        if (pmTo === -1 && to > currentTextOffset && to <= nodeEndOffset) {
+          pmTo = pos + (to - currentTextOffset)
+        }
+        
+        currentTextOffset = nodeEndOffset
+        return false
+      })
+
+      if (pmFrom !== -1 && pmTo !== -1) {
+        decos.push(Decoration.inline(pmFrom, pmTo, {
           class: cls,
           'data-comment-id': comment.id,
           title: `${comment.author}: ${comment.text.slice(0, 100)}`
         }))
-        idx = node.text.indexOf(text, idx + 1)
       }
-    })
+
+      searchIdx = docText.indexOf(text, searchIdx + 1)
+    }
   }
 
   return DecorationSet.create(doc, decos)

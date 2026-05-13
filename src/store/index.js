@@ -1034,5 +1034,6 @@ export const useAppStore = defineStore("app", () => {
     copyPeerFileToWorkspace,
     fileIndex,
     appVersion,
+    commentingActive: ref(false),
   };
 });

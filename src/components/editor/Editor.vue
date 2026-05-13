@@ -141,48 +141,48 @@
                         />
                     </MilkdownProvider>
                 </ProsemirrorAdapterProvider>
-            </div>
-        </div>
 
-        <!-- Inline comment input -->
-        <div
-            v-if="commentInput.visible"
-            class="comment-input-box"
-            :style="{
-                top: selectionPopover.y + 'px',
-                left: selectionPopover.x + 'px',
-            }"
-            @click.stop
-            @mousedown.stop
-        >
-            <div class="comment-quoted">
-                <span class="comment-quote-bar" />
-                <span class="comment-quote-text">{{
-                    truncateQuote(selectionPopover.text)
-                }}</span>
-            </div>
-            <textarea
-                ref="commentTextareaEl"
-                v-model="commentInput.text"
-                class="comment-textarea"
-                placeholder="Add a comment…"
-                rows="3"
-                @keydown.ctrl.enter="submitComment"
-                @keydown.meta.enter="submitComment"
-                @keydown.esc="cancelComment"
-            />
-            <div class="comment-input-actions">
-                <span class="comment-input-hint">⌘↩ to submit</span>
-                <button class="comment-cancel-btn" @click="cancelComment">
-                    Cancel
-                </button>
-                <button
-                    class="comment-submit-btn"
-                    @click="submitComment"
-                    :disabled="!commentInput.text.trim()"
+                <!-- Inline comment input -->
+                <div
+                    v-if="commentInput.visible"
+                    class="comment-input-box"
+                    :style="{
+                        top: selectionPopover.y + 'px',
+                        left: selectionPopover.x + 'px',
+                    }"
+                    @click.stop
+                    @mousedown.stop
                 >
-                    Comment
-                </button>
+                    <div class="comment-quoted">
+                        <span class="comment-quote-bar" />
+                        <span class="comment-quote-text">{{
+                            truncateQuote(selectionPopover.text)
+                        }}</span>
+                    </div>
+                    <textarea
+                        ref="commentTextareaEl"
+                        v-model="commentInput.text"
+                        class="comment-textarea"
+                        placeholder="Add a comment…"
+                        rows="3"
+                        @keydown.ctrl.enter="submitComment"
+                        @keydown.meta.enter="submitComment"
+                        @keydown.esc="cancelComment"
+                    />
+                    <div class="comment-input-actions">
+                        <span class="comment-input-hint">⌘↩ to submit</span>
+                        <button class="comment-cancel-btn" @click="cancelComment">
+                            Cancel
+                        </button>
+                        <button
+                            class="comment-submit-btn"
+                            @click="submitComment"
+                            :disabled="!commentInput.text.trim()"
+                        >
+                            Comment
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -214,14 +214,27 @@ provide("openCommentFromToolbar", (selectedText, fixedCoords) => {
     const wrapperRect = editorContentEl.value?.getBoundingClientRect() ?? {
         left: 0,
         top: 0,
+        width: 800
     };
+    
+    let x = fixedCoords.left - wrapperRect.left;
+    let y = fixedCoords.top - wrapperRect.top;
+
+    // Position refined logic
+    y = Math.max(8, y - 54);
+    const boxWidth = 280;
+    if (x + boxWidth > wrapperRect.width - 20) {
+        x = Math.max(10, wrapperRect.width - boxWidth - 20);
+    }
+
     selectionPopover.value = {
         visible: false,
-        x: Math.max(0, fixedCoords.left - wrapperRect.left),
-        y: fixedCoords.top - wrapperRect.top,
+        x,
+        y,
         text: selectedText,
     };
     commentInput.value = { visible: true, text: "" };
+    store.commentingActive = true;
     nextTick(() => commentTextareaEl.value?.focus());
 });
 const showForkModal = ref(false);
@@ -365,7 +378,9 @@ function truncateQuote(text, len = 80) {
 
 function cancelComment() {
     commentInput.value = { visible: false, text: "" };
-    selectionPopover.value.visible = false;
+    selectionPopover.value = { visible: false, x: 0, y: 0, text: "" };
+    store.commentingActive = false;
+    milkdownEditor.value?.focusEditor();
 }
 
 function submitComment() {
@@ -423,12 +438,53 @@ function editorHasFocus() {
     return editorContentEl.value?.contains(document.activeElement);
 }
 
+function openCommentInput() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.toString().trim()) return;
+
+    const selectedText = selection.toString().trim();
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const wrapperRect = editorContentEl.value.getBoundingClientRect();
+
+    // Calculate position relative to editor-content (which is position:relative)
+    let x = rect.left - wrapperRect.left;
+    let y = rect.top - wrapperRect.top;
+
+    // Shift up to clear the selection, but don't go above the top padding
+    y = Math.max(8, y - 54); 
+
+    // Keep within horizontal bounds
+    const boxWidth = 280;
+    const contentWidth = wrapperRect.width;
+    if (x + boxWidth > contentWidth - 20) {
+        x = Math.max(10, contentWidth - boxWidth - 20);
+    }
+
+    selectionPopover.value = {
+        visible: false,
+        x,
+        y,
+        text: selectedText,
+    };
+    commentInput.value = { visible: true, text: "" };
+    store.commentingActive = true;
+    nextTick(() => commentTextareaEl.value?.focus());
+}
+
 onMounted(() => {
     document.addEventListener("keydown", (e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
             e.preventDefault();
             if (store.isDirty) save();
         }
+
+        // Comment hotkey: Cmd+Alt+M or Ctrl+Alt+M
+        if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === "m") {
+            e.preventDefault();
+            openCommentInput();
+        }
+
         if ((e.metaKey || e.ctrlKey) && editorHasFocus()) {
             if (e.key === "=" || e.key === "+") {
                 e.preventDefault();

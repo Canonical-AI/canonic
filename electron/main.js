@@ -849,7 +849,11 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("comments:save", async (_, docId, comments) => {
-    const commentsFile = path.join(CANONIC_DIR, "comments", `${docId}.json`);
+    const commentsDir = path.join(CANONIC_DIR, "comments");
+    if (!fs.existsSync(commentsDir)) {
+      fs.mkdirSync(commentsDir, { recursive: true });
+    }
+    const commentsFile = path.join(commentsDir, `${docId}.json`);
     fs.writeFileSync(commentsFile, JSON.stringify(comments, null, 2), "utf-8");
     return true;
   });

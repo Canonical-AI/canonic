@@ -241,10 +241,15 @@ watch(() => store.activeCommentId, async (id) => {
   const comment = store.peerFileComments.find(c => c.id === id)
   if (!comment?.anchor?.quotedText) return
   await nextTick()
-  const mark = bodyEl.value?.querySelector(
-    `mark.comment-anchor[data-anchor="${comment.anchor.quotedText.replace(/"/g, '\\"')}"]`
-  )
-  if (!mark) return
+  
+  // Use CSS.escape for robust attribute selection (handles newlines, quotes, slashes, etc.)
+  const escapedAnchor = CSS.escape(comment.anchor.quotedText)
+  const mark = bodyEl.value?.querySelector(`mark.comment-anchor[data-anchor="${escapedAnchor}"]`)
+  
+  if (!mark) {
+    console.warn(`[PeerFileViewer] Could not find mark for anchor: ${comment.anchor.quotedText}`)
+    return
+  }
   mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
   mark.classList.add('flash')
   setTimeout(() => mark.classList.remove('flash'), 1200)

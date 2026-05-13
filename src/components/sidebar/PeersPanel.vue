@@ -248,7 +248,12 @@ async function openFile(peer, relPath) {
   try {
     const result = await api.peers.openFile(peer.id, relPath)
     if (result.success) {
-      store.openPeerFile({ peer, relPath, content: result.content })
+      store.openPeerFile({ 
+        peer, 
+        relPath, 
+        content: result.content, 
+        comments: result.comments 
+      })
     } else {
       alert(`Could not open file: ${result.error || 'Unknown error'}`)
     }

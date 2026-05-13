@@ -24,13 +24,14 @@ function startDiscovery() {
   browser.on('down', (svc) => emitter.emit('peer:lost', { id: peerIdFromSvc(svc) }))
 }
 
-function announceShare({ port, token, scope, permission, author }) {
+function announceShare({ port, token, scope, permission, author, taggedOnly }) {
   if (!bonjour) return
   const svc = bonjour.publish({
-    name: `${author} (${os.hostname()})`,
+    // Add port to name to prevent collision on same machine
+    name: `${author} (${os.hostname()}) - ${port}`,
     type: 'canonic',
     port,
-    txt: { token, scope, permission, author }
+    txt: { token, scope, permission, author, taggedOnly: !!taggedOnly }
   })
   publishedServices.set(port, svc)
 }
@@ -50,20 +51,62 @@ function stopDiscovery() {
 }
 
 function svcToPeer(svc) {
-  return {
-    id: `${svc.txt?.author || svc.name}@${svc.host}`,
-    name: svc.txt?.author || svc.name,
+  console.log('[Discovery] Raw service found:', JSON.stringify({
+    name: svc.name,
     host: svc.host,
+    port: svc.port,
+    addresses: svc.addresses,
+    txt: svc.txt
+  }, null, 2));
+  
+  // 1. Determine the best host (IP preferred over hostname)
+  let resolvedHost = svc.host;
+  if (svc.addresses && svc.addresses.length > 0) {
+    const ipv4 = svc.addresses.find(a => a.includes('.') && !a.includes(':'));
+    if (ipv4) resolvedHost = ipv4;
+    else resolvedHost = svc.addresses[0];
+  }
+
+  // 2. Clean up hostnames (trim trailing dots, append .local if it's a bare hostname)
+  if (typeof resolvedHost === 'string') {
+    resolvedHost = resolvedHost.replace(/\.$/, ''); // Remove trailing dot if any
+    if (!resolvedHost.includes('.') && !resolvedHost.includes(':') && resolvedHost !== 'localhost') {
+      resolvedHost = `${resolvedHost}.local`;
+    }
+  }
+
+  const author = svc.txt?.author || svc.name;
+  
+  const peer = {
+    // Include port in ID to allow multiple instances on one machine
+    id: `${author}@${resolvedHost}:${svc.port}`,
+    name: author,
+    host: resolvedHost,
     port: svc.port,
     token: svc.txt?.token,
     scope: svc.txt?.scope,
     permission: svc.txt?.permission,
+    taggedOnly: svc.txt?.taggedOnly === 'true',
     online: true
   }
+  
+  console.log('[Discovery] Resolved peer object:', JSON.stringify(peer, null, 2));
+  return peer
 }
 
 function peerIdFromSvc(svc) {
-  return `${svc.txt?.author || svc.name}@${svc.host}`
+  // Must match the ID logic in svcToPeer for 'down' events to work
+  let h = svc.host;
+  if (svc.addresses && svc.addresses.length > 0) {
+    const ipv4 = svc.addresses.find(a => a.includes('.') && !a.includes(':'));
+    if (ipv4) h = ipv4;
+    else h = svc.addresses[0];
+  }
+  if (typeof h === 'string') {
+    h = h.replace(/\.$/, '');
+    if (!h.includes('.') && !h.includes(':') && h !== 'localhost') h = `${h}.local`;
+  }
+  return `${svc.txt?.author || svc.name}@${h}:${svc.port}`
 }
 
 function _setConstructor(Ctor) { _BonjourCtor = Ctor }

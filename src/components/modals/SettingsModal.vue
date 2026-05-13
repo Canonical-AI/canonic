@@ -174,6 +174,16 @@
                                 </div>
                                 <p class="card-desc">Automatically start sharing your workspace when the app opens.</p>
                             </div>
+                            <div v-if="store.workspaceShareInfo" class="sharing-live-status">
+                                <div class="status-pulse-group">
+                                    <span class="status-dot-pulse"></span>
+                                    <span class="status-text-live">Workspace sharing active</span>
+                                </div>
+                                <div class="sharing-stats-row">
+                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.connected }}</b> live connections</span>
+                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.reads }}</b> total reads</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="field">
@@ -559,6 +569,21 @@ async function confirmReset() {
 .add-path-row { display: flex; gap: 8px; margin-top: 4px; }
 .add-path-btn { padding: 6px 14px; border-radius: 6px; border: none; background: var(--accent); color: white; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
 .add-path-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Live Sharing Status ── */
+.sharing-live-status { margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+.status-pulse-group { display: flex; align-items: center; gap: 8px; }
+.status-dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 rgba(34, 197, 94, 0.4); animation: pulse-green 2s infinite; }
+.status-text-live { font-size: 0.75rem; font-weight: 600; color: #22c55e; text-transform: uppercase; letter-spacing: 0.02em; }
+.sharing-stats-row { display: flex; gap: 16px; }
+.sharing-stat { font-size: 0.8125rem; color: var(--text-secondary); }
+.sharing-stat b { color: var(--text-primary); }
+
+@keyframes pulse-green {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
 
 /* ── Providers ── */
 .providers-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }

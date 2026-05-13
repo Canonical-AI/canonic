@@ -46,7 +46,13 @@ function getLanIP() {
 
 function loadPeers() {
   if (!fs.existsSync(PEERS_FILE)) return []
-  return JSON.parse(fs.readFileSync(PEERS_FILE, 'utf-8'))
+  try {
+    const content = fs.readFileSync(PEERS_FILE, 'utf-8')
+    return content ? JSON.parse(content) : []
+  } catch (err) {
+    console.error('[share] Error parsing peers.json:', err.message)
+    return []
+  }
 }
 
 function savePeer(peer) {
@@ -70,26 +76,51 @@ function loadIgnorePatterns(workspacePath) {
     .filter(l => l && !l.startsWith('#'))
 }
 
-function collectMarkdownFiles(rootDir, workspacePath, ignore = [], excludedPaths = []) {
+const versionService = require('./versions')
+
+function collectMarkdownFiles(workspaces, ignore = [], excludedPaths = [], taggedOnly = false) {
   const results = []
-  const scan = (dir) => {
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.name.startsWith('.')) continue
-      const full = path.join(dir, entry.name)
-      const rel = path.relative(workspacePath, full)
+  if (!Array.isArray(workspaces)) return results;
+  
+  for (const ws of workspaces) {
+    if (!ws || !ws.path) {
+      console.warn('[share] Skipping workspace with missing path:', ws);
+      continue;
+    }
+    
+    const wsVersions = taggedOnly ? versionService.readAll(ws.path) : null
+    
+    const scan = (dir) => {
+      if (!dir || typeof dir !== 'string') return;
+      
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.name.startsWith('.')) continue
+          const full = path.join(dir, entry.name)
+          const rel = path.relative(ws.path, full)
 
-      if (ignore.some(p => rel.startsWith(p) || entry.name === p)) continue
-      if (excludedPaths.some(p => rel.startsWith(p) || rel === p.replace(/\/$/, ''))) continue
+          if (ignore.some(p => rel.startsWith(p) || entry.name === p)) continue
+          if (excludedPaths.some(p => rel.startsWith(p) || rel === p.replace(/\/$/, ''))) continue
 
-      if (entry.isDirectory()) {
-        scan(full)
-      } else if (entry.name.endsWith('.md')) {
-        results.push(rel)
+          if (entry.isDirectory()) {
+            scan(full)
+          } else if (entry.name.endsWith('.md')) {
+            if (taggedOnly) {
+              if (wsVersions && wsVersions[rel] && wsVersions[rel].length > 0) {
+                results.push({ workspace: ws.name, path: rel, versions: wsVersions[rel] })
+              }
+            } else {
+              results.push({ workspace: ws.name, path: rel })
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[share] Failed to scan directory ${dir}:`, err.message);
       }
     }
+    scan(ws.path)
   }
-  scan(rootDir)
   return results
 }
 
@@ -371,9 +402,10 @@ function renderBrowsePage(author, files, token, baseUrl) {
 </html>`
 }
 
-async function startWorkspaceShare(workspacePath, options = {}) {
-  if (activeShares.has(WORKSPACE_KEY)) {
-    const s = activeShares.get(WORKSPACE_KEY)
+async function startWorkspaceShare(workspaces, options = {}) {
+  const key = options.id || WORKSPACE_KEY
+  if (activeShares.has(key)) {
+    const s = activeShares.get(key)
     const lanIP = getLanIP()
     return { success: true, token: s.token, localUrl: `http://${lanIP}:${s.port}/browse?token=${s.token}`, port: s.port, reads: s.reads, permission: s.permission }
   }
@@ -381,19 +413,18 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   const token = generateToken()
   const PORT = 3800 + Math.floor(Math.random() * 200)
   const permission = options.permission || 'view'
-  const ignore = loadIgnorePatterns(workspacePath)
-  const excludedPaths = options.excludedPaths || []
   const author = os.userInfo().username
+  const taggedOnly = !!options.taggedOnly
 
-  const share = { reads: 0, token, port: PORT, permission, wss: null, server: null, heartbeat: null, limiter: null, excludedPaths }
+  const share = { reads: 0, token, port: PORT, permission, wss: null, server: null, heartbeat: null, limiter: null, workspaces, excludedPaths: options.excludedPaths || [], taggedOnly }
 
   const app = express()
   app.set('trust proxy', true)
   app.use(express.json())
 
   const limiter = new RateLimiter({
-    maxPerSecond: 10, maxPerMinute: 1000, emaThreshold: 20,
-    onThreaten: (ema) => { console.warn(`[share:workspace] EMA ${ema.toFixed(1)} req/s — auto-stopping`); stopWorkspaceShare() }
+    maxPerSecond: 20, maxPerMinute: 2000, emaThreshold: 40,
+    onThreaten: (ema) => { console.warn(`[share:workspace] EMA ${ema.toFixed(1)} req/s — auto-stopping`); stopWorkspaceShare(key) }
   })
   share.limiter = limiter
   app.use(limiter.middleware())
@@ -425,8 +456,8 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   app.get('/browse', (req, res) => {
     if (req.query.token !== token) return res.status(403).send('Forbidden')
     share.reads++
-    emitStats(WORKSPACE_KEY, share)
-    const files = collectMarkdownFiles(workspacePath, workspacePath, ignore, share.excludedPaths)
+    emitStats(key, share)
+    const files = collectMarkdownFiles(workspaces, [], share.excludedPaths, taggedOnly)
     const baseUrl = `${req.protocol}://${req.headers.host}`
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
     res.send(renderBrowsePage(author, files, token, baseUrl))
@@ -435,40 +466,68 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   // JSON manifest for Canonic app
   app.get('/manifest', (req, res) => {
     if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
-    const files = collectMarkdownFiles(workspacePath, workspacePath, ignore, share.excludedPaths)
-    res.json({ scope: 'workspace', files, sharedAt: new Date().toISOString(), author })
+    const files = collectMarkdownFiles(workspaces, [], share.excludedPaths, taggedOnly)
+    res.json({ 
+      scope: options.scope || (workspaces.length > 1 ? 'all-workspaces' : 'workspace'), 
+      files, 
+      sharedAt: new Date().toISOString(), 
+      author, 
+      taggedOnly 
+    })
   })
 
   // Individual file
-  app.get('/file', (req, res) => {
+  app.get('/file', async (req, res) => {
     if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
     const relPath = req.query.path
+    const wsName = req.query.workspace
+    const versionOid = req.query.oid
+
     if (!relPath) return res.status(400).json({ error: 'Missing path' })
+    
+    const ws = workspaces.find(w => w.name === wsName) || workspaces[0]
+    if (!ws) return res.status(404).json({ error: 'Workspace not found' })
+
+    const resolved = path.resolve(ws.path, relPath)
+    if (!resolved.startsWith(ws.path)) return res.status(403).json({ error: 'Path outside workspace' })
 
     // Check exclusion
     if (share.excludedPaths.some(p => relPath.startsWith(p) || relPath === p.replace(/\/$/, ''))) {
       return res.status(403).json({ error: 'Path excluded from sharing' })
     }
 
-    const resolved = path.resolve(workspacePath, relPath)
-    if (!resolved.startsWith(workspacePath)) return res.status(403).json({ error: 'Path outside workspace' })
-    if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'Not found' })
-
     share.reads++
-    emitStats(WORKSPACE_KEY, share)
+    emitStats(key, share)
 
-    const content = fs.readFileSync(resolved, 'utf-8')
-    const commentsFile = path.join(os.homedir(), '.canonic', 'comments', `${relPath.replace(/\//g, '_')}.json`)
-    const comments = fs.existsSync(commentsFile) ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8')) : []
+    try {
+      let content
+      if (versionOid) {
+        const git = require('./git')
+        content = await git.readCommit(ws.path, relPath, versionOid)
+      } else if (taggedOnly) {
+        const versions = versionService.list(ws.path, relPath)
+        if (!versions.length) return res.status(403).json({ error: 'No tagged versions' })
+        const git = require('./git')
+        content = await git.readCommit(ws.path, relPath, versions[0].oid)
+      } else {
+        if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'Not found' })
+        content = fs.readFileSync(resolved, 'utf-8')
+      }
 
-    const accept = req.headers['accept'] || ''
-    if (accept.includes('text/html')) {
-      const title = path.basename(relPath, '.md')
-      const docUrl = `${req.protocol}://${req.headers.host}${req.originalUrl}`
-      res.setHeader('Content-Type', 'text/html; charset=utf-8')
-      return res.send(renderDocPage(title, content, author, docUrl))
+      const commentsFile = path.join(os.homedir(), '.canonic', 'comments', `${relPath.replace(/\//g, '_')}.json`)
+      const comments = fs.existsSync(commentsFile) ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8')) : []
+
+      const accept = req.headers['accept'] || ''
+      if (accept.includes('text/html')) {
+        const title = path.basename(relPath, '.md')
+        const docUrl = `${req.protocol}://${req.headers.host}${req.originalUrl}`
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        return res.send(renderDocPage(title, content, author, docUrl))
+      }
+      res.json({ filePath: relPath, workspace: ws.name, content, comments, oid: versionOid })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
     }
-    res.json({ filePath: relPath, content, comments })
   })
 
   const server = http.createServer(app)
@@ -481,9 +540,9 @@ async function startWorkspaceShare(workspacePath, options = {}) {
     if (url.searchParams.get('token') !== token) { ws.close(4003, 'Unauthorized'); return }
     ws.isAlive = true
     ws.on('pong', () => { ws.isAlive = true })
-    ws.on('close', () => emitStats(WORKSPACE_KEY, share))
+    ws.on('close', () => emitStats(key, share))
     ws.send(JSON.stringify({ type: 'manifest', author }))
-    emitStats(WORKSPACE_KEY, share)
+    emitStats(key, share)
   })
 
   const heartbeat = setInterval(() => {
@@ -491,22 +550,22 @@ async function startWorkspaceShare(workspacePath, options = {}) {
   }, 30000)
   share.heartbeat = heartbeat
 
-  server.listen(PORT, '127.0.0.1')
-  activeShares.set(WORKSPACE_KEY, share)
+  server.listen(PORT, '0.0.0.0')
+  activeShares.set(key, share)
 
   const lanIP = getLanIP()
   return { success: true, token, localUrl: `http://${lanIP}:${PORT}/browse?token=${token}`, port: PORT, reads: 0, permission }
 }
 
-function stopWorkspaceShare() {
-  const share = activeShares.get(WORKSPACE_KEY)
-  if (!share) return { success: false, error: 'No active workspace share' }
+function stopWorkspaceShare(key = WORKSPACE_KEY) {
+  const share = activeShares.get(key)
+  if (!share) return { success: false, error: 'No active share' }
   const port = share.port
   clearInterval(share.heartbeat)
   share.limiter.destroy()
   share.wss.close()
   share.server.close()
-  activeShares.delete(WORKSPACE_KEY)
+  activeShares.delete(key)
   return { success: true, port }
 }
 
@@ -686,7 +745,7 @@ async function startShare(workspacePath, filePath, options = {}) {
   }, 30000)
   share.heartbeat = heartbeat
 
-  server.listen(PORT, '127.0.0.1')
+  server.listen(PORT, '0.0.0.0')
   activeShares.set(filePath, share)
 
   const lanIP = getLanIP()
@@ -731,6 +790,25 @@ function stopAllShares() {
   return stoppedPorts
 }
 
+function listActiveShares() {
+  const results = []
+  for (const [key, s] of activeShares.entries()) {
+    const lanIP = getLanIP()
+    results.push({
+      key,
+      success: true,
+      token: s.token,
+      localUrl: `http://${lanIP}:${s.port}/${key === WORKSPACE_KEY || key === '__all_workspaces__' ? 'browse' : 'doc'}?token=${s.token}`,
+      port: s.port,
+      reads: s.reads,
+      permission: s.permission,
+      connected: s.wss.clients.size,
+      taggedOnly: s.taggedOnly
+    })
+  }
+  return results
+}
+
 async function fetchSharedDoc(url, token) {
   try {
     const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args))
@@ -768,4 +846,4 @@ function getStats(filePath) {
   return { filePath, reads: share.reads, connected: share.wss.clients.size }
 }
 
-module.exports = { startShare, stopShare, startWorkspaceShare, stopWorkspaceShare, stopAllShares, pushUpdate, fetchSharedDoc, getStats, emitter, WORKSPACE_KEY }
+module.exports = { startShare, stopShare, startWorkspaceShare, stopWorkspaceShare, stopAllShares, listActiveShares, pushUpdate, fetchSharedDoc, getStats, emitter, WORKSPACE_KEY }

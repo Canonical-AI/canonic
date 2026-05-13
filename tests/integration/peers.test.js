@@ -65,21 +65,26 @@ describe('peers store', () => {
     expect(store.favoritedPeerIds.has('alice@alice-mac.local')).toBe(false)
   })
 
-  it('favoritedPeers computed returns only favorited discoveredPeers', () => {
+  it('favoritedPeers computed returns favorited peers even if offline', () => {
     store.discoveredPeers = [
       { id: 'alice@host', name: 'alice', online: true },
-      { id: 'bob@host', name: 'bob', online: true }
     ]
     store.favoritedPeerIds.add('alice@host')
-    expect(store.favoritedPeers).toHaveLength(1)
-    expect(store.favoritedPeers[0].id).toBe('alice@host')
+    store.favoritedPeerIds.add('bob@host')
+    // alice is online, bob is offline (not in discoveredPeers)
+    expect(store.favoritedPeers).toHaveLength(2)
+    expect(store.favoritedPeers.find(p => p.id === 'alice@host').online).toBe(true)
+    expect(store.favoritedPeers.find(p => p.id === 'bob@host').online).toBe(false)
   })
 
-  it('discoveredPeers is reactive — favoritedPeers updates when peer added', () => {
+  it('discoveredPeers is reactive — favoritedPeers updates online status', () => {
     store.favoritedPeerIds.add('charlie@host')
-    expect(store.favoritedPeers).toHaveLength(0)
+    expect(store.favoritedPeers).toHaveLength(1)
+    expect(store.favoritedPeers[0].online).toBe(false)
+    
     store.discoveredPeers.push({ id: 'charlie@host', name: 'charlie', online: true })
     expect(store.favoritedPeers).toHaveLength(1)
+    expect(store.favoritedPeers[0].online).toBe(true)
   })
 })
 

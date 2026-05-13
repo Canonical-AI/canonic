@@ -49,6 +49,9 @@ export const useAppStore = defineStore("app", () => {
   const showLineNumbers = ref(
     localStorage.getItem("canonic:line-numbers") === "true",
   );
+  if (showLineNumbers.value) {
+    document.documentElement.setAttribute("data-line-numbers", "true");
+  }
   watch(showLineNumbers, (val) => {
     localStorage.setItem("canonic:line-numbers", String(val));
     if (val) {
@@ -71,10 +74,32 @@ export const useAppStore = defineStore("app", () => {
 
   // Peer discovery state
   const discoveredPeers = ref([]);
+  const persistedPeers = ref([]);
   const favoritedPeerIds = reactive(new Set());
-  const favoritedPeers = computed(() =>
-    discoveredPeers.value.filter((p) => favoritedPeerIds.has(p.id))
-  );
+  const favoritedPeers = computed(() => {
+    const onlineMap = new Map(discoveredPeers.value.map((p) => [p.id, p]));
+    const result = [];
+    for (const id of favoritedPeerIds) {
+      const online = onlineMap.get(id);
+      if (online) {
+        result.push(online);
+      } else {
+        const persisted = persistedPeers.value.find((p) => p.id === id);
+        if (persisted) {
+          result.push({ ...persisted, online: false });
+        } else {
+          result.push({ id, name: id.split("@")[0], online: false });
+        }
+      }
+    }
+    return result;
+  });
+
+  async function refreshDiscoveredPeers() {
+    if (isDemoMode.value) return;
+    const peers = await api.peers.listDiscovered();
+    discoveredPeers.value = peers;
+  }
   const peerFileContent = ref(null); // { peer, relPath, content } | null
   const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
   const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
@@ -84,6 +109,15 @@ export const useAppStore = defineStore("app", () => {
   const appVersion = ref(__APP_VERSION__ || "");
 
   const api = window.canonic;
+
+  async function syncActiveShares() {
+    if (!api.share?.listActive) return;
+    const active = await api.share.listActive();
+    for (const s of active) {
+      sharesByFile[s.key] = s;
+      shareStatsByFile[s.key] = { reads: s.reads, connected: s.connected };
+    }
+  }
 
   // Register agent session IPC listeners once
   if (api.agentSession) {
@@ -212,6 +246,7 @@ export const useAppStore = defineStore("app", () => {
       comments.value = [];
       await refreshFiles();
       await refreshBranches();
+      await syncActiveShares();
 
       // Restore last used branch if it exists in the workspace
       const cfg = await loadConfig();
@@ -223,8 +258,11 @@ export const useAppStore = defineStore("app", () => {
       await loadDocBranchMap();
       await loadTrash();
       if (api.peers?.list) {
-        const persistedPeers = await api.peers.list()
-        persistedPeers.forEach(p => { if (p.favorited) favoritedPeerIds.add(p.id) })
+        const peers = await api.peers.list();
+        persistedPeers.value = peers;
+        peers.forEach((p) => {
+          if (p.favorited) favoritedPeerIds.add(p.id);
+        });
       }
       if (api.files.getIndex) {
         const idx = await api.files.getIndex();
@@ -789,10 +827,11 @@ export const useAppStore = defineStore("app", () => {
 
   async function startShare(options) {
     if (!workspacePath.value || !currentFile.value) return;
+    const cleanOptions = JSON.parse(JSON.stringify(options || {}));
     const result = await api.share.start(
       workspacePath.value,
       currentFile.value,
-      options,
+      cleanOptions,
     );
     if (result.success) {
       sharesByFile[currentFile.value] = result;
@@ -812,15 +851,39 @@ export const useAppStore = defineStore("app", () => {
   async function startWorkspaceShare() {
     if (!workspacePath.value) return;
     const cfg = config.value || await loadConfig();
-    const result = await api.share.startWorkspace(workspacePath.value, {
+    const options = {
       permission: cfg?.sharingDefaults?.accessLevel || 'view',
-      excludedPaths: cfg?.sharingExcludedPaths || []
-    });
+      excludedPaths: JSON.parse(JSON.stringify(cfg?.sharingExcludedPaths || []))
+    };
+    const result = await api.share.startWorkspace(workspacePath.value, options);
     if (result.success) {
       sharesByFile[WORKSPACE_KEY] = result;
       shareStatsByFile[WORKSPACE_KEY] = { reads: result.reads ?? 0, connected: 0 };
     }
     return result;
+  }
+
+  async function startAllWorkspacesShare() {
+    const cfg = config.value || await loadConfig();
+    const workspaces = recentWorkspaces.value.map(w => ({ path: w.path, name: w.name }));
+    const options = {
+      permission: cfg?.sharingDefaults?.accessLevel || 'view',
+      excludedPaths: JSON.parse(JSON.stringify(cfg?.sharingExcludedPaths || []))
+    };
+    const ALL_WS_KEY = '__all_workspaces__';
+    const result = await api.share.startAllWorkspaces(workspaces, options);
+    if (result.success) {
+      sharesByFile[ALL_WS_KEY] = result;
+      shareStatsByFile[ALL_WS_KEY] = { reads: result.reads ?? 0, connected: 0 };
+    }
+    return result;
+  }
+
+  async function stopAllWorkspacesShare() {
+    const ALL_WS_KEY = '__all_workspaces__';
+    await api.share.stopWorkspace(ALL_WS_KEY);
+    delete sharesByFile[ALL_WS_KEY];
+    delete shareStatsByFile[ALL_WS_KEY];
   }
 
   async function stopWorkspaceShare() {
@@ -894,11 +957,15 @@ export const useAppStore = defineStore("app", () => {
   async function favoritePeer(id) {
     await api.peers.favorite(id);
     favoritedPeerIds.add(id);
+    const peers = await api.peers.list();
+    persistedPeers.value = peers;
   }
 
   async function unfavoritePeer(id) {
     await api.peers.unfavorite(id);
     favoritedPeerIds.delete(id);
+    const peers = await api.peers.list();
+    persistedPeers.value = peers;
   }
 
   function setActiveComment(id) {
@@ -954,6 +1021,8 @@ export const useAppStore = defineStore("app", () => {
     workspaceShareStats,
     startWorkspaceShare,
     stopWorkspaceShare,
+    startAllWorkspacesShare,
+    stopAllWorkspacesShare,
     searchResults,
     config,
     sidebarTab,
@@ -1035,5 +1104,9 @@ export const useAppStore = defineStore("app", () => {
     fileIndex,
     appVersion,
     commentingActive: ref(false),
+    refreshDiscoveredPeers,
+    discoveredPeers,
+    favoritedPeerIds,
+    favoritedPeers,
   };
 });

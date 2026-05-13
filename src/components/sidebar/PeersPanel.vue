@@ -106,20 +106,50 @@
               <Loader :size="12" class="spin" /> Loading files…
             </div>
             <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
-              Could not load files.
+              Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
             </div>
             <div v-else class="peer-files">
               <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
-              <button
-                v-for="relPath in peerFiles[peer.id]"
-                :key="relPath"
-                class="peer-file"
-                @click="openFile(peer, relPath)"
-              >
-                <FileText :size="13" />
-                <span class="file-name">{{ basename(relPath) }}</span>
-                <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
-              </button>
+              
+              <!-- Grouped by Workspace if multiple -->
+              <template v-if="peer.scope === 'all-workspaces'">
+                <div v-for="(group, wsName) in groupedPeerFiles(peer.id)" :key="wsName" class="peer-ws-group">
+                  <div class="peer-ws-header">
+                    <FolderSync :size="10" />
+                    {{ wsName }}
+                  </div>
+                  <button
+                    v-for="file in group"
+                    :key="file.path"
+                    class="peer-file"
+                    @click="openFile(peer, file.path, wsName)"
+                  >
+                    <FileText :size="13" />
+                    <div class="peer-file-info">
+                      <span class="file-name">{{ basename(file.path) }}</span>
+                      <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
+                    </div>
+                    <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+                  </button>
+                </div>
+              </template>
+
+              <!-- Standard flat list (Workspace scope) -->
+              <template v-else>
+                <button
+                  v-for="file in peerFiles[peer.id]"
+                  :key="typeof file === 'string' ? file : file.path"
+                  class="peer-file"
+                  @click="openFile(peer, typeof file === 'string' ? file : file.path, typeof file === 'string' ? null : file.workspace)"
+                >
+                  <FileText :size="13" />
+                  <div class="peer-file-info">
+                    <span class="file-name">{{ basename(typeof file === 'string' ? file : file.path) }}</span>
+                    <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
+                  </div>
+                  <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+                </button>
+              </template>
             </div>
           </div>
           <div v-else-if="peerFilesExpanded[peer.id]" class="peer-offline-hint">Offline — can't load files</div>
@@ -134,19 +164,19 @@
           <Loader :size="14" class="spin" /> Scanning…
         </div>
         <div v-else class="discover-meta">
-          {{ allDiscovered.length }} peer{{ allDiscovered.length !== 1 ? 's' : '' }} found
+          {{ store.discoveredPeers.length }} peer{{ store.discoveredPeers.length !== 1 ? 's' : '' }} found
         </div>
         <button class="refresh-btn" @click="refreshDiscover" :disabled="discovering">
           <RefreshCw :size="13" :class="{ spin: discovering }" />
         </button>
       </div>
 
-      <div v-if="!discovering && allDiscovered.length === 0" class="empty-hint">
+      <div v-if="!discovering && store.discoveredPeers.length === 0" class="empty-hint">
         No Canonic peers found on this network.
       </div>
 
-      <div v-for="peer in allDiscovered" :key="peer.id" class="peer-group">
-        <div class="peer-header">
+      <div v-for="peer in store.discoveredPeers" :key="peer.id" class="peer-group">
+        <div class="peer-header" @click="togglePeerFiles(peer)">
           <div class="peer-avatar">{{ initials(peer.name) }}</div>
           <div class="peer-info">
             <span class="peer-name">{{ peer.name }}</span>
@@ -159,11 +189,64 @@
             class="icon-btn"
             :class="store.favoritedPeerIds.has(peer.id) ? 'unfav-btn' : 'fav-btn'"
             :title="store.favoritedPeerIds.has(peer.id) ? 'Unfavorite' : 'Favorite'"
-            @click="toggleFavorite(peer)"
+            @click.stop="toggleFavorite(peer)"
           >
             <Star :size="13" :fill="store.favoritedPeerIds.has(peer.id) ? 'currentColor' : 'none'" />
           </button>
         </div>
+
+        <div v-if="peerFilesExpanded[peer.id] && peer.online">
+          <div v-if="peerFiles[peer.id] === undefined" class="peer-files-loading">
+            <Loader :size="12" class="spin" /> Loading files…
+          </div>
+          <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
+            Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
+          </div>
+          <div v-else class="peer-files">
+            <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+            
+            <!-- Grouped by Workspace if multiple -->
+            <template v-if="peer.scope === 'all-workspaces'">
+              <div v-for="(group, wsName) in groupedPeerFiles(peer.id)" :key="wsName" class="peer-ws-group">
+                <div class="peer-ws-header">
+                  <FolderSync :size="10" />
+                  {{ wsName }}
+                </div>
+                <button
+                  v-for="file in group"
+                  :key="file.path"
+                  class="peer-file"
+                  @click="openFile(peer, file.path, wsName)"
+                >
+                  <FileText :size="13" />
+                  <div class="peer-file-info">
+                    <span class="file-name">{{ basename(file.path) }}</span>
+                    <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
+                  </div>
+                  <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+                </button>
+              </div>
+            </template>
+
+            <!-- Standard flat list (Workspace scope) -->
+            <template v-else>
+              <button
+                v-for="file in peerFiles[peer.id]"
+                :key="typeof file === 'string' ? file : file.path"
+                class="peer-file"
+                @click="openFile(peer, typeof file === 'string' ? file : file.path, typeof file === 'string' ? null : file.workspace)"
+              >
+                <FileText :size="13" />
+                <div class="peer-file-info">
+                  <span class="file-name">{{ basename(typeof file === 'string' ? file : file.path) }}</span>
+                  <span v-if="file.versions" class="file-version-count">{{ file.versions.length }} v</span>
+                </div>
+                <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
+              </button>
+            </template>
+          </div>
+        </div>
+        <div v-else-if="peerFilesExpanded[peer.id]" class="peer-offline-hint">Offline — can't load files</div>
       </div>
     </div>
 
@@ -189,7 +272,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useAppStore } from '../../store'
-import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw } from 'lucide-vue-next'
+import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw, FolderSync } from 'lucide-vue-next'
 import demoConfig from "../../demo/config.json"
 
 const store = useAppStore()
@@ -197,7 +280,6 @@ const api = window.canonic
 
 const view = ref('favorites')
 const discovering = ref(false)
-const allDiscovered = ref([])
 const peerFiles = reactive({}) // peerId -> string[] | null | undefined
 const peerFilesExpanded = reactive({}) // peerId -> boolean
 
@@ -211,42 +293,72 @@ function basename(relPath) {
 
 async function switchToDiscover() {
   view.value = 'discover'
-  if (allDiscovered.value.length > 0) return
+  if (store.discoveredPeers.length > 0) return
   await refreshDiscover()
 }
 
 async function refreshDiscover() {
   if (store.isDemoMode) {
-    allDiscovered.value = demoConfig.discoveredPeers || []
+    // Demo mode uses demoConfig but we could also just leave it
     return
   }
   discovering.value = true
   try {
-    const peers = await api.peers.listDiscovered()
-    allDiscovered.value = peers
+    await store.refreshDiscoveredPeers()
+    // Clear local cache on refresh so we try loading again
+    for (const key in peerFiles) {
+      delete peerFiles[key]
+    }
   } finally {
     discovering.value = false
   }
 }
 
 async function togglePeerFiles(peer) {
+  console.log('[PeersPanel] togglePeerFiles', peer.id, 'expanded:', !!peerFilesExpanded[peer.id])
   const isExpanded = !!peerFilesExpanded[peer.id]
   peerFilesExpanded[peer.id] = !isExpanded
 
-  if (!isExpanded && peerFiles[peer.id] === undefined && !store.isDemoMode) {
+  // If expanding and we don't have files (or failed previously), load them
+  if (!isExpanded && (peerFiles[peer.id] === undefined || peerFiles[peer.id] === null) && !store.isDemoMode) {
     await loadFiles(peer)
   }
 }
 
-async function loadFiles(peer) {
-  peerFiles[peer.id] = undefined // show loading state
-  const result = await api.peers.fetchManifest(peer.id)
-  peerFiles[peer.id] = result.success ? result.files : null
+function groupedPeerFiles(peerId) {
+  const files = peerFiles[peerId] || []
+  const groups = {}
+  for (const f of files) {
+    const ws = f.workspace || 'Default'
+    if (!groups[ws]) groups[ws] = []
+    groups[ws].push(f)
+  }
+  return groups
 }
 
-async function openFile(peer, relPath) {
+async function loadFiles(peer) {
+  console.log('[PeersPanel] loadFiles starting for', peer.id)
+  peerFiles[peer.id] = undefined // show loading state
   try {
-    const result = await api.peers.openFile(peer.id, relPath)
+    const result = await api.peers.fetchManifest(peer.id)
+    console.log('[PeersPanel] fetchManifest result for', peer.id, ':', result)
+    // The manifest now includes scope metadata
+    if (result.success) {
+      peerFiles[peer.id] = result.files
+      peer.scope = result.scope // dynamically update scope from manifest
+    } else {
+      peerFiles[peer.id] = null
+      console.warn('[PeersPanel] fetchManifest failed:', result.error)
+    }
+  } catch (err) {
+    console.error('[PeersPanel] fetchManifest error:', err)
+    peerFiles[peer.id] = null
+  }
+}
+
+async function openFile(peer, relPath, wsName = null) {
+  try {
+    const result = await api.peers.openFile(peer.id, relPath, wsName)
     if (result.success) {
       store.openPeerFile({ 
         peer, 
@@ -496,12 +608,50 @@ function toggleFavorite(peer) {
 }
 .peer-file:hover { background: var(--bg-hover); color: var(--text-primary); }
 
-.file-name {
+.peer-file-info {
   flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.file-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.file-version-count {
+  font-size: 0.625rem;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.peer-ws-group {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.peer-ws-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 36px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.peer-ws-header :deep(svg) { opacity: 0.6; }
 
 .perm-badge {
   font-size: 0.625rem;

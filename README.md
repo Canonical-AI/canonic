@@ -81,6 +81,32 @@ Download the latest version for your platform from the [Releases](https://github
 - **Windows:** `.exe`
 - **Linux:** `.AppImage`
 
+---
+
+## Release Pipeline
+
+Canonic uses an automated release pipeline triggered by Pull Requests.
+
+### 1. Versioning
+Versions are incremented automatically upon merging a PR into `main`. Use GitHub Labels to control the bump:
+- `major`: Increments the first digit (X.0.0). Use for breaking changes.
+- `minor`: Increments the second digit (0.X.0). Use for new features.
+- `patch` (default): Increments the third digit (0.0.X). Use for bug fixes.
+
+### 2. Release Notes
+The **PR Description** is automatically captured and used as the release notes for the drafted release. 
+
+### 3. CI/CD Flow
+1. **Merge PR:** The `Version Bump` workflow identifies the label, bumps `package.json`, creates a Draft Release with your notes, and pushes a tag.
+2. **Auto-Build:** The tag push triggers the `Release` workflow, which builds the binaries and uploads them to the draft.
+
+### 4. Setup Requirement
+To allow the versioning workflow to trigger the build workflow, you must add a GitHub Personal Access Token (PAT) to your repository secrets:
+- **Name:** `RELEASE_TOKEN`
+- **Permissions:** `repo` (for classic PAT) or `contents:write` (for fine-grained PAT).
+
+---
+
 ### Run Locally (for Development)
 
 This starts both the Vite dev server and the Electron window.

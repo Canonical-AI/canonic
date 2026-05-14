@@ -76,7 +76,7 @@ jobs:
           
           # Check if release exists, if not create it with PR body as notes
           if ! gh release view "v$VERSION" > /dev/null 2>&1; then
-            gh release create "v$VERSION" --draft --title "v$VERSION" --notes-file release_notes.md
+            gh release create "v$VERSION" --draft --title "v$VERSION" --notes-file release_notes.md --target main
           else
             echo "Release v$VERSION already exists, updating notes..."
             gh release edit "v$VERSION" --notes-file release_notes.md

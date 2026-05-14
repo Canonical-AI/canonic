@@ -138,8 +138,7 @@ jobs:
         run: |
           gh release edit "v${{ needs.create-draft.outputs.version }}" \
             --repo Canonical-AI/canonic \
-            --draft=false \
-            --latest
+            --draft=false
 
   update-brew:
     needs: [create-draft, release-mac, publish-release]

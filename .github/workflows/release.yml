@@ -126,8 +126,23 @@ jobs:
           DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  publish-release:
+    needs: [create-draft, release-mac, release-win, release-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "v${{ needs.create-draft.outputs.version }}" \
+            --repo Canonical-AI/canonic \
+            --draft=false \
+            --latest
+
   update-brew:
-    needs: [create-draft, release-mac]
+    needs: [create-draft, release-mac, publish-release]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:

@@ -71,6 +71,7 @@ jobs:
 
       - name: Push changes
         run: |
+          VERSION=$(jq -r .version package.json)
           git push origin main
           git push origin "refs/tags/v$VERSION"
 

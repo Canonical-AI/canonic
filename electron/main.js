@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require("
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { exec, execSync } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const semver = require("semver");
@@ -342,6 +343,110 @@ app.on("will-quit", () => {
   stopWatcher();
 });
 
+async function setDefaultEditor(value) {
+  if (value) {
+    app.setAsDefaultProtocolClient("canonic");
+
+    if (process.platform === "win32") {
+      shell.openExternal("ms-settings:defaultapps");
+    } else if (process.platform === "linux") {
+      try {
+        exec("xdg-mime default canonic.desktop text/markdown");
+      } catch (e) {
+        console.error("[main] Failed to set default mime type", e);
+      }
+    } else if (process.platform === "darwin") {
+      try {
+        const bundleId = app.isPackaged ? "ai.canonic.app" : "com.github.electron";
+        console.log(`[main] Attempting to set default editor for ${bundleId} on macOS (packaged: ${app.isPackaged})`);
+        
+        const script = `
+import Foundation
+import AppKit
+import UniformTypeIdentifiers
+
+let semaphore = DispatchSemaphore(value: 0)
+let bundleId = "${bundleId}"
+print("--- Swift Start ---")
+print("Target Bundle ID: \\(bundleId)")
+
+if #available(macOS 12.0, *) {
+    let uti = UTType("net.daringfireball.markdown") ?? UTType.plainText
+    print("Target UTI: \\(uti.identifier)")
+    
+    if let appUrl = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+        print("Found app at: \\(appUrl.path)")
+        print("Calling setDefaultApplication...")
+        NSWorkspace.shared.setDefaultApplication(at: appUrl, toOpenContentType: uti) { error in
+            if let error = error {
+                print("Result: ERROR - \\(error.localizedDescription)")
+                exit(1)
+            } else {
+                print("Result: SUCCESS (Request sent to OS)")
+            }
+            semaphore.signal()
+        }
+        let waitResult = semaphore.wait(timeout: .now() + 5)
+        if waitResult == .timedOut {
+            print("Result: ERROR - Timeout waiting for OS response")
+            exit(1)
+        }
+    } else {
+        print("Result: ERROR - App not found for bundle ID")
+        exit(1)
+    }
+} else {
+    print("Using legacy LSSetDefaultRoleHandlerForContentType")
+    let cfBundleId = bundleId as CFString
+    LSSetDefaultRoleHandlerForContentType("net.daringfireball.markdown" as CFString, .editor, cfBundleId)
+    LSSetDefaultRoleHandlerForContentType("public.markdown" as CFString, .editor, cfBundleId)
+    print("Result: Legacy call completed")
+}
+print("--- Swift End ---")
+`;
+        const tempScriptPath = path.join(os.tmpdir(), `set_default_${Date.now()}.swift`);
+        fs.writeFileSync(tempScriptPath, script);
+
+        try {
+          const output = execSync(`swift ${tempScriptPath}`, { encoding: "utf8" });
+          console.log("[main] Swift script output:\n", output);
+        } finally {
+          try { fs.unlinkSync(tempScriptPath); } catch {}
+        }
+
+        // Verify
+        const checkCmd = `swift -e 'import Foundation; import AppKit; let url = NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "dummy.md")); print(url?.bundleIdentifier ?? "none")'`;
+        const currentBundleId = execSync(checkCmd, { encoding: "utf8" }).trim();
+        console.log(`[main] Verification check: current default is ${currentBundleId}`);
+
+        if (currentBundleId === bundleId) {
+          await dialog.showMessageBox({
+            type: "info",
+            title: "Default Editor Set",
+            message: "Canonic is now your default Markdown editor.",
+          });
+          return true;
+        }
+      } catch (e) {
+        console.error("[main] Failed to set default programmatically on macOS", e);
+      }
+
+      // Fallback to manual instructions if programmatic fails
+      await dialog.showMessageBox(mainWindow, {
+        type: "info",
+        title: "Set Default Editor",
+        message: "To make Canonic your default .md editor on macOS:",
+        detail:
+          "1. Right-click any .md file in Finder\n2. Select 'Get Info'\n3. Under 'Open with', select Canonic\n4. Click 'Change All...'",
+        buttons: ["Got it"],
+      });
+    }
+    return true;
+  } else {
+    return app.removeAsDefaultProtocolClient("canonic");
+  }
+}
+
 function createMenu() {
   const template = [
     ...(process.platform === "darwin"
@@ -361,14 +466,9 @@ function createMenu() {
               {
                 label: "Set as Default Markdown Editor",
                 click: async () => {
-                  app.setAsDefaultProtocolClient("canonic");
-                  await dialog.showMessageBox(mainWindow, {
-                    message: "Canonic registered for canonic://. To make it default for .md files, use your OS 'Open With' menu and select 'Always use this app'.",
-                    title: "Default Editor",
-                  });
+                  await setDefaultEditor(true);
                 },
-              },
-              { type: "separator" },
+              },              { type: "separator" },
               { role: "services" },
               { type: "separator" },
               { role: "hide" },
@@ -700,15 +800,34 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("app:is-default-md", async () => {
-    return app.isDefaultProtocolClient("canonic");
+    const isProtocolDefault = app.isDefaultProtocolClient("canonic");
+
+    try {
+      if (process.platform === "win32") {
+        const output = execSync(
+          'reg query "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.md\\UserChoice" /v ProgId',
+          { encoding: "utf8" },
+        );
+        return output.includes("Canonic") || output.includes("ai.canonic.app");
+      } else if (process.platform === "linux") {
+        const output = execSync("xdg-mime query default text/markdown", {
+          encoding: "utf8",
+        });
+        return output.toLowerCase().includes("canonic");
+      } else if (process.platform === "darwin") {
+        const checkCmd = `swift -e 'import Foundation; import AppKit; let url = NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "dummy.md")); print(url?.bundleIdentifier ?? "")'`;
+        const bundleId = execSync(checkCmd, { encoding: "utf8" }).trim();
+        return bundleId === "ai.canonic.app";
+      }
+    } catch (e) {
+      // Fallback
+    }
+
+    return isProtocolDefault;
   });
 
   ipcMain.handle("app:set-default-md", async (_, value) => {
-    if (value) {
-      return app.setAsDefaultProtocolClient("canonic");
-    } else {
-      return app.removeAsDefaultProtocolClient("canonic");
-    }
+    return setDefaultEditor(value);
   });
 
   // --- Files ---

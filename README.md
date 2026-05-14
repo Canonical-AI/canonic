@@ -67,21 +67,21 @@ Open any folder with a `.git` directory — Canonic detects it, skips re-initial
 
 ---
 
-## Getting Started
+### Installation
 
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) v16+
-- npm
-
-### Run Locally
-
+#### macOS (via Homebrew)
 ```bash
-git clone https://github.com/Canonical-AI/canonic.git
-cd canonic
-npm install
-npm run dev
+brew tap Canonical-AI/tap
+brew install --cask canonic
 ```
+
+#### Direct Download
+Download the latest version for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
+- **macOS:** `.dmg` (Apple Silicon)
+- **Windows:** `.exe`
+- **Linux:** `.AppImage`
+
+### Run Locally (for Development)
 
 This starts both the Vite dev server and the Electron window.
 

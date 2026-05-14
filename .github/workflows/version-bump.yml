@@ -73,10 +73,12 @@ jobs:
           git commit -m "chore(release): bump version to $VERSION"
           # Delete stale remote tag from a prior failed run if it exists
           git push origin ":refs/tags/v$VERSION" 2>/dev/null || true
-          git tag "v$VERSION"
+          git tag -a "v$VERSION" -m "v$VERSION"
 
       - name: Push changes
-        run: git push origin main --follow-tags
+        run: |
+          git push origin main
+          git push origin "refs/tags/v$VERSION"
 
       - name: Create Draft Release
         env:

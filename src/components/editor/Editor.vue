@@ -248,7 +248,7 @@ const titleValue = ref("");
 
 const docTitle = computed(() => {
     if (!store.currentFile) return "";
-    return store.currentFile.split("/").pop().replace(".md", "");
+    return store.currentFile.split(/[\\/]/).pop().replace(".md", "");
 });
 
 async function startTitleRename() {

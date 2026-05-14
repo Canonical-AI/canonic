@@ -401,9 +401,19 @@ onMounted(async () => {
                 }
             }
         });
+
+        window.canonic.menu.onOpenFile(async (path) => {
+            if (path) {
+                try {
+                    await store.openStandaloneFile(path);
+                } catch (err) {
+                    console.error("Failed to open file from menu:", err);
+                }
+            }
+        });
     }
 
-    if (!store.workspacePath) {
+    if (!store.workspacePath && !store.currentFile) {
         const last = store.recentWorkspaces[0];
         if (last) {
             try {

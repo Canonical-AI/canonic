@@ -18,7 +18,7 @@ const router = createRouter({
 router.beforeEach((to) => {
   if (to.path === '/workspace') {
     const store = useAppStore()
-    if (!store.workspacePath && store.recentWorkspaces.length === 0) {
+    if (!store.workspacePath && !store.currentFile && store.recentWorkspaces.length === 0) {
       return '/'
     }
   }

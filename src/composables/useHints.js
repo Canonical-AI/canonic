@@ -9,6 +9,12 @@ export const HINTS = [
     action: { label: 'Set up', target: 'settings:providers' },
     condition: (config) => !config?.completion?.providerId,
   },
+  {
+    id: 'default-editor-setup',
+    title: 'Default editor',
+    body: 'Make Canonic your default markdown editor for quick access to your files.',
+    action: { label: 'Set as default', target: 'settings:profile' },
+  },
 ]
 
 export function useHints(config) {

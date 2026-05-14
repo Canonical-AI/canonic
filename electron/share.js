@@ -6,6 +6,13 @@ const { EventEmitter } = require('events')
 const path = require('path')
 
 function resolveSafePath(base, target) {
+  // If target is an absolute path and base is null, allow it (for workspace-less files)
+  if (!base && path.isAbsolute(target)) {
+    return target;
+  }
+  if (!base) {
+    throw new Error("Base path required for relative targets");
+  }
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
   if (!resolvedTarget.startsWith(resolvedBase)) {

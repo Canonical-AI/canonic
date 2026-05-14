@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require("
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const { exec, execSync } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const semver = require("semver");
@@ -136,10 +137,31 @@ if (!fs.existsSync(path.join(CANONIC_DIR, "comments"))) {
 let mainWindow;
 let updateDownloaded = false;
 
+// Track file passed via OS "open-file" event (macOS) or CLI (Win/Linux)
+let fileToOpenOnStartup = process.argv.find(arg => arg.endsWith('.md') && fs.existsSync(arg)) || null;
+
+app.on("open-file", (event, path) => {
+  event.preventDefault();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("menu:open-file", path);
+  } else {
+    fileToOpenOnStartup = path;
+  }
+});
+
 function resolveSafePath(base, target) {
+  // If target is an absolute path and base is null, allow it (for workspace-less files)
+  if (!base && path.isAbsolute(target)) {
+    return target;
+  }
+  if (!base) {
+    console.error("[resolveSafePath] No base provided for target:", target);
+    throw new Error("Base path required for relative targets");
+  }
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
   if (!resolvedTarget.startsWith(resolvedBase)) {
+    console.error("[resolveSafePath] Path traversal blocked:", { base, target, resolvedBase, resolvedTarget });
     throw new Error("Path traversal blocked: " + target);
   }
   return resolvedTarget;
@@ -235,6 +257,13 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
 
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (fileToOpenOnStartup) {
+      mainWindow.webContents.send("menu:open-file", fileToOpenOnStartup);
+      fileToOpenOnStartup = null;
+    }
+  });
+
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const isDevUrl = isDev && url.startsWith(process.env.VITE_DEV_URL || "http://localhost:5173");
     const isFileUrl = !isDev && url.startsWith('file://');
@@ -314,6 +343,110 @@ app.on("will-quit", () => {
   stopWatcher();
 });
 
+async function setDefaultEditor(value) {
+  if (value) {
+    app.setAsDefaultProtocolClient("canonic");
+
+    if (process.platform === "win32") {
+      shell.openExternal("ms-settings:defaultapps");
+    } else if (process.platform === "linux") {
+      try {
+        exec("xdg-mime default canonic.desktop text/markdown");
+      } catch (e) {
+        console.error("[main] Failed to set default mime type", e);
+      }
+    } else if (process.platform === "darwin") {
+      try {
+        const bundleId = app.isPackaged ? "ai.canonic.app" : "com.github.electron";
+        console.log(`[main] Attempting to set default editor for ${bundleId} on macOS (packaged: ${app.isPackaged})`);
+        
+        const script = `
+import Foundation
+import AppKit
+import UniformTypeIdentifiers
+
+let semaphore = DispatchSemaphore(value: 0)
+let bundleId = "${bundleId}"
+print("--- Swift Start ---")
+print("Target Bundle ID: \\(bundleId)")
+
+if #available(macOS 12.0, *) {
+    let uti = UTType("net.daringfireball.markdown") ?? UTType.plainText
+    print("Target UTI: \\(uti.identifier)")
+    
+    if let appUrl = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+        print("Found app at: \\(appUrl.path)")
+        print("Calling setDefaultApplication...")
+        NSWorkspace.shared.setDefaultApplication(at: appUrl, toOpenContentType: uti) { error in
+            if let error = error {
+                print("Result: ERROR - \\(error.localizedDescription)")
+                exit(1)
+            } else {
+                print("Result: SUCCESS (Request sent to OS)")
+            }
+            semaphore.signal()
+        }
+        let waitResult = semaphore.wait(timeout: .now() + 5)
+        if waitResult == .timedOut {
+            print("Result: ERROR - Timeout waiting for OS response")
+            exit(1)
+        }
+    } else {
+        print("Result: ERROR - App not found for bundle ID")
+        exit(1)
+    }
+} else {
+    print("Using legacy LSSetDefaultRoleHandlerForContentType")
+    let cfBundleId = bundleId as CFString
+    LSSetDefaultRoleHandlerForContentType("net.daringfireball.markdown" as CFString, .editor, cfBundleId)
+    LSSetDefaultRoleHandlerForContentType("public.markdown" as CFString, .editor, cfBundleId)
+    print("Result: Legacy call completed")
+}
+print("--- Swift End ---")
+`;
+        const tempScriptPath = path.join(os.tmpdir(), `set_default_${Date.now()}.swift`);
+        fs.writeFileSync(tempScriptPath, script);
+
+        try {
+          const output = execSync(`swift ${tempScriptPath}`, { encoding: "utf8" });
+          console.log("[main] Swift script output:\n", output);
+        } finally {
+          try { fs.unlinkSync(tempScriptPath); } catch {}
+        }
+
+        // Verify
+        const checkCmd = `swift -e 'import Foundation; import AppKit; let url = NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "dummy.md")); print(url?.bundleIdentifier ?? "none")'`;
+        const currentBundleId = execSync(checkCmd, { encoding: "utf8" }).trim();
+        console.log(`[main] Verification check: current default is ${currentBundleId}`);
+
+        if (currentBundleId === bundleId) {
+          await dialog.showMessageBox({
+            type: "info",
+            title: "Default Editor Set",
+            message: "Canonic is now your default Markdown editor.",
+          });
+          return true;
+        }
+      } catch (e) {
+        console.error("[main] Failed to set default programmatically on macOS", e);
+      }
+
+      // Fallback to manual instructions if programmatic fails
+      await dialog.showMessageBox(mainWindow, {
+        type: "info",
+        title: "Set Default Editor",
+        message: "To make Canonic your default .md editor on macOS:",
+        detail:
+          "1. Right-click any .md file in Finder\n2. Select 'Get Info'\n3. Under 'Open with', select Canonic\n4. Click 'Change All...'",
+        buttons: ["Got it"],
+      });
+    }
+    return true;
+  } else {
+    return app.removeAsDefaultProtocolClient("canonic");
+  }
+}
+
 function createMenu() {
   const template = [
     ...(process.platform === "darwin"
@@ -330,7 +463,12 @@ function createMenu() {
                   mainWindow?.webContents.send("menu:open-settings");
                 },
               },
-              { type: "separator" },
+              {
+                label: "Set as Default Markdown Editor",
+                click: async () => {
+                  await setDefaultEditor(true);
+                },
+              },              { type: "separator" },
               { role: "services" },
               { type: "separator" },
               { role: "hide" },
@@ -346,21 +484,22 @@ function createMenu() {
       label: "File",
       submenu: [
         {
-          label: "New Workspace...",
-          accelerator: "CmdOrCtrl+N",
+          label: "Open File...",
+          accelerator: "CmdOrCtrl+O",
           click: async () => {
-            const result = await dialog.showOpenDialog(mainWindow, {
-              properties: ["openDirectory", "createDirectory"],
-              title: "Create a new Canonic workspace",
+            const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+              title: "Open Markdown File",
+              filters: [{ name: "Markdown", extensions: ["md"] }],
+              properties: ["openFile"],
             });
-            if (!result.canceled && result.filePaths[0]) {
-              mainWindow?.webContents.send("menu:open-workspace", result.filePaths[0]);
+            if (!canceled && filePaths[0]) {
+              mainWindow?.webContents.send("menu:open-file", filePaths[0]);
             }
           },
         },
         {
           label: "Open Workspace...",
-          accelerator: "CmdOrCtrl+O",
+          accelerator: "CmdOrCtrl+Shift+O",
           click: async () => {
             const result = await dialog.showOpenDialog(mainWindow, {
               properties: ["openDirectory", "createDirectory"],
@@ -372,7 +511,7 @@ function createMenu() {
           },
         },
         { type: "separator" },
-        { role: "quit" },
+        { role: "close" },
       ],
     },
     {
@@ -646,31 +785,89 @@ function setupIpcHandlers() {
     return defaultPath;
   });
 
+  ipcMain.handle("files:open-dialog", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: "Open Markdown File",
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+      properties: ["openFile"],
+    });
+    if (canceled) return null;
+    return filePaths[0];
+  });
+
   ipcMain.handle("app:version", () => {
     return app.getVersion() || require("../package.json").version;
+  });
+
+  ipcMain.handle("app:is-default-md", async () => {
+    const isProtocolDefault = app.isDefaultProtocolClient("canonic");
+
+    try {
+      if (process.platform === "win32") {
+        const output = execSync(
+          'reg query "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.md\\UserChoice" /v ProgId',
+          { encoding: "utf8" },
+        );
+        return output.includes("Canonic") || output.includes("ai.canonic.app");
+      } else if (process.platform === "linux") {
+        const output = execSync("xdg-mime query default text/markdown", {
+          encoding: "utf8",
+        });
+        return output.toLowerCase().includes("canonic");
+      } else if (process.platform === "darwin") {
+        const checkCmd = `swift -e 'import Foundation; import AppKit; let url = NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "dummy.md")); print(url?.bundleIdentifier ?? "")'`;
+        const bundleId = execSync(checkCmd, { encoding: "utf8" }).trim();
+        return bundleId === "ai.canonic.app";
+      }
+    } catch (e) {
+      // Fallback
+    }
+
+    return isProtocolDefault;
+  });
+
+  ipcMain.handle("app:set-default-md", async (_, value) => {
+    return setDefaultEditor(value);
   });
 
   // --- Files ---
   ipcMain.handle("files:index", () => getIndex())
 
   ipcMain.handle("files:list", async (_, workspacePath) => {
+    if (!workspacePath) return [];
     return gitService.listFiles(workspacePath);
   });
 
   ipcMain.handle("files:read", async (_, workspacePath, filePath) => {
-    const fullPath = resolveSafePath(workspacePath, filePath);
-    if (!fs.existsSync(fullPath)) return null;
-    return fs.readFileSync(fullPath, "utf-8");
+    try {
+      console.log("[main:files:read] reading:", { workspacePath, filePath });
+      const fullPath = resolveSafePath(workspacePath, filePath);
+      if (!fs.existsSync(fullPath)) {
+        console.warn("[main:files:read] file not found:", fullPath);
+        return null;
+      }
+      const content = fs.readFileSync(fullPath, "utf-8");
+      console.log("[main:files:read] success, read", content.length, "bytes");
+      return content;
+    } catch (err) {
+      console.error("[main:files:read] error:", err.message);
+      return null;
+    }
   });
 
   ipcMain.handle("files:write", async (_, workspacePath, filePath, content) => {
-    const fullPath = resolveSafePath(workspacePath, filePath);
-    const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(fullPath, content, "utf-8");
-    // Push live update to any connected WebSocket clients
-    shareService.pushUpdate(filePath, content);
-    return true;
+    try {
+      const fullPath = resolveSafePath(workspacePath, filePath);
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, content, "utf-8");
+      // Push live update to any connected WebSocket clients
+      shareService.pushUpdate(filePath, content);
+      return true;
+    } catch (err) {
+      console.error("[main:files:write] error:", err.message);
+      return false;
+    }
   });
 
   ipcMain.handle("files:delete", async (_, workspacePath, filePath) => {

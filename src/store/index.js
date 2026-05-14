@@ -163,6 +163,31 @@ export const useAppStore = defineStore("app", () => {
     });
   }
 
+  async function openStandaloneFile(path) {
+    if (!path) return;
+    isLoading.value = true;
+    try {
+      // Buffer unsaved changes for the file we're leaving (workspace or previous standalone)
+      if (isDirty.value && currentFile.value) {
+        unsavedBuffer[currentFile.value] = currentContent.value;
+      }
+
+      workspacePath.value = null;
+      workspaceName.value = null;
+      isExternalRepo.value = false;
+      currentBranch.value = "main";
+      files.value = [];
+      
+      await openFile(path);
+      return true;
+    } catch (err) {
+      console.error("[Store] openStandaloneFile failed:", err);
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
 
   // Active branch for the current document (defaults to 'main' if not in map)
   const currentDocBranch = computed(() => {
@@ -285,8 +310,8 @@ export const useAppStore = defineStore("app", () => {
     const cleanName = newName.endsWith(".md") ? newName : `${newName}.md`;
     const newPath = dir ? `${dir}/${cleanName}` : cleanName;
     await api.files.move(workspacePath.value, oldPath, newPath);
-    const oldDocId = oldPath.replace(/\//g, "_");
-    const newDocId = newPath.replace(/\//g, "_");
+    const oldDocId = oldPath.replace(/[\\/]/g, "_");
+    const newDocId = newPath.replace(/[\\/]/g, "_");
     await api.comments.move(oldDocId, newDocId);
     if (currentFile.value === oldPath) {
       currentFile.value = newPath;
@@ -363,8 +388,8 @@ export const useAppStore = defineStore("app", () => {
     // Migrate comments for all affected files
     for (const oldFile of affectedFiles) {
       const movedFile = oldFile.replace(filePath, newPath);
-      const oldDocId = oldFile.replace(/\//g, "_");
-      const newDocId = movedFile.replace(/\//g, "_");
+      const oldDocId = oldFile.replace(/[\\/]/g, "_");
+      const newDocId = movedFile.replace(/[\\/]/g, "_");
       await api.comments.move(oldDocId, newDocId);
     }
 
@@ -434,15 +459,13 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function openFile(filePath) {
-    if (!workspacePath.value) return;
-
     // Buffer unsaved changes for the file we're leaving
     if (isDirty.value && currentFile.value) {
       unsavedBuffer[currentFile.value] = currentContent.value;
     }
 
     // Switch to the branch this document is on (only in internal branching mode)
-    if (!isExternalRepo.value) {
+    if (workspacePath.value && !isExternalRepo.value) {
       const docBranch = docBranchMap.value[filePath]?.activeBranch || "main";
       if (docBranch !== currentBranch.value) {
         const result = await api.git.checkout(workspacePath.value, docBranch);
@@ -451,6 +474,7 @@ export const useAppStore = defineStore("app", () => {
     }
 
     const diskContent = await api.files.read(workspacePath.value, filePath);
+    console.log("[Store] File content read, setting currentFile to:", filePath);
     currentFile.value = filePath;
 
     // Prefer buffered unsaved content over disk content
@@ -463,10 +487,12 @@ export const useAppStore = defineStore("app", () => {
     }
 
     await loadComments();
-    await loadCommitLog();
-    await loadDocVersions();
-    if (diskContent) {
-      api.search.index(workspacePath.value, filePath, diskContent);
+    if (workspacePath.value) {
+      await loadCommitLog();
+      await loadDocVersions();
+      if (diskContent) {
+        api.search.index(workspacePath.value, filePath, diskContent);
+      }
     }
     await logEvent("file:open");
   }
@@ -480,14 +506,16 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function saveFile(content) {
-    if (!workspacePath.value || !currentFile.value) return;
+    if (!currentFile.value) return;
     const normalized = normalizeMarkdown(content);
     await api.files.write(workspacePath.value, currentFile.value, normalized);
     currentContent.value = normalized;
     isDirty.value = false;
     clearUnsaved(currentFile.value);
-    api.search.index(workspacePath.value, currentFile.value, content);
-    await checkFileStatus();
+    if (workspacePath.value) {
+      api.search.index(workspacePath.value, currentFile.value, content);
+      await checkFileStatus();
+    }
   }
 
   async function checkFileStatus() {
@@ -684,7 +712,7 @@ export const useAppStore = defineStore("app", () => {
 
   async function loadComments() {
     if (!currentFile.value) return;
-    const docId = currentFile.value.replace(/\//g, "_");
+    const docId = currentFile.value.replace(/[\\/]/g, "_");
     const saved = (await api.comments.get(docId)) || [];
     if (isDemoMode.value) {
       const demoForFile = _demoComments.value[currentFile.value] || [];
@@ -721,7 +749,7 @@ export const useAppStore = defineStore("app", () => {
 
   async function persistComments() {
     if (!currentFile.value) return;
-    const docId = currentFile.value.replace(/\//g, "_");
+    const docId = currentFile.value.replace(/[\\/]/g, "_");
     await api.comments.save(docId, JSON.parse(JSON.stringify(comments.value)));
   }
 
@@ -1044,6 +1072,7 @@ export const useAppStore = defineStore("app", () => {
     openWorkspace,
     refreshFiles,
     openFile,
+    openStandaloneFile,
     saveFile,
     clearUnsaved,
     createFile,

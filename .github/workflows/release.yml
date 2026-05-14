@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -27,15 +25,16 @@ jobs:
           VERSION=$(jq -r .version package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create draft release
+      - name: Create or Verify draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${{ steps.get-version.outputs.version }}
           if ! gh release view "v$VERSION" > /dev/null 2>&1; then
-            gh release create "v$VERSION" --draft --title "v$VERSION" --notes "Draft release for v$VERSION"
+            echo "Creating new draft release (manual tag push?)..."
+            gh release create "v$VERSION" --draft --title "v$VERSION" --notes "Release v$VERSION"
           else
-            echo "Release v$VERSION already exists."
+            echo "Release v$VERSION already exists (created by version-bump workflow)."
           fi
 
   release-mac:
@@ -126,3 +125,21 @@ jobs:
         env:
           DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-brew:
+    needs: [create-draft, release-mac]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Update Homebrew Cask
+        uses: mislav/bump-homebrew-formula-action@v3
+        with:
+          formula-name: canonic
+          formula-path: Casks/canonic.rb
+          homebrew-tap: Canonical-AI/homebrew-tap
+          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.create-draft.outputs.version }}/Canonic-${{ needs.create-draft.outputs.version }}-arm64.dmg
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

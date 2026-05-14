@@ -1463,6 +1463,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("update:install", async () => {
+    updateDownloaded = false; // prevent close handler from re-showing install dialog
     autoUpdater.quitAndInstall();
   });
 

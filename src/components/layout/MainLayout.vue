@@ -262,6 +262,7 @@ import FileTree from "../sidebar/FileTree.vue";
 import SearchPanel from "../sidebar/SearchPanel.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
 import HintsPanel from "../sidebar/HintsPanel.vue";
+import { markDefaultEditorActive } from "../../composables/useHints.js";
 import Editor from "../editor/Editor.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
@@ -375,6 +376,12 @@ onMounted(async () => {
     // Load version info
     if (window.canonic?.app?.getVersion) {
         store.appVersion = await window.canonic.app.getVersion();
+    }
+
+    // Suppress default-editor hint if already set
+    if (window.canonic?.app?.isDefaultEditor) {
+        const isDefault = await window.canonic.app.isDefaultEditor();
+        if (isDefault) markDefaultEditorActive();
     }
 
     // Load config to register any custom themes

@@ -35,13 +35,15 @@
                             <p class="field-hint">Used in git commits and comments.</p>
                         </div>
                         <div class="field">
-                            <div class="settings-card" :class="{ active: isDefaultEditor }" @click="toggleDefaultEditor">
-                                <div class="card-header">
-                                    <span class="card-label">Set as Default Markdown Editor</span>
-                                    <div class="toggle" :class="{ on: isDefaultEditor }"><div class="toggle-thumb"></div></div>
-                                </div>
-                                <p class="card-desc">Open all your .md files with Canonic by default.</p>
-                            </div>
+                            <label class="field-label">Default editor</label>
+                            <button
+                                class="default-editor-btn"
+                                :class="{ 'default-editor-btn--done': isDefaultEditor }"
+                                :disabled="isDefaultEditor"
+                                @click="toggleDefaultEditor"
+                            >
+                                {{ isDefaultEditor ? 'Canonic is already default for .md' : 'Set as Default for .md' }}
+                            </button>
                         </div>
                         <div class="field">
                             <div class="settings-card" :class="{ active: hintsEnabled }" @click="hintsEnabled = !hintsEnabled">
@@ -336,7 +338,7 @@
 import { ref, reactive, onMounted, computed, watch, toRaw } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
-import { useHints } from "../../composables/useHints.js";
+import { useHints, markDefaultEditorActive } from "../../composables/useHints.js";
 import ProviderForm from "./ProviderForm.vue";
 import { User, Bot, Keyboard, Share2, FolderTree, Shield, RefreshCw, Trash2 } from "lucide-vue-next";
 
@@ -373,6 +375,7 @@ const isDefaultEditor = ref(false);
 
 async function checkDefaultEditor() {
     isDefaultEditor.value = await window.canonic.app.isDefaultEditor();
+    if (isDefaultEditor.value) markDefaultEditorActive();
 }
 
 async function toggleDefaultEditor() {
@@ -561,6 +564,11 @@ async function confirmReset() {
 .card-header, .telemetry-header { display: flex; justify-content: space-between; align-items: center; }
 .card-label { font-size: 0.9375rem; font-weight: 600; color: var(--text-primary); }
 .card-desc { font-size: 0.875rem; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
+
+/* ── Default Editor Button ── */
+.default-editor-btn { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+.default-editor-btn:hover:not(:disabled) { opacity: 0.88; }
+.default-editor-btn--done { background: var(--bg-base); border-color: var(--border-mid); color: var(--text-muted); cursor: default; }
 
 /* ── UI Elements ── */
 .toggle { width: 36px; height: 20px; background: var(--border-mid); border-radius: 10px; position: relative; transition: background 0.2s; flex-shrink: 0; }

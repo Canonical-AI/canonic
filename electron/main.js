@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require("
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { exec, execSync } = require("child_process");
+const { exec, execSync, spawnSync } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const semver = require("semver");
@@ -356,70 +356,87 @@ async function setDefaultEditor(value) {
         console.error("[main] Failed to set default mime type", e);
       }
     } else if (process.platform === "darwin") {
-      try {
-        const bundleId = app.isPackaged ? "ai.canonic.app" : "com.github.electron";
-        console.log(`[main] Attempting to set default editor for ${bundleId} on macOS (packaged: ${app.isPackaged})`);
-        
-        const script = `
-import Foundation
-import AppKit
-import UniformTypeIdentifiers
+      if (!app.isPackaged) {
+        await dialog.showMessageBox(mainWindow, {
+          type: "info",
+          title: "Dev Mode",
+          message: "Default editor registration only works in a packaged build.",
+          detail: "Build and install the app, then try again.",
+          buttons: ["OK"],
+        });
+        return false;
+      }
 
-let semaphore = DispatchSemaphore(value: 0)
-let bundleId = "${bundleId}"
-print("--- Swift Start ---")
-print("Target Bundle ID: \\(bundleId)")
+      // swift CLI required (Xcode Command Line Tools)
+      const swiftCheck = spawnSync("which", ["swift"], { encoding: "utf8" });
+      const swiftAvailable = swiftCheck.status === 0;
 
-if #available(macOS 12.0, *) {
-    let uti = UTType("net.daringfireball.markdown") ?? UTType.plainText
-    print("Target UTI: \\(uti.identifier)")
-    
-    if let appUrl = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
-        print("Found app at: \\(appUrl.path)")
-        print("Calling setDefaultApplication...")
-        NSWorkspace.shared.setDefaultApplication(at: appUrl, toOpenContentType: uti) { error in
-            if let error = error {
-                print("Result: ERROR - \\(error.localizedDescription)")
-                exit(1)
-            } else {
-                print("Result: SUCCESS (Request sent to OS)")
-            }
-            semaphore.signal()
-        }
-        let waitResult = semaphore.wait(timeout: .now() + 5)
-        if waitResult == .timedOut {
-            print("Result: ERROR - Timeout waiting for OS response")
-            exit(1)
-        }
-    } else {
-        print("Result: ERROR - App not found for bundle ID")
-        exit(1)
-    }
-} else {
-    print("Using legacy LSSetDefaultRoleHandlerForContentType")
-    let cfBundleId = bundleId as CFString
-    LSSetDefaultRoleHandlerForContentType("net.daringfireball.markdown" as CFString, .editor, cfBundleId)
-    LSSetDefaultRoleHandlerForContentType("public.markdown" as CFString, .editor, cfBundleId)
-    print("Result: Legacy call completed")
-}
-print("--- Swift End ---")
-`;
-        const tempScriptPath = path.join(os.tmpdir(), `set_default_${Date.now()}.swift`);
+      if (swiftAvailable) {
+        const bundleId = "ai.canonic.app";
+        console.log("[main] Setting default .md editor to", bundleId);
+
+        // Use LSSetDefaultRoleHandlerForContentType — works silently on all macOS
+        // versions without requiring a consent dialog (unlike NSWorkspace.setDefaultApplication
+        // on macOS 12+ which needs UI and can't run from a subprocess).
+        // LSRegisterURL forces LaunchServices to re-scan the app bundle so it picks
+        // up the LSItemContentTypes we added in afterPack.js.
+        const script = [
+          "import CoreServices",
+          "import Foundation",
+          "",
+          'let bundleId = "' + bundleId + '"',
+          'print("Bundle ID:", bundleId)',
+          "",
+          "guard let appUrls = LSCopyApplicationURLsForBundleIdentifier(bundleId as CFString, nil)?.takeRetainedValue() as? [URL],",
+          "      let appUrl = appUrls.first else {",
+          '    print("ERROR: app not found")',
+          "    exit(1)",
+          "}",
+          'print("App path:", appUrl.path)',
+          "",
+          "let regStatus = LSRegisterURL(appUrl as CFURL, true)",
+          'print("LSRegisterURL:", regStatus)',
+          "",
+          'let utis = ["public.markdown", "net.daringfireball.markdown"]',
+          "var failed = false",
+          "for uti in utis {",
+          "    let s = LSSetDefaultRoleHandlerForContentType(uti as CFString, .editor, bundleId as CFString)",
+          '    print("LSSet(\\(uti)):", s)',
+          "    if s != noErr { failed = true }",
+          "}",
+          "if failed { exit(1) }",
+          'print("OK")',
+        ].join("\n");
+
+        const tempScriptPath = path.join(os.tmpdir(), "set_default_" + Date.now() + ".swift");
         fs.writeFileSync(tempScriptPath, script);
 
+        let swiftStdout = "";
+        let scriptSucceeded = false;
         try {
-          const output = execSync(`swift ${tempScriptPath}`, { encoding: "utf8" });
-          console.log("[main] Swift script output:\n", output);
+          const result = spawnSync("swift", [tempScriptPath], { encoding: "utf8", timeout: 30000 });
+          swiftStdout = (result.stdout || "").trim();
+          console.log("[main] Swift output:\n", swiftStdout);
+          if (result.status !== 0) {
+            console.error("[main] Swift stderr:\n", result.stderr);
+            await dialog.showMessageBox(mainWindow, {
+              type: "error",
+              title: "Set Default Editor — Debug",
+              message: "Swift script failed (exit " + result.status + ")",
+              detail: swiftStdout + "\n" + (result.stderr || ""),
+              buttons: ["OK"],
+            });
+          } else {
+            scriptSucceeded = true;
+          }
         } finally {
           try { fs.unlinkSync(tempScriptPath); } catch {}
         }
 
-        // Verify
-        const checkCmd = `swift -e 'import Foundation; import AppKit; let url = NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "dummy.md")); print(url?.bundleIdentifier ?? "none")'`;
-        const currentBundleId = execSync(checkCmd, { encoding: "utf8" }).trim();
-        console.log(`[main] Verification check: current default is ${currentBundleId}`);
-
-        if (currentBundleId === bundleId) {
+        if (scriptSucceeded) {
+          // LSSetDefaultRoleHandlerForContentType returning noErr is the confirmation.
+          // A separate verification subprocess reads stale LaunchServices cache and
+          // gives false negatives, so we trust the noErr result directly.
           await dialog.showMessageBox({
             type: "info",
             title: "Default Editor Set",
@@ -427,11 +444,11 @@ print("--- Swift End ---")
           });
           return true;
         }
-      } catch (e) {
-        console.error("[main] Failed to set default programmatically on macOS", e);
+      } else {
+        console.log("[main] Swift not available — showing manual instructions");
       }
 
-      // Fallback to manual instructions if programmatic fails
+      // Fallback to manual instructions
       await dialog.showMessageBox(mainWindow, {
         type: "info",
         title: "Set Default Editor",
@@ -815,9 +832,22 @@ function setupIpcHandlers() {
         });
         return output.toLowerCase().includes("canonic");
       } else if (process.platform === "darwin") {
-        const checkCmd = `swift -e 'import Foundation; import AppKit; let url = NSWorkspace.shared.urlForApplication(toOpen: URL(fileURLWithPath: "dummy.md")); print(url?.bundleIdentifier ?? "")'`;
-        const bundleId = execSync(checkCmd, { encoding: "utf8" }).trim();
-        return bundleId === "ai.canonic.app";
+        // Read LaunchServices prefs plist directly — LSCopy* APIs read from a
+        // per-process cache that doesn't reflect writes made by other subprocesses.
+        const pyCode = [
+          "import plistlib, os, sys",
+          "p = os.path.expanduser('~/Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist')",
+          "try:",
+          "    with open(p, 'rb') as f: d = plistlib.load(f)",
+          "    for h in d.get('LSHandlers', []):",
+          "        if h.get('LSHandlerContentType') == 'public.markdown':",
+          "            print(h.get('LSHandlerRoleEditor') or h.get('LSHandlerRoleAll', ''))",
+          "            sys.exit(0)",
+          "    print('')",
+          "except: print('')",
+        ].join("\n");
+        const result = spawnSync("python3", ["-c", pyCode], { encoding: "utf8", timeout: 5000 });
+        return (result.stdout || "").trim() === "ai.canonic.app";
       }
     } catch (e) {
       // Fallback

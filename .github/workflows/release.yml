@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - main
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -27,15 +25,16 @@ jobs:
           VERSION=$(jq -r .version package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create draft release
+      - name: Create or Verify draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${{ steps.get-version.outputs.version }}
           if ! gh release view "v$VERSION" > /dev/null 2>&1; then
-            gh release create "v$VERSION" --draft --title "v$VERSION" --notes "Draft release for v$VERSION"
+            echo "Creating new draft release (manual tag push?)..."
+            gh release create "v$VERSION" --draft --title "v$VERSION" --notes "Release v$VERSION"
           else
-            echo "Release v$VERSION already exists."
+            echo "Release v$VERSION already exists (created by version-bump workflow)."
           fi
 
   release-mac:

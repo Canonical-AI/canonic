@@ -51,3 +51,21 @@ jobs:
 
       - name: Push changes
         run: git push origin main --follow-tags
+
+      - name: Create Draft Release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(jq -r .version package.json)
+          # Save PR body to a file to handle markdown and special characters safely
+          cat << 'EOF' > release_notes.md
+          ${{ github.event.pull_request.body }}
+          EOF
+          
+          # Check if release exists, if not create it with PR body as notes
+          if ! gh release view "v$VERSION" > /dev/null 2>&1; then
+            gh release create "v$VERSION" --draft --title "v$VERSION" --notes-file release_notes.md
+          else
+            echo "Release v$VERSION already exists, updating notes..."
+            gh release edit "v$VERSION" --notes-file release_notes.md
+          fi

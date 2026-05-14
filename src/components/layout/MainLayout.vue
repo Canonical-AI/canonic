@@ -448,52 +448,11 @@ function handleHintNavigate(target) {
     }
     showSettings.value = true
 }
-const updateReady = ref(false);
-const updateAvailable = ref(false);
-const updateDownloading = ref(false);
-const updateInfo = ref(null);
-const downloadProgress = ref(0);
+const { updateReady, updateAvailable, updateDownloading, updateInfo, downloadProgress, downloadUpdate, installUpdate } = store;
 
 provide("showNewDoc", () => {
     showNewDoc.value = true;
 });
-
-if (window.canonic?.update) {
-    window.canonic.update.onAvailable?.((info) => {
-        updateInfo.value = info;
-        updateAvailable.value = true;
-    });
-    window.canonic.update.onProgress?.((progress) => {
-        updateDownloading.value = true;
-        updateAvailable.value = false;
-        downloadProgress.value = Math.round(progress.percent);
-    });
-    window.canonic.update.onDownloaded?.(() => {
-        updateReady.value = true;
-        updateDownloading.value = false;
-        updateAvailable.value = false;
-    });
-    window.canonic.update.onError?.((err) => {
-        console.error("Update error:", err);
-        clearUpdate();
-    });
-}
-
-function downloadUpdate() {
-    updateAvailable.value = false;
-    updateDownloading.value = true;
-    window.canonic?.update.download();
-}
-
-function installUpdate() {
-    window.canonic?.update.install();
-}
-
-function clearUpdate() {
-    updateAvailable.value = false;
-    updateDownloading.value = false;
-    updateReady.value = false;
-}
 
 async function newDoc() {
     showNewDoc.value = true;

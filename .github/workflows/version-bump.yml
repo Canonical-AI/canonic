@@ -49,6 +49,12 @@ jobs:
           PRERELEASE_TAG: ${{ vars.PRERELEASE_TAG }}
         run: |
           echo "Bumping version with type: $BUMP_TYPE"
+          # Strip prerelease suffix before bumping so e.g. 0.0.5-alpha + patch = 0.0.6 not 0.0.5
+          CURRENT=$(jq -r .version package.json)
+          BASE=$(echo "$CURRENT" | sed 's/-.*//')
+          if [ "$CURRENT" != "$BASE" ]; then
+            npm pkg set version="$BASE"
+          fi
           npm version "$BUMP_TYPE" --no-git-tag-version
 
           if [ -n "$PRERELEASE_TAG" ]; then

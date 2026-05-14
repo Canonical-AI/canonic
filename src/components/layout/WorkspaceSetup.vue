@@ -58,6 +58,10 @@
                         <FolderOpen :size="15" />
                         Open folder
                     </button>
+                    <button class="action-btn" @click="openStandaloneFile">
+                        <FileText :size="15" />
+                        Open file
+                    </button>
                 </div>
             </div>
 
@@ -171,12 +175,12 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
 import SetupScreen from "./SetupScreen.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
-import { Folder, FolderPlus, FolderOpen, Sparkles } from "lucide-vue-next";
+import { Folder, FolderPlus, FolderOpen, Sparkles, FileText } from "lucide-vue-next";
 
 const router = useRouter();
 const store = useAppStore();
@@ -216,6 +220,17 @@ const pmPreview = [
     "Monitoring/ (2 docs)",
 ];
 
+onMounted(() => {
+    if (window.canonic?.menu?.onOpenFile) {
+        window.canonic.menu.onOpenFile(async (path) => {
+            if (path) {
+                const success = await store.openStandaloneFile(path);
+                if (success) router.push("/workspace");
+            }
+        });
+    }
+});
+
 // Check if first-run setup needed
 async function checkSetup() {
     const exists = await window.canonic.config.exists();
@@ -245,6 +260,15 @@ async function openExisting() {
     const chosen = await window.canonic.workspace.openDialog();
     if (!chosen) return;
     await launch(chosen, "blank");
+}
+
+async function openStandaloneFile() {
+    const chosen = await window.canonic.files.openDialog();
+    if (!chosen) return;
+    const success = await store.openStandaloneFile(chosen);
+    if (success) {
+        router.push("/workspace");
+    }
 }
 
 async function openRecent(path) {

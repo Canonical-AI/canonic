@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld("canonic", {
   // App
   app: {
     getVersion: () => ipcRenderer.invoke("app:version"),
+    isDefaultEditor: () => ipcRenderer.invoke("app:is-default-md"),
+    setDefaultEditor: (value) => ipcRenderer.invoke("app:set-default-md", value),
   },
 
   // Telemetry
@@ -36,6 +38,7 @@ contextBridge.exposeInMainWorld("canonic", {
 
   // Files
   files: {
+    openDialog: () => ipcRenderer.invoke("files:open-dialog"),
     list: (workspacePath) => ipcRenderer.invoke("files:list", workspacePath),
     read: (workspacePath, filePath) =>
       ipcRenderer.invoke("files:read", workspacePath, filePath),
@@ -52,8 +55,8 @@ contextBridge.exposeInMainWorld("canonic", {
     move: (workspacePath, oldPath, newPath) =>
       ipcRenderer.invoke("files:move", workspacePath, oldPath, newPath),
     getIndex: () => ipcRenderer.invoke("files:index"),
-    onIndexUpdate: (cb) => ipcRenderer.on("files:index-update", (_, idx) => cb(idx)),
-    offIndexUpdate: () => ipcRenderer.removeAllListeners("files:index-update"),
+    onIndexUpdate: (cb) => { ipcRenderer.on("files:index-update", (_, idx) => cb(idx)) },
+    offIndexUpdate: () => { ipcRenderer.removeAllListeners("files:index-update") },
     trash: {
       delete: (workspacePath, itemPath, isDirectory) =>
         ipcRenderer.invoke("files:trash", workspacePath, itemPath, isDirectory),
@@ -91,7 +94,7 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("git:log-all", workspacePath, filePath, branchList),
     fileStatus: (workspacePath, filePath) =>
       ipcRenderer.invoke("git:file-status", workspacePath, filePath),
-    onBranchUpdate: (cb) => ipcRenderer.on('git:branch-updated', () => cb()),
+    onBranchUpdate: (cb) => { ipcRenderer.on('git:branch-updated', () => cb()) },
   },
 
   // Comments
@@ -119,16 +122,16 @@ contextBridge.exposeInMainWorld("canonic", {
     openShared: (url, token) =>
       ipcRenderer.invoke("peers:open-shared", url, token),
     getStats: (filePath) => ipcRenderer.invoke("share:stats", filePath),
-    onStats: (cb) => ipcRenderer.on("share:stats", (_, stats) => cb(stats)),
-    offStats: (cb) => ipcRenderer.removeListener("share:stats", cb),
-    onOpenPeer: (cb) => ipcRenderer.on("share:open-peer", (_, data) => cb(data)),
+    onStats: (cb) => { ipcRenderer.on("share:stats", (_, stats) => cb(stats)) },
+    offStats: (cb) => { ipcRenderer.removeListener("share:stats", cb) },
+    onOpenPeer: (cb) => { ipcRenderer.on("share:open-peer", (_, data) => cb(data)) },
     startWorkspace: (workspacePath, options) => ipcRenderer.invoke("share:start-workspace", workspacePath, options),
     startAllWorkspaces: (workspaces, options) => ipcRenderer.invoke("share:start-all-workspaces", workspaces, options),
     stopWorkspace: (key) => ipcRenderer.invoke("share:stop-workspace", key),
     getWorkspaceStats: () => ipcRenderer.invoke("share:workspace-stats"),
     listActive: () => ipcRenderer.invoke("share:list-active"),
-    onNetworkChanged: (cb) => ipcRenderer.on("share:network-changed", () => cb()),
-    offNetworkChanged: (cb) => ipcRenderer.removeListener("share:network-changed", cb),
+    onNetworkChanged: (cb) => { ipcRenderer.on("share:network-changed", () => cb()) },
+    offNetworkChanged: (cb) => { ipcRenderer.removeListener("share:network-changed", cb) },
   },
 
   // Peers
@@ -139,16 +142,16 @@ contextBridge.exposeInMainWorld("canonic", {
     unfavorite: (id) => ipcRenderer.invoke("peers:unfavorite", id),
     fetchManifest: (id) => ipcRenderer.invoke("peers:fetch-manifest", id),
     openFile: (id, relPath, wsName) => ipcRenderer.invoke("peers:open-peer-file", id, relPath, wsName),
-    onFound: (cb) => ipcRenderer.on("peers:found", (_, peer) => cb(peer)),
-    offFound: (cb) => ipcRenderer.removeListener("peers:found", cb),
-    onLost: (cb) => ipcRenderer.on("peers:lost", (_, data) => cb(data)),
-    offLost: (cb) => ipcRenderer.removeListener("peers:lost", cb),
+    onFound: (cb) => { ipcRenderer.on("peers:found", (_, peer) => cb(peer)) },
+    offFound: (cb) => { ipcRenderer.removeListener("peers:found", cb) },
+    onLost: (cb) => { ipcRenderer.on("peers:lost", (_, data) => cb(data)) },
+    offLost: (cb) => { ipcRenderer.removeListener("peers:lost", cb) },
   },
 
   // Peer comments
   peerComments: {
-    onReceived: (cb) => ipcRenderer.on("comments:received", (_, data) => cb(data)),
-    offReceived: (cb) => ipcRenderer.removeListener("comments:received", cb),
+    onReceived: (cb) => { ipcRenderer.on("comments:received", (_, data) => cb(data)) },
+    offReceived: (cb) => { ipcRenderer.removeListener("comments:received", cb) },
   },
 
   // Cleanup / Uninstall
@@ -164,13 +167,16 @@ contextBridge.exposeInMainWorld("canonic", {
     check: () => ipcRenderer.invoke("update:check"),
     download: () => ipcRenderer.invoke("update:download"),
     install: () => ipcRenderer.invoke("update:install"),
-    onAvailable: (cb) =>
-      ipcRenderer.on("update:available", (_, info) => cb(info)),
-    onDownloaded: (cb) =>
-      ipcRenderer.on("update:downloaded", (_, info) => cb(info)),
-    onProgress: (cb) =>
-      ipcRenderer.on("update:progress", (_, progress) => cb(progress)),
-    onError: (cb) => ipcRenderer.on("update:error", (_, msg) => cb(msg)),
+    onAvailable: (cb) => {
+      ipcRenderer.on("update:available", (_, info) => cb(info))
+    },
+    onDownloaded: (cb) => {
+      ipcRenderer.on("update:downloaded", (_, info) => cb(info))
+    },
+    onProgress: (cb) => {
+      ipcRenderer.on("update:progress", (_, progress) => cb(progress))
+    },
+    onError: (cb) => { ipcRenderer.on("update:error", (_, msg) => cb(msg)) },
   },
 
   // Doc branch manifest (per-workspace, stored in .canonic/doc-branches.json)
@@ -207,9 +213,9 @@ contextBridge.exposeInMainWorld("canonic", {
   ai: {
     chat: (params) => ipcRenderer.invoke("ai:chat", params),
     complete: (params) => ipcRenderer.invoke("ai:complete", params),
-    onChunk: (cb) => ipcRenderer.on("ai:chunk", (_, text) => cb(text)),
-    onDone: (cb) => ipcRenderer.on("ai:done", () => cb()),
-    onError: (cb) => ipcRenderer.on("ai:error", (_, msg) => cb(msg)),
+    onChunk: (cb) => { ipcRenderer.on("ai:chunk", (_, text) => cb(text)) },
+    onDone: (cb) => { ipcRenderer.on("ai:done", () => cb()) },
+    onError: (cb) => { ipcRenderer.on("ai:error", (_, msg) => cb(msg)) },
     removeListeners: () => {
       ipcRenderer.removeAllListeners("ai:chunk");
       ipcRenderer.removeAllListeners("ai:done");
@@ -219,16 +225,17 @@ contextBridge.exposeInMainWorld("canonic", {
 
   // Menu events
   menu: {
-    onOpenSettings: (cb) => ipcRenderer.on("menu:open-settings", () => cb()),
-    onOpenWorkspace: (cb) => ipcRenderer.on("menu:open-workspace", (_, path) => cb(path)),
+    onOpenSettings: (cb) => { ipcRenderer.on("menu:open-settings", () => cb()) },
+    onOpenWorkspace: (cb) => { ipcRenderer.on("menu:open-workspace", (_, path) => cb(path)) },
+    onOpenFile: (cb) => { ipcRenderer.on("menu:open-file", (_, path) => cb(path)) },
   },
 
   // Agent session bridge
   agentSession: {
-    onSessionStart: (cb) => ipcRenderer.on('agent:session-start', (_, data) => cb(data)),
-    onComment: (cb) => ipcRenderer.on('agent:comment', (_, data) => cb(data)),
-    onSessionCancel: (cb) => ipcRenderer.on('agent:session-cancel', (_, data) => cb(data)),
-    onSessionDone: (cb) => ipcRenderer.on('agent:session-done', (_, data) => cb(data)),
+    onSessionStart: (cb) => { ipcRenderer.on('agent:session-start', (_, data) => cb(data)) },
+    onComment: (cb) => { ipcRenderer.on('agent:comment', (_, data) => cb(data)) },
+    onSessionCancel: (cb) => { ipcRenderer.on('agent:session-cancel', (_, data) => cb(data)) },
+    onSessionDone: (cb) => { ipcRenderer.on('agent:session-done', (_, data) => cb(data)) },
     submit: (params) => ipcRenderer.invoke('agent:submit', params),
     cancel: (sessionId) => ipcRenderer.invoke('agent:cancel', sessionId),
     removeListeners: () => {

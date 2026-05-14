@@ -2,6 +2,13 @@ const git = require('isomorphic-git')
 
 function resolveSafePath(base, target) {
   const path = require('path');
+  // If target is an absolute path and base is null, allow it (for workspace-less files)
+  if (!base && path.isAbsolute(target)) {
+    return target;
+  }
+  if (!base) {
+    throw new Error("Base path required for relative targets");
+  }
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
   if (!resolvedTarget.startsWith(resolvedBase)) {

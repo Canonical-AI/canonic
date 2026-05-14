@@ -136,10 +136,31 @@ if (!fs.existsSync(path.join(CANONIC_DIR, "comments"))) {
 let mainWindow;
 let updateDownloaded = false;
 
+// Track file passed via OS "open-file" event (macOS) or CLI (Win/Linux)
+let fileToOpenOnStartup = process.argv.find(arg => arg.endsWith('.md') && fs.existsSync(arg)) || null;
+
+app.on("open-file", (event, path) => {
+  event.preventDefault();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("menu:open-file", path);
+  } else {
+    fileToOpenOnStartup = path;
+  }
+});
+
 function resolveSafePath(base, target) {
+  // If target is an absolute path and base is null, allow it (for workspace-less files)
+  if (!base && path.isAbsolute(target)) {
+    return target;
+  }
+  if (!base) {
+    console.error("[resolveSafePath] No base provided for target:", target);
+    throw new Error("Base path required for relative targets");
+  }
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
   if (!resolvedTarget.startsWith(resolvedBase)) {
+    console.error("[resolveSafePath] Path traversal blocked:", { base, target, resolvedBase, resolvedTarget });
     throw new Error("Path traversal blocked: " + target);
   }
   return resolvedTarget;
@@ -234,6 +255,13 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
+
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (fileToOpenOnStartup) {
+      mainWindow.webContents.send("menu:open-file", fileToOpenOnStartup);
+      fileToOpenOnStartup = null;
+    }
+  });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const isDevUrl = isDev && url.startsWith(process.env.VITE_DEV_URL || "http://localhost:5173");
@@ -330,6 +358,16 @@ function createMenu() {
                   mainWindow?.webContents.send("menu:open-settings");
                 },
               },
+              {
+                label: "Set as Default Markdown Editor",
+                click: async () => {
+                  app.setAsDefaultProtocolClient("canonic");
+                  await dialog.showMessageBox(mainWindow, {
+                    message: "Canonic registered for canonic://. To make it default for .md files, use your OS 'Open With' menu and select 'Always use this app'.",
+                    title: "Default Editor",
+                  });
+                },
+              },
               { type: "separator" },
               { role: "services" },
               { type: "separator" },
@@ -346,21 +384,22 @@ function createMenu() {
       label: "File",
       submenu: [
         {
-          label: "New Workspace...",
-          accelerator: "CmdOrCtrl+N",
+          label: "Open File...",
+          accelerator: "CmdOrCtrl+O",
           click: async () => {
-            const result = await dialog.showOpenDialog(mainWindow, {
-              properties: ["openDirectory", "createDirectory"],
-              title: "Create a new Canonic workspace",
+            const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+              title: "Open Markdown File",
+              filters: [{ name: "Markdown", extensions: ["md"] }],
+              properties: ["openFile"],
             });
-            if (!result.canceled && result.filePaths[0]) {
-              mainWindow?.webContents.send("menu:open-workspace", result.filePaths[0]);
+            if (!canceled && filePaths[0]) {
+              mainWindow?.webContents.send("menu:open-file", filePaths[0]);
             }
           },
         },
         {
           label: "Open Workspace...",
-          accelerator: "CmdOrCtrl+O",
+          accelerator: "CmdOrCtrl+Shift+O",
           click: async () => {
             const result = await dialog.showOpenDialog(mainWindow, {
               properties: ["openDirectory", "createDirectory"],
@@ -372,7 +411,7 @@ function createMenu() {
           },
         },
         { type: "separator" },
-        { role: "quit" },
+        { role: "close" },
       ],
     },
     {
@@ -646,31 +685,70 @@ function setupIpcHandlers() {
     return defaultPath;
   });
 
+  ipcMain.handle("files:open-dialog", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: "Open Markdown File",
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+      properties: ["openFile"],
+    });
+    if (canceled) return null;
+    return filePaths[0];
+  });
+
   ipcMain.handle("app:version", () => {
     return app.getVersion() || require("../package.json").version;
+  });
+
+  ipcMain.handle("app:is-default-md", async () => {
+    return app.isDefaultProtocolClient("canonic");
+  });
+
+  ipcMain.handle("app:set-default-md", async (_, value) => {
+    if (value) {
+      return app.setAsDefaultProtocolClient("canonic");
+    } else {
+      return app.removeAsDefaultProtocolClient("canonic");
+    }
   });
 
   // --- Files ---
   ipcMain.handle("files:index", () => getIndex())
 
   ipcMain.handle("files:list", async (_, workspacePath) => {
+    if (!workspacePath) return [];
     return gitService.listFiles(workspacePath);
   });
 
   ipcMain.handle("files:read", async (_, workspacePath, filePath) => {
-    const fullPath = resolveSafePath(workspacePath, filePath);
-    if (!fs.existsSync(fullPath)) return null;
-    return fs.readFileSync(fullPath, "utf-8");
+    try {
+      console.log("[main:files:read] reading:", { workspacePath, filePath });
+      const fullPath = resolveSafePath(workspacePath, filePath);
+      if (!fs.existsSync(fullPath)) {
+        console.warn("[main:files:read] file not found:", fullPath);
+        return null;
+      }
+      const content = fs.readFileSync(fullPath, "utf-8");
+      console.log("[main:files:read] success, read", content.length, "bytes");
+      return content;
+    } catch (err) {
+      console.error("[main:files:read] error:", err.message);
+      return null;
+    }
   });
 
   ipcMain.handle("files:write", async (_, workspacePath, filePath, content) => {
-    const fullPath = resolveSafePath(workspacePath, filePath);
-    const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(fullPath, content, "utf-8");
-    // Push live update to any connected WebSocket clients
-    shareService.pushUpdate(filePath, content);
-    return true;
+    try {
+      const fullPath = resolveSafePath(workspacePath, filePath);
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, content, "utf-8");
+      // Push live update to any connected WebSocket clients
+      shareService.pushUpdate(filePath, content);
+      return true;
+    } catch (err) {
+      console.error("[main:files:write] error:", err.message);
+      return false;
+    }
   });
 
   ipcMain.handle("files:delete", async (_, workspacePath, filePath) => {

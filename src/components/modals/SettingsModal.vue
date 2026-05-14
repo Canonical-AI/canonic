@@ -35,6 +35,15 @@
                             <p class="field-hint">Used in git commits and comments.</p>
                         </div>
                         <div class="field">
+                            <div class="settings-card" :class="{ active: isDefaultEditor }" @click="toggleDefaultEditor">
+                                <div class="card-header">
+                                    <span class="card-label">Set as Default Markdown Editor</span>
+                                    <div class="toggle" :class="{ on: isDefaultEditor }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Open all your .md files with Canonic by default.</p>
+                            </div>
+                        </div>
+                        <div class="field">
                             <div class="settings-card" :class="{ active: hintsEnabled }" @click="hintsEnabled = !hintsEnabled">
                                 <div class="card-header">
                                     <span class="card-label">Show feature hints</span>
@@ -360,6 +369,16 @@ const form = reactive({
 });
 
 const newExcludedPath = ref("");
+const isDefaultEditor = ref(false);
+
+async function checkDefaultEditor() {
+    isDefaultEditor.value = await window.canonic.app.isDefaultEditor();
+}
+
+async function toggleDefaultEditor() {
+    await window.canonic.app.setDefaultEditor(!isDefaultEditor.value);
+    await checkDefaultEditor();
+}
 function addExcludedPath() {
     const p = newExcludedPath.value.trim();
     if (!p) return;
@@ -402,6 +421,7 @@ const scopeOptions = [
 ];
 
 onMounted(async () => {
+    checkDefaultEditor();
     const cfg = store.config || (await store.loadConfig());
     if (cfg) {
         const loaded = {

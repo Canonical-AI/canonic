@@ -70,6 +70,13 @@
     "appId": "ai.canonic.app",
     "productName": "Canonic",
     "icon": "build/icons/icon.png",
+    "fileAssociations": [
+      {
+        "ext": "md",
+        "name": "Markdown",
+        "role": "Editor"
+      }
+    ],
     "asar": true,
     "afterPack": "./afterPack.js",
     "files": [

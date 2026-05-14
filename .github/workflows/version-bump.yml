@@ -71,6 +71,8 @@ jobs:
           VERSION=$(jq -r .version package.json)
           git add package.json package-lock.json
           git commit -m "chore(release): bump version to $VERSION"
+          # Delete stale remote tag from a prior failed run if it exists
+          git push origin ":refs/tags/v$VERSION" 2>/dev/null || true
           git tag "v$VERSION"
 
       - name: Push changes

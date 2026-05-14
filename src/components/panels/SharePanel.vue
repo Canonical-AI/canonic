@@ -74,7 +74,11 @@
         Allow peers to browse all documents in this workspace.
       </p>
 
-      <div v-if="!store.workspaceShareInfo" class="share-action">
+      <div v-if="!store.workspaceShareInfo" class="share-action-column">
+        <label class="toggle-row">
+          <input type="checkbox" v-model="wsTaggedOnly" />
+          <span class="toggle-label">Tagged versions only</span>
+        </label>
         <button class="start-btn start-btn--secondary" @click="startWorkspaceShare" :disabled="wsLoading">
           {{ wsLoading ? 'Starting…' : 'Share workspace' }}
         </button>
@@ -84,7 +88,7 @@
         <div class="status-bar">
           <div class="status-live">
             <span class="status-dot" />
-            <span class="status-label">Live</span>
+            <span class="status-label">Live <span v-if="store.workspaceShareInfo.taggedOnly" class="label-tag">(Tagged)</span></span>
           </div>
           <div class="stat-pills">
             <div class="stat-pill" :class="store.workspaceShareStats.connected > 0 && 'stat-pill--active'">
@@ -104,6 +108,53 @@
           </button>
         </div>
         <button class="stop-btn stop-btn--compact" @click="stopWorkspaceShare">Stop workspace sharing</button>
+      </div>
+    </div>
+
+    <!-- All Workspaces Sharing -->
+    <div class="panel-section">
+      <div class="section-label">
+        <FolderSync :size="11" />
+        Share all workspaces
+      </div>
+      <p class="section-desc">
+        Share your recent {{ store.recentWorkspaces.length }} workspaces at once.
+      </p>
+
+      <div v-if="!store.sharesByFile['__all_workspaces__']" class="share-action-column">
+        <label class="toggle-row">
+          <input type="checkbox" v-model="allWsTaggedOnly" />
+          <span class="toggle-label">Tagged versions only</span>
+        </label>
+        <button class="start-btn start-btn--secondary" @click="startAllWorkspacesShare" :disabled="allWsLoading">
+          {{ allWsLoading ? 'Starting…' : 'Share all workspaces' }}
+        </button>
+      </div>
+
+      <div v-else class="share-active share-active--ws">
+        <div class="status-bar">
+          <div class="status-live">
+            <span class="status-dot" />
+            <span class="status-label">Live <span v-if="store.sharesByFile['__all_workspaces__'].taggedOnly" class="label-tag">(Tagged)</span></span>
+          </div>
+          <div class="stat-pills">
+            <div class="stat-pill" :class="store.shareStatsByFile['__all_workspaces__']?.connected > 0 && 'stat-pill--active'">
+              <Users :size="10" />
+              {{ store.shareStatsByFile['__all_workspaces__']?.connected || 0 }}
+            </div>
+            <div class="stat-pill">
+              <Eye :size="10" />
+              {{ store.shareStatsByFile['__all_workspaces__']?.reads || 0 }}
+            </div>
+          </div>
+        </div>
+        <div class="link-row link-row--compact">
+          <span class="link-text">{{ store.sharesByFile['__all_workspaces__'].localUrl }}</span>
+          <button class="copy-btn" :class="allWsCopied && 'copied'" @click="copyAllWsLink">
+            {{ allWsCopied ? '✓' : 'Copy' }}
+          </button>
+        </div>
+        <button class="stop-btn stop-btn--compact" @click="stopAllWorkspacesShare">Stop all workspaces sharing</button>
       </div>
     </div>
 
@@ -158,9 +209,14 @@ import { Share2, Users, Eye, ExternalLink, FolderSync } from 'lucide-vue-next'
 const store = useAppStore()
 const loading = ref(false)
 const wsLoading = ref(false)
+const allWsLoading = ref(false)
 const error = ref('')
 const copied = ref(false)
 const wsCopied = ref(false)
+const allWsCopied = ref(false)
+
+const wsTaggedOnly = ref(false)
+const allWsTaggedOnly = ref(false)
 
 const peerUrl = ref('')
 const peerLoading = ref(false)
@@ -185,7 +241,7 @@ async function stopShare() {
 
 async function startWorkspaceShare() {
   wsLoading.value = true
-  await store.startWorkspaceShare()
+  await store.startWorkspaceShare({ taggedOnly: wsTaggedOnly.value })
   wsLoading.value = false
 }
 
@@ -193,11 +249,30 @@ async function stopWorkspaceShare() {
   await store.stopWorkspaceShare()
 }
 
+async function startAllWorkspacesShare() {
+  allWsLoading.value = true
+  await store.startAllWorkspacesShare({ taggedOnly: allWsTaggedOnly.value })
+  allWsLoading.value = false
+}
+
+async function stopAllWorkspacesShare() {
+  await store.stopAllWorkspacesShare()
+}
+
 async function copyWsLink() {
   if (store.workspaceShareInfo?.localUrl) {
     await navigator.clipboard.writeText(store.workspaceShareInfo.localUrl)
     wsCopied.value = true
     setTimeout(() => { wsCopied.value = false }, 2000)
+  }
+}
+
+async function copyAllWsLink() {
+  const info = store.sharesByFile['__all_workspaces__']
+  if (info?.localUrl) {
+    await navigator.clipboard.writeText(info.localUrl)
+    allWsCopied.value = true
+    setTimeout(() => { allWsCopied.value = false }, 2000)
   }
 }
 
@@ -483,6 +558,35 @@ function relativeTime(ms) {
   color: var(--accent);
 }
 .start-btn--secondary:hover { background: var(--accent-muted); }
+
+.share-action-column {
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label {
+  font-size: 0.775rem;
+  color: var(--text-secondary);
+}
+
+.label-tag {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  background: var(--accent-muted);
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
 
 /* ── Peer input ── */
 .peer-input-row {

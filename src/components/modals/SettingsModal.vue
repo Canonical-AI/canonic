@@ -169,10 +169,40 @@
                         <div class="field">
                             <div class="settings-card" :class="{ active: form.autoShareWorkspace }" @click="form.autoShareWorkspace = !form.autoShareWorkspace">
                                 <div class="card-header">
-                                    <span class="card-label">Auto-share workspace</span>
+                                    <span class="card-label">Auto-share current workspace</span>
                                     <div class="toggle" :class="{ on: form.autoShareWorkspace }"><div class="toggle-thumb"></div></div>
                                 </div>
-                                <p class="card-desc">Automatically start sharing your workspace when the app opens.</p>
+                                <p class="card-desc">Start sharing your active workspace when the app opens.</p>
+                            </div>
+                            <div v-if="store.workspaceShareInfo" class="sharing-live-status">
+                                <div class="status-pulse-group">
+                                    <span class="status-dot-pulse"></span>
+                                    <span class="status-text-live">Workspace sharing active</span>
+                                </div>
+                                <div class="sharing-stats-row">
+                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.connected }}</b> live</span>
+                                    <span class="sharing-stat"><b>{{ store.workspaceShareStats.reads }}</b> reads</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="settings-card" :class="{ active: form.autoShareAllWorkspaces }" @click="form.autoShareAllWorkspaces = !form.autoShareAllWorkspaces">
+                                <div class="card-header">
+                                    <span class="card-label">Auto-share all workspaces</span>
+                                    <div class="toggle" :class="{ on: form.autoShareAllWorkspaces }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Automatically share your {{ store.recentWorkspaces.length }} recent workspaces on startup.</p>
+                            </div>
+                            <div v-if="store.sharesByFile['__all_workspaces__']" class="sharing-live-status">
+                                <div class="status-pulse-group">
+                                    <span class="status-dot-pulse"></span>
+                                    <span class="status-text-live">All-workspace sharing active</span>
+                                </div>
+                                <div class="sharing-stats-row">
+                                    <span class="sharing-stat"><b>{{ store.shareStatsByFile['__all_workspaces__']?.connected || 0 }}</b> live</span>
+                                    <span class="sharing-stat"><b>{{ store.shareStatsByFile['__all_workspaces__']?.reads || 0 }}</b> reads</span>
+                                </div>
                             </div>
                         </div>
 
@@ -320,6 +350,7 @@ const isDirty = ref(false);
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
     autoShareWorkspace: false,
+    autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
     sharingDefaults: { scope: "file", accessLevel: "read" },
     providers: [],
@@ -380,6 +411,7 @@ onMounted(async () => {
             autoUpdate: cfg.autoUpdate !== false,
             updateChannel: cfg.updateChannel || "stable",
             autoShareWorkspace: !!cfg.autoShareWorkspace,
+            autoShareAllWorkspaces: !!cfg.autoShareAllWorkspaces,
             sharingExcludedPaths: JSON.parse(JSON.stringify(cfg.sharingExcludedPaths || [])),
             sharingDefaults: { ...form.sharingDefaults, ...(cfg.sharingDefaults || {}) },
             providers: JSON.parse(JSON.stringify(cfg.providers || [])),
@@ -559,6 +591,21 @@ async function confirmReset() {
 .add-path-row { display: flex; gap: 8px; margin-top: 4px; }
 .add-path-btn { padding: 6px 14px; border-radius: 6px; border: none; background: var(--accent); color: white; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
 .add-path-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Live Sharing Status ── */
+.sharing-live-status { margin-top: 12px; padding: 12px; background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+.status-pulse-group { display: flex; align-items: center; gap: 8px; }
+.status-dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 rgba(34, 197, 94, 0.4); animation: pulse-green 2s infinite; }
+.status-text-live { font-size: 0.75rem; font-weight: 600; color: #22c55e; text-transform: uppercase; letter-spacing: 0.02em; }
+.sharing-stats-row { display: flex; gap: 16px; }
+.sharing-stat { font-size: 0.8125rem; color: var(--text-secondary); }
+.sharing-stat b { color: var(--text-primary); }
+
+@keyframes pulse-green {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
 
 /* ── Providers ── */
 .providers-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }

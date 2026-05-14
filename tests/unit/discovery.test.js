@@ -84,7 +84,7 @@ describe('discovery', () => {
     upCb({ name: 'alice (alice-mac)', host: 'alice-mac.local', port: 3801, txt: { token: 'tok1', scope: 'workspace', permission: 'copy', author: 'alice' } })
 
     expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'alice@alice-mac.local', name: 'alice', port: 3801, permission: 'copy', online: true })
+      expect.objectContaining({ id: 'alice-mac.local:3801', name: 'alice', port: 3801, permission: 'copy', online: true })
     )
     discovery.emitter.off('peer:found', handler)
   })
@@ -95,9 +95,9 @@ describe('discovery', () => {
     discovery.emitter.on('peer:lost', handler)
 
     const downCb = mockBrowser.on.mock.calls.find(c => c[0] === 'down')[1]
-    downCb({ name: 'alice (alice-mac)', host: 'alice-mac.local', txt: { author: 'alice' } })
+    downCb({ name: 'alice (alice-mac)', host: 'alice-mac.local', port: 3801, txt: { author: 'alice' } })
 
-    expect(handler).toHaveBeenCalledWith({ id: 'alice@alice-mac.local' })
+    expect(handler).toHaveBeenCalledWith({ id: 'alice-mac.local:3801' })
     discovery.emitter.off('peer:lost', handler)
   })
 })

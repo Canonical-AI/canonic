@@ -106,20 +106,33 @@
               <Loader :size="12" class="spin" /> Loading files…
             </div>
             <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
-              Could not load files.
+              Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
             </div>
             <div v-else class="peer-files">
-              <div v-if="peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
-              <button
-                v-for="relPath in peerFiles[peer.id]"
-                :key="relPath"
-                class="peer-file"
-                @click="openFile(peer, relPath)"
-              >
-                <FileText :size="13" />
-                <span class="file-name">{{ basename(relPath) }}</span>
-                <span class="perm-badge" :class="peer.permission">{{ peer.permission ?? 'view' }}</span>
-              </button>
+              <div v-if="!peerFiles[peer.id] || peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+              
+              <template v-else>
+                <div v-for="node in getPeerTreeNodes(peer.id)" :key="node.key" v-show="node.visible" class="peer-node-row">
+                  <!-- Directory -->
+                  <div 
+                    v-if="node.type === 'dir' || node.type === 'ws'" 
+                    class="peer-ascii-dir"
+                    @click="toggleDir(peer.id, node.key)"
+                  >
+                    <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="ascii-name">{{ node.name }}/</span> <span class="ascii-state">{{ isDirExpanded(peer.id, node.key) ? '(-)' : `(+${node.count})` }}</span>
+                  </div>
+
+                  <!-- File -->
+                  <button
+                    v-else
+                    class="peer-ascii-file"
+                    @click="openFile(peer, node.path, node.workspace)"
+                  >
+                    <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="file-name">{{ node.name }}</span>
+                    <span v-if="node.versions" class="file-version-count">{{ node.versions.length }} v</span>
+                  </button>
+                </div>
+              </template>
             </div>
           </div>
           <div v-else-if="peerFilesExpanded[peer.id]" class="peer-offline-hint">Offline — can't load files</div>
@@ -134,23 +147,22 @@
           <Loader :size="14" class="spin" /> Scanning…
         </div>
         <div v-else class="discover-meta">
-          {{ allDiscovered.length }} peer{{ allDiscovered.length !== 1 ? 's' : '' }} found
+          {{ store.discoveredPeers.length }} peer{{ store.discoveredPeers.length !== 1 ? 's' : '' }} found
         </div>
         <button class="refresh-btn" @click="refreshDiscover" :disabled="discovering">
           <RefreshCw :size="13" :class="{ spin: discovering }" />
         </button>
       </div>
 
-      <div v-if="!discovering && allDiscovered.length === 0" class="empty-hint">
+      <div v-if="!discovering && store.discoveredPeers.length === 0" class="empty-hint">
         No Canonic peers found on this network.
       </div>
 
-      <div v-for="peer in allDiscovered" :key="peer.id" class="peer-group">
-        <div class="peer-header">
+      <div v-for="peer in store.discoveredPeers" :key="peer.id" class="peer-group">
+        <div class="peer-header" @click="togglePeerFiles(peer)">
           <div class="peer-avatar">{{ initials(peer.name) }}</div>
           <div class="peer-info">
             <span class="peer-name">{{ peer.name }}</span>
-            <span class="peer-id">{{ peer.id }}</span>
           </div>
           <div class="peer-status" :class="peer.online ? 'online' : 'offline'">
             <span class="status-dot" />
@@ -159,11 +171,47 @@
             class="icon-btn"
             :class="store.favoritedPeerIds.has(peer.id) ? 'unfav-btn' : 'fav-btn'"
             :title="store.favoritedPeerIds.has(peer.id) ? 'Unfavorite' : 'Favorite'"
-            @click="toggleFavorite(peer)"
+            @click.stop="toggleFavorite(peer)"
           >
             <Star :size="13" :fill="store.favoritedPeerIds.has(peer.id) ? 'currentColor' : 'none'" />
           </button>
         </div>
+
+        <div v-if="peerFilesExpanded[peer.id] && peer.online">
+          <div v-if="peerFiles[peer.id] === undefined" class="peer-files-loading">
+            <Loader :size="12" class="spin" /> Loading files…
+          </div>
+          <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
+            Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
+          </div>
+          <div v-else class="peer-files">
+            <div v-if="!peerFiles[peer.id] || peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
+            
+            <template v-else>
+              <div v-for="node in getPeerTreeNodes(peer.id)" :key="node.key" v-show="node.visible" class="peer-node-row">
+                <!-- Directory -->
+                <div 
+                  v-if="node.type === 'dir' || node.type === 'ws'" 
+                  class="peer-ascii-dir"
+                  @click="toggleDir(peer.id, node.key)"
+                >
+                  <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="ascii-name">{{ node.name }}/</span> <span class="ascii-state">{{ isDirExpanded(peer.id, node.key) ? '(-)' : `(+${node.count})` }}</span>
+                </div>
+
+                <!-- File -->
+                <button
+                  v-else
+                  class="peer-ascii-file"
+                  @click="openFile(peer, node.path, node.workspace)"
+                >
+                  <span class="ascii-prefix">{{ getAsciiPrefix(node.depth) }}</span><span class="file-name">{{ node.name }}</span>
+                  <span v-if="node.versions" class="file-version-count">{{ node.versions.length }} v</span>
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div v-else-if="peerFilesExpanded[peer.id]" class="peer-offline-hint">Offline — can't load files</div>
       </div>
     </div>
 
@@ -189,7 +237,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useAppStore } from '../../store'
-import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw } from 'lucide-vue-next'
+import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw, FolderSync } from 'lucide-vue-next'
 import demoConfig from "../../demo/config.json"
 
 const store = useAppStore()
@@ -197,9 +245,9 @@ const api = window.canonic
 
 const view = ref('favorites')
 const discovering = ref(false)
-const allDiscovered = ref([])
 const peerFiles = reactive({}) // peerId -> string[] | null | undefined
 const peerFilesExpanded = reactive({}) // peerId -> boolean
+const dirExpansion = reactive({}) // peerId:dirKey -> boolean
 
 function initials(name) {
   return (name || '?').split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -209,21 +257,130 @@ function basename(relPath) {
   return relPath.split('/').pop()
 }
 
+function getAsciiPrefix(depth) {
+  if (depth === 0) return ''
+  return '│  '.repeat(depth - 1) + '├─ '
+}
+
+function getPeerTreeNodes(peerId) {
+  const files = peerFiles[peerId] || []
+  const nodes = []
+  const expansionPrefix = `${peerId}:`
+
+  // 1. Group by workspace first
+  const workspaces = {}
+  for (const f of files) {
+    const wsName = typeof f === 'string' ? 'Workspace' : (f.workspace || 'Workspace')
+    const fPath = typeof f === 'string' ? f : f.path
+    if (!workspaces[wsName]) workspaces[wsName] = []
+    workspaces[wsName].push(f)
+  }
+
+  for (const [wsName, wsFiles] of Object.entries(workspaces)) {
+    const wsKey = `ws:${wsName}`
+    const wsExpanded = isDirExpanded(peerId, wsKey)
+    
+    // Add Workspace root node
+    nodes.push({
+      key: wsKey,
+      type: 'ws',
+      name: wsName,
+      count: wsFiles.length,
+      depth: 0,
+      visible: true
+    })
+
+    // Add children (directories and files)
+    const tree = {}
+    for (const f of wsFiles) {
+      const fPath = typeof f === 'string' ? f : f.path
+      const parts = fPath.split('/')
+      let curr = tree
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i]
+        const isFile = i === parts.length - 1
+        if (isFile) {
+          curr[`f:${part}`] = f
+        } else {
+          if (!curr[`d:${part}`]) curr[`d:${part}`] = { _count: 0, _children: {} }
+          curr[`d:${part}`]._count++
+          curr = curr[`d:${part}`]._children
+        }
+      }
+    }
+
+    const flatten = (obj, depth, parentVisible, parentKey) => {
+      const entries = Object.entries(obj).sort(([a], [b]) => a.localeCompare(b))
+      for (const [key, val] of entries) {
+        const type = key.startsWith('d:') ? 'dir' : 'file'
+        const name = key.slice(2)
+        const nodeKey = `${parentKey}/${key}`
+        const visible = parentVisible && isDirExpanded(peerId, parentKey)
+
+        if (type === 'dir') {
+          nodes.push({
+            key: nodeKey,
+            type: 'dir',
+            name,
+            count: val._count,
+            depth: depth + 1,
+            visible
+          })
+          flatten(val._children, depth + 1, visible, nodeKey)
+        } else {
+          const f = val
+          nodes.push({
+            key: nodeKey,
+            type: 'file',
+            name,
+            path: typeof f === 'string' ? f : f.path,
+            workspace: typeof f === 'string' ? null : f.workspace,
+            versions: f.versions,
+            depth: depth + 1,
+            visible
+          })
+        }
+      }
+    }
+
+    flatten(tree, 0, wsExpanded, wsKey)
+  }
+
+  return nodes
+}
+
+function isDirExpanded(peerId, key) {
+  const compositeKey = `${peerId}:${key}`
+  if (dirExpansion[compositeKey] === undefined) {
+    // Default: collapse all
+    return false
+  }
+  return dirExpansion[compositeKey]
+}
+
+function toggleDir(peerId, key) {
+  const compositeKey = `${peerId}:${key}`
+  dirExpansion[compositeKey] = !isDirExpanded(peerId, key)
+}
+
 async function switchToDiscover() {
   view.value = 'discover'
-  if (allDiscovered.value.length > 0) return
+  if (store.discoveredPeers.length > 0) return
   await refreshDiscover()
 }
 
 async function refreshDiscover() {
   if (store.isDemoMode) {
-    allDiscovered.value = demoConfig.discoveredPeers || []
+    // Demo mode uses demoConfig but we could also just leave it
     return
   }
   discovering.value = true
   try {
-    const peers = await api.peers.listDiscovered()
-    allDiscovered.value = peers
+    await store.refreshDiscoveredPeers()
+    // Clear local cache on refresh so we try loading again
+    for (const key in peerFiles) {
+      delete peerFiles[key]
+    }
   } finally {
     discovering.value = false
   }
@@ -233,22 +390,49 @@ async function togglePeerFiles(peer) {
   const isExpanded = !!peerFilesExpanded[peer.id]
   peerFilesExpanded[peer.id] = !isExpanded
 
-  if (!isExpanded && peerFiles[peer.id] === undefined && !store.isDemoMode) {
+  // If expanding and we don't have files (or failed previously), load them
+  if (!isExpanded && (peerFiles[peer.id] === undefined || peerFiles[peer.id] === null) && !store.isDemoMode) {
     await loadFiles(peer)
   }
 }
 
-async function loadFiles(peer) {
-  peerFiles[peer.id] = undefined // show loading state
-  const result = await api.peers.fetchManifest(peer.id)
-  peerFiles[peer.id] = result.success ? result.files : null
+function groupedPeerFiles(peerId) {
+  const files = peerFiles[peerId] || []
+  const groups = {}
+  for (const f of files) {
+    const ws = f.workspace || 'Default'
+    if (!groups[ws]) groups[ws] = []
+    groups[ws].push(f)
+  }
+  return groups
 }
 
-async function openFile(peer, relPath) {
+async function loadFiles(peer) {
+  peerFiles[peer.id] = undefined // show loading state
   try {
-    const result = await api.peers.openFile(peer.id, relPath)
+    const result = await api.peers.fetchManifest(peer.id)
+    // The manifest now includes scope metadata
     if (result.success) {
-      store.openPeerFile({ peer, relPath, content: result.content })
+      peerFiles[peer.id] = result.files
+      peer.scope = result.scope // dynamically update scope from manifest
+    } else {
+      peerFiles[peer.id] = null
+    }
+  } catch (err) {
+    peerFiles[peer.id] = null
+  }
+}
+
+async function openFile(peer, relPath, wsName = null) {
+  try {
+    const result = await api.peers.openFile(peer.id, relPath, wsName)
+    if (result.success) {
+      store.openPeerFile({ 
+        peer, 
+        relPath, 
+        content: result.content, 
+        comments: result.comments 
+      })
     } else {
       alert(`Could not open file: ${result.error || 'Unknown error'}`)
     }
@@ -471,40 +655,87 @@ function toggleFavorite(peer) {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 2px 6px 4px 6px;
+  padding: 4px 0;
 }
 
-.peer-file {
+.peer-node-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.peer-ascii-dir {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 6px 4px 36px;
-  border-radius: 6px;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 0.775rem;
+  color: var(--text-muted); /* Muted color for directories */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s, color 0.1s;
+}
+.peer-ascii-dir:hover { background: var(--bg-hover); color: var(--text-secondary); }
+
+.peer-ascii-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.8125rem;
+  color: var(--text-primary); /* Prominent color for files */
+  font-size: 0.8125rem; /* Slightly larger for prominence */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background 0.12s;
+  transition: background 0.1s, color 0.1s;
 }
-.peer-file:hover { background: var(--bg-hover); color: var(--text-primary); }
+.peer-ascii-file:hover { background: var(--bg-hover); color: var(--accent-light); }
+
+.ascii-prefix {
+  color: var(--text-muted);
+  opacity: 0.5; /* Slightly fainter prefix */
+  white-space: pre;
+}
+
+.ascii-name {
+  font-weight: 400; /* Regular weight for dirs */
+}
 
 .file-name {
-  flex: 1;
+  font-weight: 500; /* Bold weight for files */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.perm-badge {
+.ascii-state {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.file-version-count {
   font-size: 0.625rem;
-  padding: 1px 5px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.perm-badge {
+  font-size: 0.6rem;
+  padding: 0 4px;
   border-radius: 3px;
   background: var(--bg-hover);
   color: var(--text-muted);
   flex-shrink: 0;
+  height: 14px;
+  line-height: 14px;
 }
 .perm-badge.comment { color: var(--accent); }
 .perm-badge.copy { color: #22c55e; }

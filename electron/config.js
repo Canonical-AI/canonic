@@ -13,6 +13,7 @@ const DEFAULTS = {
   autoUpdate: true,
   updateChannel: "stable",
   autoShareWorkspace: false,
+  autoShareAllWorkspaces: false,
   sharingExcludedPaths: [],
   sharingDefaults: {
     scope: "file",

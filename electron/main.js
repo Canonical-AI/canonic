@@ -109,6 +109,17 @@ function logError(...args) {
 }
 
 const PEERS_FILE = path.join(CANONIC_DIR, "peers.json");
+
+function readPeers() {
+  if (!fs.existsSync(PEERS_FILE)) return [];
+  try {
+    const content = fs.readFileSync(PEERS_FILE, "utf-8");
+    return content ? JSON.parse(content) : [];
+  } catch (err) {
+    console.error("[main] Error parsing peers.json:", err.message);
+    return [];
+  }
+}
 const USAGE_LOG_PATH = path.join(CANONIC_DIR, "usage.log");
 
 // Ensure ~/.canonic exists
@@ -441,9 +452,11 @@ app.whenReady().then(async () => {
     log("[main] auto-sharing workspace:", cfg.defaultWorkspacePath);
     const options = {
       ...(cfg.sharingDefaults || {}),
-      excludedPaths: cfg.sharingExcludedPaths || []
+      excludedPaths: cfg.sharingExcludedPaths || [],
+      id: shareService.WORKSPACE_KEY
     };
-    shareService.startWorkspaceShare(cfg.defaultWorkspacePath, options).then(result => {
+    const wsName = path.basename(cfg.defaultWorkspacePath);
+    shareService.startWorkspaceShare([{ path: cfg.defaultWorkspacePath, name: wsName }], options).then(result => {
       if (result.success) {
         const author = cfg.displayName || os.userInfo().username;
         discoveryService.announceShare({
@@ -458,6 +471,15 @@ app.whenReady().then(async () => {
     }).catch(err => {
       logError("[main] auto-share failed:", err);
     });
+  }
+
+  if (cfg?.autoShareAllWorkspaces) {
+    const ALL_WS_KEY = '__all_workspaces__';
+    // We don't have recentWorkspaces in main process easily accessible (they are in localStorage).
+    // Actually, let's just trigger a 'menu:sync-all-workspaces' to the renderer or similar?
+    // No, better to read the recentWorkspaces if they were stored in config?
+    // They are not. They are only in localStorage.
+    // So the RENDERER must trigger all-workspace sharing on load.
   }
 
   await apiServer
@@ -562,9 +584,7 @@ function setupIpcHandlers() {
     else discoveredPeers.push(peer);
 
     // Upsert to peers.json
-    const peers = fs.existsSync(PEERS_FILE)
-      ? JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"))
-      : [];
+    const peers = readPeers();
     const pidx = peers.findIndex((p) => p.id === peer.id);
     if (pidx >= 0) peers[pidx] = { ...peers[pidx], ...peer, lastSeen: Date.now() };
     else peers.push({ ...peer, favorited: false, lastSeen: Date.now() });
@@ -849,7 +869,11 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("comments:save", async (_, docId, comments) => {
-    const commentsFile = path.join(CANONIC_DIR, "comments", `${docId}.json`);
+    const commentsDir = path.join(CANONIC_DIR, "comments");
+    if (!fs.existsSync(commentsDir)) {
+      fs.mkdirSync(commentsDir, { recursive: true });
+    }
+    const commentsFile = path.join(commentsDir, `${docId}.json`);
     fs.writeFileSync(commentsFile, JSON.stringify(comments, null, 2), "utf-8");
     return true;
   });
@@ -887,6 +911,7 @@ function setupIpcHandlers() {
         scope: options?.scope || "file",
         permission: result.permission,
         author,
+        taggedOnly: options?.taggedOnly
       });
       startNetworkWatcher();
     }
@@ -909,8 +934,17 @@ function setupIpcHandlers() {
     return shareService.getStats(filePath);
   });
 
+  ipcMain.handle("share:list-active", async () => {
+    return shareService.listActiveShares();
+  });
+
   ipcMain.handle("share:start-workspace", async (_, workspacePath, options) => {
-    const result = await shareService.startWorkspaceShare(workspacePath, options);
+    const wsName = path.basename(workspacePath);
+    const result = await shareService.startWorkspaceShare([{ path: workspacePath, name: wsName }], {
+      ...options,
+      id: shareService.WORKSPACE_KEY
+    });
+    
     if (result.success) {
       const cfg = configService.read();
       const author = cfg?.displayName || os.userInfo().username;
@@ -920,25 +954,53 @@ function setupIpcHandlers() {
         scope: "workspace",
         permission: result.permission,
         author,
+        taggedOnly: options?.taggedOnly
       });
       startNetworkWatcher();
 
       // Persist auto-share preference
-      if (cfg) {
-        configService.write({ ...cfg, autoShareWorkspace: true });
+      const currentCfg = configService.read();
+      if (currentCfg) {
+        configService.write({ ...currentCfg, autoShareWorkspace: true });
       }
     }
     return result;
   });
 
-  ipcMain.handle("share:stop-workspace", async () => {
-    const result = shareService.stopWorkspaceShare();
+  ipcMain.handle("share:start-all-workspaces", async (_, workspaces, options) => {
+    const key = "__all_workspaces__";
+    const result = await shareService.startWorkspaceShare(workspaces, {
+      ...options,
+      id: key,
+      scope: "all-workspaces"
+    });
+
+    if (result.success) {
+      const cfg = configService.read();
+      const author = cfg?.displayName || os.userInfo().username;
+      discoveryService.announceShare({
+        port: result.port,
+        token: result.token,
+        scope: "all-workspaces",
+        permission: result.permission,
+        author,
+        taggedOnly: options?.taggedOnly
+      });
+      startNetworkWatcher();
+    }
+    return result;
+  });
+
+  ipcMain.handle("share:stop-workspace", async (_, key = shareService.WORKSPACE_KEY) => {
+    const result = shareService.stopWorkspaceShare(key);
     if (result.success) {
       discoveryService.unpublishShare(result.port);
-      // Persist auto-share preference
-      const cfg = configService.read();
-      if (cfg) {
-        configService.write({ ...cfg, autoShareWorkspace: false });
+      
+      if (key === shareService.WORKSPACE_KEY) {
+        const cfg = configService.read();
+        if (cfg) {
+          configService.write({ ...cfg, autoShareWorkspace: false });
+        }
       }
     }
     return result;
@@ -950,8 +1012,7 @@ function setupIpcHandlers() {
 
   // --- Peers ---
   ipcMain.handle("peers:list", async () => {
-    if (!fs.existsSync(PEERS_FILE)) return [];
-    return JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"));
+    return readPeers();
   });
 
   ipcMain.handle("peers:list-discovered", async () => {
@@ -959,9 +1020,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("peers:favorite", async (_, peerId) => {
-    const peers = fs.existsSync(PEERS_FILE)
-      ? JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"))
-      : [];
+    const peers = readPeers();
     const idx = peers.findIndex((p) => p.id === peerId);
     if (idx >= 0) peers[idx].favorited = true;
     fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
@@ -969,9 +1028,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("peers:unfavorite", async (_, peerId) => {
-    const peers = fs.existsSync(PEERS_FILE)
-      ? JSON.parse(fs.readFileSync(PEERS_FILE, "utf-8"))
-      : [];
+    const peers = readPeers();
     const idx = peers.findIndex((p) => p.id === peerId);
     if (idx >= 0) peers[idx].favorited = false;
     fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
@@ -998,15 +1055,15 @@ function setupIpcHandlers() {
     }
   });
 
-  ipcMain.handle("peers:open-peer-file", async (_, peerId, relPath) => {
+  ipcMain.handle("peers:open-peer-file", async (_, peerId, relPath, wsName) => {
     const peer = discoveredPeers.find((p) => p.id === peerId);
     if (!peer) return { success: false, error: "Peer not online" };
     try {
       const { default: fetch } = await import("node-fetch");
-      const res = await fetch(
-        `http://${peer.host}:${peer.port}/file?path=${encodeURIComponent(relPath)}&token=${peer.token}`,
-        { timeout: 15000, headers: { Accept: "application/json" } }
-      );
+      let url = `http://${peer.host}:${peer.port}/file?path=${encodeURIComponent(relPath)}&token=${peer.token}`;
+      if (wsName) url += `&workspace=${encodeURIComponent(wsName)}`;
+      
+      const res = await fetch(url, { timeout: 15000, headers: { Accept: "application/json" } });
       if (!res.ok) {
         logError(`[peers] file fetch failed for ${peerId}/${relPath}: HTTP ${res.status}`);
         return { success: false, error: `HTTP ${res.status}` };
@@ -1047,6 +1104,21 @@ function setupIpcHandlers() {
       name: saved.displayName,
       email: `${saved.displayName.replace(/\s+/g, ".")}@canonic.local`,
     });
+    
+    // Re-announce any active shares so peers see the new name
+    const activeShares = shareService.listActiveShares();
+    for (const share of activeShares) {
+      discoveryService.unpublishShare(share.port);
+      discoveryService.announceShare({
+        port: share.port,
+        token: share.token,
+        scope: share.key === shareService.WORKSPACE_KEY ? 'workspace' : (share.key === '__all_workspaces__' ? 'all-workspaces' : 'file'),
+        permission: share.permission,
+        author: saved.displayName || os.userInfo().username,
+        taggedOnly: share.taggedOnly
+      });
+    }
+
     return { success: true, config: saved };
   });
 

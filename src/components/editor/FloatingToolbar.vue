@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      v-if="show"
+      v-if="show && !store.commentingActive"
       class="floating-toolbar"
       :style="style"
       @mousedown.prevent
@@ -54,9 +54,11 @@
 import { ref, reactive, nextTick, watch, inject } from 'vue'
 import { usePluginViewContext } from '@prosemirror-adapter/vue'
 import { Bold, Italic, Strikethrough, Link as LinkIcon, List, ListOrdered, Quote, MessageSquarePlus } from 'lucide-vue-next'
+import { useAppStore } from '../../store'
 
 const { view, prevState } = usePluginViewContext()
 const openCommentFromToolbar = inject('openCommentFromToolbar', null)
+const store = useAppStore()
 
 watch(prevState, () => updateState())
 

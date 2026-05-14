@@ -98,6 +98,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "artifactName": "${name}-${arch}.${ext}",
       "target": [
         {
           "target": "dmg",
@@ -108,6 +109,7 @@
       ]
     },
     "linux": {
+      "artifactName": "${name}-${arch}.${ext}",
       "target": [
         {
           "target": "AppImage",
@@ -118,6 +120,7 @@
       ]
     },
     "win": {
+      "artifactName": "${name}-${arch}.${ext}",
       "target": [
         {
           "target": "nsis",

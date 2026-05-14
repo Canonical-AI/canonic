@@ -140,6 +140,6 @@ jobs:
           formula-name: canonic
           formula-path: Casks/canonic.rb
           homebrew-tap: Canonical-AI/homebrew-tap
-          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.create-draft.outputs.version }}/Canonic-${{ needs.create-draft.outputs.version }}-arm64.dmg
+          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.create-draft.outputs.version }}/canonic-arm64.dmg
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

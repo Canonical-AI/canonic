@@ -294,10 +294,19 @@
                             </div>
                         </div>
                         <div class="field">
-                            <button class="btn-secondary" @click="checkUpdates" :disabled="checkingUpdates">
+                            <button class="btn-secondary" @click="checkUpdates" :disabled="checkingUpdates || store.updateDownloading">
                                 {{ checkingUpdates ? "Checking…" : "Check now" }}
                             </button>
                             <span v-if="updateStatus" class="update-status">{{ updateStatus }}</span>
+                        </div>
+                        <div v-if="store.updateReady" class="field">
+                            <button class="btn-primary" @click="store.installUpdate()">Restart to update — v{{ store.updateInfo?.version }}</button>
+                        </div>
+                        <div v-else-if="store.updateDownloading" class="field">
+                            <span class="update-status">Downloading… {{ store.downloadProgress }}%</span>
+                        </div>
+                        <div v-else-if="store.updateAvailable" class="field">
+                            <button class="btn-primary" @click="store.downloadUpdate()">Download v{{ store.updateInfo?.version }}</button>
                         </div>
                         <div class="field" style="margin-top: 32px; opacity: 0.6">
                             <p class="field-hint">Current version: v{{ store.appVersion }}</p>

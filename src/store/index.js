@@ -110,6 +110,43 @@ export const useAppStore = defineStore("app", () => {
 
   const api = window.canonic;
 
+  const updateAvailable = ref(false);
+  const updateDownloading = ref(false);
+  const updateReady = ref(false);
+  const updateInfo = ref(null);
+  const downloadProgress = ref(0);
+
+  if (api?.update) {
+    api.update.onAvailable?.((info) => {
+      updateInfo.value = info;
+      updateAvailable.value = true;
+    });
+    api.update.onProgress?.((progress) => {
+      updateAvailable.value = false;
+      updateDownloading.value = true;
+      downloadProgress.value = Math.round(progress.percent);
+    });
+    api.update.onDownloaded?.(() => {
+      updateReady.value = true;
+      updateDownloading.value = false;
+      downloadProgress.value = 0;
+    });
+    api.update.onError?.((err) => {
+      console.error("[update]", err);
+      updateDownloading.value = false;
+    });
+  }
+
+  function downloadUpdate() {
+    updateAvailable.value = false;
+    updateDownloading.value = true;
+    api?.update.download();
+  }
+
+  function installUpdate() {
+    api?.update.install();
+  }
+
   async function syncActiveShares() {
     if (!api.share?.listActive) return;
     const active = await api.share.listActive();
@@ -1135,6 +1172,13 @@ export const useAppStore = defineStore("app", () => {
     copyPeerFileToWorkspace,
     fileIndex,
     appVersion,
+    updateAvailable,
+    updateDownloading,
+    updateReady,
+    updateInfo,
+    downloadProgress,
+    downloadUpdate,
+    installUpdate,
     commentingActive: ref(false),
     refreshDiscoveredPeers,
     sharesByFile,

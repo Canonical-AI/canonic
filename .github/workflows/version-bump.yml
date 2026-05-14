@@ -44,10 +44,22 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump version
+        env:
+          BUMP_TYPE: ${{ steps.bump-type.outputs.type }}
+          PRERELEASE_TAG: ${{ vars.PRERELEASE_TAG }}
         run: |
-          TYPE=${{ steps.bump-type.outputs.type }}
-          echo "Bumping version with type: $TYPE"
-          npm version $TYPE -m "chore(release): bump version to %s"
+          echo "Bumping version with type: $BUMP_TYPE"
+          npm version "$BUMP_TYPE" --no-git-tag-version
+
+          if [ -n "$PRERELEASE_TAG" ]; then
+            CURRENT=$(jq -r .version package.json)
+            npm pkg set version="${CURRENT}-${PRERELEASE_TAG}"
+          fi
+
+          VERSION=$(jq -r .version package.json)
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version to $VERSION"
+          git tag "v$VERSION"
 
       - name: Push changes
         run: git push origin main --follow-tags

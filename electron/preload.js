@@ -44,6 +44,8 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("files:read", workspacePath, filePath),
     write: (workspacePath, filePath, content) =>
       ipcRenderer.invoke("files:write", workspacePath, filePath, content),
+    writeBinary: (workspacePath, filePath, buffer) =>
+      ipcRenderer.invoke("files:write-binary", workspacePath, filePath, buffer),
     delete: (workspacePath, filePath) =>
       ipcRenderer.invoke("files:delete", workspacePath, filePath),
     newDoc: (workspacePath, fileName) =>
@@ -94,6 +96,8 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("git:log-all", workspacePath, filePath, branchList),
     fileStatus: (workspacePath, filePath) =>
       ipcRenderer.invoke("git:file-status", workspacePath, filePath),
+    isFileTracked: (workspacePath, filePath) =>
+      ipcRenderer.invoke("git:is-file-tracked", workspacePath, filePath),
     onBranchUpdate: (cb) => { ipcRenderer.on('git:branch-updated', () => cb()) },
   },
 

@@ -533,4 +533,45 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ***
 
-*Last updated: 2026-05-08*
+***
+
+## Image Paste (IMG)
+
+> Users can paste images (PNG, JPG, GIF, WebP) and screenshots directly into the editor. Images are saved to disk in the workspace's `assets/` folder and embedded in the markdown document.
+
+* scenario: paste PNG or JPEG from clipboard
+  given: the user has copied an image to the clipboard
+  when: the user pastes (Cmd+V / Ctrl+V) in the editor
+  then: the image is saved to `assets/image-<timestamp>.png` (or `.jpg`) in the workspace and displayed inline in the editor
+
+* scenario: paste animated GIF from clipboard
+  given: the user has copied a GIF to the clipboard
+  when: the user pastes in the editor
+  then: the GIF is saved to `assets/image-<timestamp>.gif` and displayed inline; animation plays in the editor
+
+* scenario: image saved to assets folder
+  given: an image was pasted into any document
+  when: the user inspects the workspace folder
+  then: an `assets/` directory exists containing the saved image file
+
+* scenario: markdown references the image
+  given: an image was pasted
+  when: the markdown is serialized
+  then: the image appears as `![](canonic-asset:///assets/image-<timestamp>.ext)` in the `.md` file
+
+* scenario: paste in readonly mode
+  given: the editor is in readonly mode (peer file view or prop)
+  when: the user attempts to paste an image
+  then: no image is saved and no change occurs in the editor
+
+* scenario: paste in demo mode
+  given: the app is in demo mode (no real workspace)
+  when: the user attempts to paste an image
+  then: no file is written and the paste is silently ignored
+
+* scenario: paste non-image content
+  given: the user copies text or non-image content
+  when: the user pastes in the editor
+  then: normal paste behavior occurs (image plugin does not interfere)
+
+*Last updated: 2026-05-15*

@@ -469,6 +469,15 @@ async function commit(workspacePath, filePath, message) {
     }
 
     await git.add({ fs, dir: workspacePath, filepath: filePath })
+
+    // Stage new assets (untracked: HEAD=0, WORKDIR=2, STAGE=0) alongside the doc
+    const newAssets = matrix.filter(([f, head, workdir, stage]) =>
+      f.startsWith('assets/') && head === 0 && workdir === 2 && stage === 0
+    )
+    for (const [f] of newAssets) {
+      await git.add({ fs, dir: workspacePath, filepath: f })
+    }
+
     const oid = await git.commit({
       fs,
       dir: workspacePath,
@@ -904,6 +913,16 @@ The core loop is: write → commit → review → approve. Everything we build s
   }
 }
 
+async function isFileTracked(workspacePath, filePath) {
+  try {
+    const matrix = await git.statusMatrix({ fs, dir: workspacePath, filepaths: [filePath] })
+    if (!matrix.length) return false
+    return matrix[0][1] !== 0 // HEAD column nonzero = file exists in latest commit
+  } catch {
+    return false
+  }
+}
+
 module.exports = {
   setAuthor,
   initWorkspace,
@@ -912,6 +931,7 @@ module.exports = {
   log,
   logAllBranches,
   fileStatus,
+  isFileTracked,
   branches,
   createBranch,
   checkout,

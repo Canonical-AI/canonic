@@ -113,7 +113,7 @@ const highlightPlugin = new Plugin({
 
 // --- isDark provide ---
 
-const LIGHT_THEMES = new Set(['paper'])
+const LIGHT_THEMES = new Set(['paper', 'latte'])
 const getIsDark = () => !LIGHT_THEMES.has(document.documentElement.getAttribute('data-theme'))
 
 const isDark = ref(getIsDark())
@@ -328,6 +328,56 @@ function isHotkeyMatch(event, hotkey) {
   
   return matchKey && matchShift && matchMod && matchAlt
 }
+
+// --- Image paste plugin ---
+
+const imagePastePlugin = $prose(() => new Plugin({
+  props: {
+    handlePaste(view, event) {
+      if (editorReadonly.value) return false
+      const items = Array.from(event.clipboardData?.items || [])
+      const imageItem = items.find(i => i.type === 'image/gif') || items.find(i => i.type.startsWith('image/'))
+      if (!imageItem) return false
+      const file = imageItem.getAsFile()
+      if (!file) return false
+      const ext = file.type.split('/')[1] || 'png'
+      const reader = new FileReader()
+      reader.onload = async () => {
+        const uint8 = new Uint8Array(reader.result)
+        const src = await store.saveAsset(uint8, ext)
+        if (!src) return
+        const imageNode = view.state.schema.nodes.image?.create({ src, alt: '' })
+        if (imageNode) view.dispatch(view.state.tr.replaceSelectionWith(imageNode))
+      }
+      reader.readAsArrayBuffer(file)
+      return true
+    }
+  }
+}))
+
+// --- Asset cleanup plugin (remove orphaned images on undo/delete) ---
+
+function getAssetSrcs(doc) {
+  const srcs = new Set()
+  doc.descendants(node => {
+    if (node.type.name === 'image' && node.attrs.src?.startsWith('canonic-asset://')) {
+      srcs.add(node.attrs.src)
+    }
+  })
+  return srcs
+}
+
+const assetCleanupPlugin = $prose(() => new Plugin({
+  appendTransaction(transactions, oldState, newState) {
+    if (!transactions.some(tr => tr.docChanged)) return null
+    const oldSrcs = getAssetSrcs(oldState.doc)
+    const newSrcs = getAssetSrcs(newState.doc)
+    for (const src of oldSrcs) {
+      if (!newSrcs.has(src)) store.maybeDeleteAsset(src)
+    }
+    return null
+  }
+}))
 
 // --- Custom Drag Handle plugin ---
 
@@ -662,6 +712,8 @@ const { loading, get } = useEditor((root) =>
     .use(wikiTriggerPlugin)
     .use(inlineCompletionPlugin)
     .use(lineNumbersPlugin)
+    .use(imagePastePlugin)
+    .use(assetCleanupPlugin)
     .use(dragHandlePlugin)
     .use(
       $view(wikiLinkNode, () =>

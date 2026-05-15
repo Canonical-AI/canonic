@@ -512,6 +512,11 @@ export const useAppStore = defineStore("app", () => {
       unsavedBuffer[currentFile.value] = currentContent.value;
     }
 
+    // Clear peer file if we're opening a local one
+    if (peerFileContent.value) {
+      openPeerFile(null);
+    }
+
     // Switch to the branch this document is on (only in internal branching mode)
     if (workspacePath.value && !isExternalRepo.value) {
       const docBranch = docBranchMap.value[filePath]?.activeBranch || "main";
@@ -564,6 +569,25 @@ export const useAppStore = defineStore("app", () => {
       api.search.index(workspacePath.value, currentFile.value, content);
       await checkFileStatus();
     }
+  }
+
+  async function maybeDeleteAsset(assetUrl) {
+    if (!workspacePath.value || isDemoMode.value) return
+    const match = assetUrl.match(/^canonic-asset:\/\/(.+)$/)
+    if (!match) return
+    const relativePath = match[1] // e.g. 'assets/image-1234.png'
+    const tracked = await api.git.isFileTracked(workspacePath.value, relativePath)
+    if (!tracked) {
+      await api.files.delete(workspacePath.value, relativePath)
+    }
+  }
+
+  async function saveAsset(uint8array, ext) {
+    if (!workspacePath.value || isDemoMode.value) return null
+    const safeExt = (ext || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '') || 'png'
+    const filename = `assets/image-${Date.now()}.${safeExt}`
+    const result = await api.files.writeBinary(workspacePath.value, filename, uint8array)
+    return result ? `canonic-asset://${filename}` : null
   }
 
   async function checkFileStatus() {
@@ -1122,6 +1146,8 @@ export const useAppStore = defineStore("app", () => {
     openFile,
     openStandaloneFile,
     saveFile,
+    saveAsset,
+    maybeDeleteAsset,
     clearUnsaved,
     createFile,
     renameFile,

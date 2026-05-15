@@ -110,12 +110,13 @@ function collectMarkdownFiles(workspaces, ignore = [], excludedPaths = [], tagge
           if (entry.isDirectory()) {
             scan(full)
           } else if (entry.name.endsWith('.md')) {
+            const normRel = rel.replace(/\\/g, '/')
             if (taggedOnly) {
               if (wsVersions && wsVersions[rel] && wsVersions[rel].length > 0) {
-                results.push({ workspace: ws.name, path: rel, versions: wsVersions[rel] })
+                results.push({ workspace: ws.name, path: normRel, versions: wsVersions[rel] })
               }
             } else {
-              results.push({ workspace: ws.name, path: rel })
+              results.push({ workspace: ws.name, path: normRel })
             }
           }
         }
@@ -482,21 +483,32 @@ async function startWorkspaceShare(workspaces, options = {}) {
 
   // Individual file
   app.get('/file', async (req, res) => {
-    if (req.query.token !== token) return res.status(403).json({ error: 'Invalid token' })
+    if (req.query.token !== token) {
+      console.error(`[share:ws /file] 403 token mismatch — got="${req.query.token}" expected="${token}" path="${req.query.path}"`)
+      return res.status(403).json({ error: 'Invalid token' })
+    }
     const relPath = req.query.path
     const wsName = req.query.workspace
     const versionOid = req.query.oid
 
     if (!relPath) return res.status(400).json({ error: 'Missing path' })
-    
-    const ws = workspaces.find(w => w.name === wsName) || workspaces[0]
-    if (!ws) return res.status(404).json({ error: 'Workspace not found' })
 
+    const ws = workspaces.find(w => w.name === wsName) || workspaces[0]
+    if (!ws) {
+      console.error(`[share:ws /file] 404 workspace not found — wsName="${wsName}" available=${JSON.stringify(workspaces.map(w=>w.name))}`)
+      return res.status(404).json({ error: 'Workspace not found' })
+    }
+
+    const resolvedBase = path.resolve(ws.path)
     const resolved = path.resolve(ws.path, relPath)
-    if (!resolved.startsWith(ws.path)) return res.status(403).json({ error: 'Path outside workspace' })
+    if (!resolved.startsWith(resolvedBase + path.sep) && resolved !== resolvedBase) {
+      console.error(`[share:ws /file] 403 path traversal — resolved="${resolved}" base="${resolvedBase}"`)
+      return res.status(403).json({ error: 'Path outside workspace' })
+    }
 
     // Check exclusion
     if (share.excludedPaths.some(p => relPath.startsWith(p) || relPath === p.replace(/\/$/, ''))) {
+      console.error(`[share:ws /file] 403 excluded path — relPath="${relPath}"`)
       return res.status(403).json({ error: 'Path excluded from sharing' })
     }
 
@@ -510,7 +522,10 @@ async function startWorkspaceShare(workspaces, options = {}) {
         content = await git.readCommit(ws.path, relPath, versionOid)
       } else if (taggedOnly) {
         const versions = versionService.list(ws.path, relPath)
-        if (!versions.length) return res.status(403).json({ error: 'No tagged versions' })
+        if (!versions.length) {
+          console.error(`[share:ws /file] 403 taggedOnly no versions — path="${relPath}"`)
+          return res.status(403).json({ error: 'No tagged versions' })
+        }
         const git = require('./git')
         content = await git.readCommit(ws.path, relPath, versions[0].oid)
       } else {
@@ -688,8 +703,9 @@ async function startShare(workspacePath, filePath, options = {}) {
     const relPath = req.query.path
     if (!relPath) return res.status(400).json({ error: 'Missing path' })
 
+    const resolvedBase = path.resolve(workspacePath)
     const resolved = path.resolve(workspacePath, relPath)
-    if (!resolved.startsWith(workspacePath)) return res.status(403).json({ error: 'Path outside workspace' })
+    if (!resolved.startsWith(resolvedBase + path.sep) && resolved !== resolvedBase) return res.status(403).json({ error: 'Path outside workspace' })
     if (!fs.existsSync(resolved)) return res.status(404).json({ error: 'Not found' })
 
     share.reads++

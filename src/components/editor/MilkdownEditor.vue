@@ -113,7 +113,7 @@ const highlightPlugin = new Plugin({
 
 // --- isDark provide ---
 
-const LIGHT_THEMES = new Set(['paper'])
+const LIGHT_THEMES = new Set(['paper', 'latte'])
 const getIsDark = () => !LIGHT_THEMES.has(document.documentElement.getAttribute('data-theme'))
 
 const isDark = ref(getIsDark())

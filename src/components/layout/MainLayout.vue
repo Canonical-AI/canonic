@@ -297,7 +297,7 @@ function toggleFont() {
 
 // ── Theme switcher ───────────────────────────────────────────────────────────
 const THEME_KEY = "canonic:theme";
-const BUILTIN_THEMES = ["hal2001", "auteur", "paper"];
+const BUILTIN_THEMES = ["hal2001", "auteur", "paper", "mocha", "macchiato", "latte", "dracula", "nord", "solarized", "gruvbox", "tokyo"];
 
 const activeTheme = ref(localStorage.getItem(THEME_KEY) || "hal2001");
 const themeOpen = ref(false);

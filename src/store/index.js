@@ -512,6 +512,11 @@ export const useAppStore = defineStore("app", () => {
       unsavedBuffer[currentFile.value] = currentContent.value;
     }
 
+    // Clear peer file if we're opening a local one
+    if (peerFileContent.value) {
+      openPeerFile(null);
+    }
+
     // Switch to the branch this document is on (only in internal branching mode)
     if (workspacePath.value && !isExternalRepo.value) {
       const docBranch = docBranchMap.value[filePath]?.activeBranch || "main";

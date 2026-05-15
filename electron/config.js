@@ -19,6 +19,7 @@ const DEFAULTS = {
     scope: "file",
     permission: "view",
   },
+  windowBlur: true,
   providers: [],
   assistant: {
     providerId: "",

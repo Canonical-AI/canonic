@@ -7,7 +7,7 @@
 import { watch, ref, provide, computed, onUnmounted, reactive } from 'vue'
 import { Milkdown, useEditor } from '@milkdown/vue'
 import { useAppStore } from '../../store'
-import { Editor, rootCtx, defaultValueCtx, editorViewCtx, prosePluginsCtx, remarkPluginsCtx } from '@milkdown/core'
+import { Editor, rootCtx, defaultValueCtx, editorViewCtx, editorViewOptionsCtx, prosePluginsCtx, remarkPluginsCtx } from '@milkdown/core'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
 import { history } from '@milkdown/plugin-history'
@@ -278,10 +278,12 @@ const lineNumbersPlugin = $prose(() => new Plugin({
         if (node.isBlock) {
           const isLeafBlock = node.childCount === 0 || (node.firstChild && (node.firstChild.isText || node.firstChild.isInline))
           const isListItem = node.type.name === 'list_item'
-          if (isLeafBlock || isListItem) {
-            const types = ['paragraph', 'heading', 'list_item', 'blockquote', 'code_block', 'hr']
+          const isTable = node.type.name === 'table'
+          if (isLeafBlock || isListItem || isTable) {
+            const types = ['paragraph', 'heading', 'list_item', 'blockquote', 'code_block', 'hr', 'table']
             if (types.includes(node.type.name)) {
-                if (node.type.name === 'paragraph' && view.state.doc.resolve(pos).parent.type.name === 'list_item') return true 
+                const TABLE_INNER = new Set(['list_item', 'table_cell', 'table_header'])
+                if (node.type.name === 'paragraph' && TABLE_INNER.has(view.state.doc.resolve(pos).parent.type.name)) return true
                 if (node.type.name === 'code_block') {
                     const lines = node.textContent.split('\n')
                     let offset = 1
@@ -289,6 +291,8 @@ const lineNumbersPlugin = $prose(() => new Plugin({
                         renderLine(pos + offset, lineNumber++)
                         offset += lines[i].length + 1
                     })
+                } else if (node.type.name === 'table') {
+                    renderLine(pos + 1, lineNumber++)
                 } else {
                     renderLine(pos, lineNumber++)
                 }
@@ -622,6 +626,10 @@ const { loading, get } = useEditor((root) =>
     .config((ctx) => {
       ctx.set(rootCtx, root)
       ctx.set(defaultValueCtx, props.content || '')
+      ctx.update(editorViewOptionsCtx, (prev) => ({
+        ...prev,
+        editable: () => !editorReadonly.value,
+      }))
       ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
         const fixed = markdown.replace(/\\\[\\\[/g, '[[')
         emit('update', fixed)

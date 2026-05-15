@@ -249,6 +249,15 @@
                     <!-- Workspace tab -->
                     <div v-if="activeTab === 'workspace'" class="tab-content">
                         <div class="field">
+                            <div class="settings-card" :class="{ active: form.windowBlur }" @click="form.windowBlur = !form.windowBlur">
+                                <div class="card-header">
+                                    <span class="card-label">Window blur</span>
+                                    <div class="toggle" :class="{ on: form.windowBlur }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Apply a frosted-glass blur and 95% opacity to the window background.</p>
+                            </div>
+                        </div>
+                        <div class="field">
                             <label class="field-label">Default workspace location</label>
                             <div class="path-input">
                                 <input v-model="form.defaultWorkspacePath" class="field-input" />
@@ -369,6 +378,7 @@ const isDirty = ref(false);
 
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
+    windowBlur: true,
     autoShareWorkspace: false,
     autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
@@ -450,6 +460,7 @@ onMounted(async () => {
             assistant: { ...form.assistant, ...(cfg.assistant || {}) },
             completion: { ...form.completion, ...(cfg.completion || {}) },
             hotkeys: { ...form.hotkeys, ...(cfg.hotkeys || {}) },
+            windowBlur: cfg.windowBlur !== false,
         };
         Object.assign(form, loaded);
         initialState = JSON.parse(JSON.stringify(loaded));

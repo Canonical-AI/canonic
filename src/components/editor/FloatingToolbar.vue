@@ -6,7 +6,7 @@
       :style="style"
       @mousedown.prevent
     >
-      <template v-if="!addingLink">
+      <template v-if="!addingLink && !editorReadonly.value">
         <button class="tb-btn" :class="{ active: marks.bold }" @click="exec('bold')" title="Bold">
           <Bold :size="14" />
         </button>
@@ -34,7 +34,7 @@
           <MessageSquarePlus :size="14" />
         </button>
       </template>
-      <template v-else>
+      <template v-else-if="!editorReadonly.value">
         <input
           ref="urlInputEl"
           v-model="urlValue"
@@ -45,6 +45,11 @@
         />
         <button class="tb-btn tb-url-ok" @click="submitUrl">Add</button>
         <button class="tb-btn" @click="addingLink = false" title="Cancel">✕</button>
+      </template>
+      <template v-else-if="openCommentFromToolbar">
+        <button class="tb-btn comment-btn" @click="clickComment" title="Add comment">
+          <MessageSquarePlus :size="14" />
+        </button>
       </template>
     </div>
   </Teleport>
@@ -58,6 +63,7 @@ import { useAppStore } from '../../store'
 
 const { view, prevState } = usePluginViewContext()
 const openCommentFromToolbar = inject('openCommentFromToolbar', null)
+const editorReadonly = inject('editorReadonly', { value: false })
 const store = useAppStore()
 
 watch(prevState, () => updateState())

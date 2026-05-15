@@ -23,13 +23,20 @@
       </div>
     </div>
 
-    <!-- Document body -->
+    <!-- Document body — same Milkdown stack as main editor, read-only -->
     <div class="viewer-body" ref="bodyEl" @mouseup="onMouseUp" @click="onBodyClick" @click.capture="onMarkClick">
-      <div class="viewer-layout">
-        <div class="viewer-gutter">
-          <div v-for="n in lineCount" :key="n" class="gutter-line">{{ n }}</div>
-        </div>
-        <div class="viewer-prose" v-html="renderedContent" />
+      <div class="viewer-content">
+        <ProsemirrorAdapterProvider>
+          <MilkdownProvider :key="peerFileKey">
+            <MilkdownEditor
+              ref="milkdownEditorRef"
+              :content="content"
+              :comments="store.peerFileComments"
+              :readonly="true"
+              @update="() => {}"
+            />
+          </MilkdownProvider>
+        </ProsemirrorAdapterProvider>
       </div>
     </div>
 
@@ -87,14 +94,18 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick, watch, onMounted } from 'vue'
-import { marked } from 'marked'
+import { computed, ref, nextTick, watch, provide } from 'vue'
+import { MilkdownProvider } from '@milkdown/vue'
+import { ProsemirrorAdapterProvider } from '@prosemirror-adapter/vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAppStore } from '../../store'
 import { Eye, MessageSquare, MessageSquarePlus, Copy, X, Lock, LockOpen } from 'lucide-vue-next'
+import MilkdownEditor from '../editor/MilkdownEditor.vue'
 
 const store = useAppStore()
 const bodyEl = ref(null)
+const viewerEl = ref(null)
+const milkdownEditorRef = ref(null)
 const commentTextareaEl = ref(null)
 
 const peer = computed(() => store.peerFileContent?.peer ?? {})
@@ -106,17 +117,11 @@ const canComment = computed(() => permission.value === 'comment' || permission.v
 const permLabel = computed(() => ({ view: 'read-only', comment: 'can comment', copy: 'can copy' }[permission.value] ?? 'read-only'))
 const permIcon = computed(() => ({ view: Eye, comment: MessageSquare, copy: Copy }[permission.value] ?? Eye))
 
+// Key forces MilkdownProvider remount when switching peer files
+const peerFileKey = computed(() => `${peer.value.id ?? ''}:${relPath.value}`)
+
 const selectionPopover = ref({ visible: false, x: 0, y: 0, text: '' })
 const commentInput = ref({ visible: false, text: '' })
-
-const lineCount = computed(() => {
-  if (!content.value) return 0
-  return content.value.split('\n').length
-})
-
-const renderedContent = computed(() => {
-  try { return marked.parse(content.value) } catch { return `<pre>${content.value}</pre>` }
-})
 
 function initials(name) {
   return (name || '?').split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -159,103 +164,45 @@ function onBodyClick() {
   }
 }
 
-// ── Comment highlights ────────────────────────────────────────────────────────
-
-// Fire on initial mount — the component mounts AFTER peerFileContent is set,
-// so the watch below won't see a change on first render.
-onMounted(async () => {
-  await nextTick()
-  highlightAnchors()
-})
-
-// Re-apply whenever content re-renders or comments are added/updated.
-watch(
-  [renderedContent, () => store.peerFileComments],
-  async () => { await nextTick(); highlightAnchors() },
-  { deep: true }
-)
-
-function highlightAnchors() {
-  const prose = bodyEl.value?.querySelector('.viewer-prose')
-  if (!prose) return
-
-  // Remove old highlights first
-  prose.querySelectorAll('mark.comment-anchor').forEach(mark => {
-    const parent = mark.parentNode
-    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark)
-    parent.removeChild(mark)
-  })
-
-  const quotedTexts = [...new Set(
-    store.peerFileComments
-      .map(c => c.anchor?.quotedText)
-      .filter(t => t?.trim())
-  )]
-  for (const qt of quotedTexts) highlightTextInElement(prose, qt)
-}
-
-function highlightTextInElement(root, searchText) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  const nodes = []
-  let node
-  while ((node = walker.nextNode())) nodes.push(node)
-
-  for (const textNode of nodes) {
-    const idx = textNode.textContent.indexOf(searchText)
-    if (idx === -1) continue
-
-    const before = textNode.textContent.slice(0, idx)
-    const after = textNode.textContent.slice(idx + searchText.length)
-    const mark = document.createElement('mark')
-    mark.className = 'comment-anchor'
-    mark.dataset.anchor = searchText   // used for click delegation + scroll
-    mark.textContent = searchText
-
-    const parent = textNode.parentNode
-    if (before) parent.insertBefore(document.createTextNode(before), textNode)
-    parent.insertBefore(mark, textNode)
-    if (after) parent.insertBefore(document.createTextNode(after), textNode)
-    parent.removeChild(textNode)
-    break // first occurrence only
-  }
-}
-
-// When user clicks a highlight in the doc, activate the matching sidebar comment.
+// When user clicks a comment highlight decoration, activate the matching sidebar comment.
 function onMarkClick(e) {
-  const mark = e.target.closest('mark.comment-anchor')
-  if (!mark) return
+  const el = e.target.closest('[data-comment-id]')
+  if (!el) return
   e.stopPropagation()
-  const qt = mark.dataset.anchor
-  const comment = store.peerFileComments.find(c => c.anchor?.quotedText === qt)
-  if (comment) {
-    store.setActiveComment(comment.id)
+  const id = el.dataset.commentId
+  if (id) {
+    store.setActiveComment(id)
     store.rightPanelTab = 'comments'
     store.rightPanelCollapsed = false
   }
 }
 
-// When activeCommentId changes (e.g. user clicked a sidebar card),
-// scroll to the matching mark in the viewer and briefly flash it.
+// When activeCommentId changes, scroll to the decorated highlight in the DOM.
 watch(() => store.activeCommentId, async (id) => {
   if (!id) return
-  const comment = store.peerFileComments.find(c => c.id === id)
-  if (!comment?.anchor?.quotedText) return
   await nextTick()
-  
-  // Use CSS.escape for robust attribute selection (handles newlines, quotes, slashes, etc.)
-  const escapedAnchor = CSS.escape(comment.anchor.quotedText)
-  const mark = bodyEl.value?.querySelector(`mark.comment-anchor[data-anchor="${escapedAnchor}"]`)
-  
-  if (!mark) {
-    console.warn(`[PeerFileViewer] Could not find mark for anchor: ${comment.anchor.quotedText}`)
-    return
+  const el = bodyEl.value?.querySelector(`[data-comment-id="${CSS.escape(id)}"]`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('flash')
+    setTimeout(() => el.classList.remove('flash'), 1200)
   }
-  mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  mark.classList.add('flash')
-  setTimeout(() => mark.classList.remove('flash'), 1200)
 })
 
 // ── Comment input ─────────────────────────────────────────────────────────────
+
+// Provided to FloatingToolbar so the toolbar's comment button works in peer view
+provide('openCommentFromToolbar', (selectedText, coords) => {
+  if (!canComment.value) return
+  const wrapperRect = bodyEl.value?.getBoundingClientRect() ?? { left: 0, top: 0 }
+  selectionPopover.value = {
+    visible: false,
+    x: Math.max(0, coords.left - wrapperRect.left),
+    y: coords.top - wrapperRect.top,
+    text: selectedText
+  }
+  openCommentInput()
+})
 
 async function openCommentInput() {
   commentInput.value = { visible: true, text: '', isPrivate: false }
@@ -281,15 +228,13 @@ async function submitComment() {
     text,
     anchor: { quotedText: selectionPopover.value.text },
     createdAt: new Date().toISOString(),
-    synced: isPrivate ? null : false   // private comments are never synced
+    synced: isPrivate ? null : false
   }
 
   store.addPeerComment(comment)
-  // Switch sidebar to comments tab so user sees it
   store.rightPanelTab = 'comments'
   store.rightPanelCollapsed = false
 
-  // Private comments stay local — never synced
   if (!isPrivate) {
     if (!store.isDemoMode && peer.value.host && peer.value.port) {
       try {
@@ -303,7 +248,7 @@ async function submitComment() {
         )
         if (res.ok) store.updatePeerComment(comment.id, { synced: true })
       } catch {
-        // Will be retried by flushPeerComments interval
+        // retried by flushPeerComments interval
       }
     } else if (store.isDemoMode) {
       setTimeout(() => store.updatePeerComment(comment.id, { synced: true }), 800)
@@ -427,91 +372,18 @@ async function copyToWorkspace() {
 .viewer-body {
   flex: 1;
   overflow-y: auto;
-  padding: 40px 0;
   position: relative;
   user-select: text;
 }
 
-.viewer-layout {
-  display: flex;
-  max-width: 800px;
-  margin: 0 auto;
+.viewer-content {
+  padding: 32px 48px;
   position: relative;
+  min-height: 100%;
 }
 
-.viewer-gutter {
-  width: 48px;
-  flex-shrink: 0;
-  text-align: right;
-  padding-right: 16px;
-  padding-top: 0.1em;
-  color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.75rem;
-  user-select: none;
-  opacity: 0.5;
-  border-right: 1px solid var(--border);
-  display: none;
-}
-
-:global([data-line-numbers="true"]) .viewer-gutter {
-  display: block;
-}
-
-.gutter-line {
-  line-height: 1.7; /* Match viewer-prose line-height */
-  height: 1.7em;
-}
-
-.viewer-prose {
-  flex: 1;
-  padding-left: 40px;
-  padding-right: 40px;
-  color: var(--text-primary);
-  line-height: 1.7;
-  font-size: 0.9375rem;
-  min-width: 0;
-}
-
-.viewer-prose :deep(h1) { font-size: 1.75rem; font-weight: 700; margin: 0 0 8px; }
-.viewer-prose :deep(h2) { font-size: 1.2rem; font-weight: 600; margin: 2rem 0 0.5rem; }
-.viewer-prose :deep(h3) { font-size: 1rem; font-weight: 600; margin: 1.5rem 0 0.4rem; }
-.viewer-prose :deep(p) { margin: 0 0 1rem; color: var(--text-secondary); }
-.viewer-prose :deep(blockquote) {
-  margin: 0 0 1rem; padding: 4px 0 4px 16px;
-  border-left: 3px solid var(--accent); color: var(--text-muted); font-style: italic;
-}
-.viewer-prose :deep(ul), .viewer-prose :deep(ol) { margin: 0 0 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
-.viewer-prose :deep(li) { margin-bottom: 0.25rem; }
-.viewer-prose :deep(code) {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem;
-  background: var(--bg-base); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
-}
-.viewer-prose :deep(pre) {
-  background: var(--bg-base); border: 1px solid var(--border);
-  border-radius: 8px; padding: 14px 16px; overflow-x: auto; margin: 0 0 1rem;
-}
-.viewer-prose :deep(pre code) { background: none; border: none; padding: 0; }
-.viewer-prose :deep(table) { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.875rem; }
-.viewer-prose :deep(th), .viewer-prose :deep(td) { padding: 7px 12px; border: 1px solid var(--border); text-align: left; }
-.viewer-prose :deep(th) { background: var(--bg-base); font-weight: 600; }
-.viewer-prose :deep(hr) { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
-.viewer-prose :deep(a) { color: var(--accent); }
-
-/* Comment anchor highlights */
-.viewer-prose :deep(mark.comment-anchor) {
-  background: color-mix(in srgb, var(--secondary, #f59e0b) 30%, transparent);
-  color: inherit;
-  border-radius: 2px;
-  padding: 0 2px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.viewer-prose :deep(mark.comment-anchor:hover) {
-  background: color-mix(in srgb, var(--secondary, #f59e0b) 50%, transparent);
-}
-.viewer-prose :deep(mark.comment-anchor.flash) {
-  background: color-mix(in srgb, var(--secondary, #f59e0b) 65%, transparent);
+/* Comment anchor flash (applied to ProseMirror decoration elements) */
+:deep(.comment-highlight.flash) {
   outline: 2px solid color-mix(in srgb, var(--secondary, #f59e0b) 80%, transparent);
   border-radius: 3px;
   transition: none;

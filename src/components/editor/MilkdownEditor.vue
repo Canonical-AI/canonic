@@ -336,7 +336,7 @@ const imagePastePlugin = $prose(() => new Plugin({
     handlePaste(view, event) {
       if (editorReadonly.value) return false
       const items = Array.from(event.clipboardData?.items || [])
-      const imageItem = items.find(i => i.type.startsWith('image/'))
+      const imageItem = items.find(i => i.type === 'image/gif') || items.find(i => i.type.startsWith('image/'))
       if (!imageItem) return false
       const file = imageItem.getAsFile()
       if (!file) return false

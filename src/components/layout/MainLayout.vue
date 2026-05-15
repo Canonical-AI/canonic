@@ -520,7 +520,7 @@ function onResizeStart(e) {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: var(--bg-base);
+    background: var(--bg-container);
     color: var(--text-primary);
 }
 

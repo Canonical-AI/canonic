@@ -187,12 +187,8 @@ function resolveSafePath(base, target) {
 
 function applyWindowBlur(win, enabled) {
   if (!win) return;
-  win.setOpacity(enabled ? 0.97 : 1.0);
-  if (process.platform === "darwin") {
-    win.setVibrancy(enabled ? "under-window" : null);
-  } else if (process.platform === "win32") {
-    win.setBackgroundMaterial(enabled ? "acrylic" : "none");
-  }
+  // Transparency is CSS-only (rgba panels). No native vibrancy/blur.
+  win.setBackgroundColor(enabled ? "#00000000" : "#0C0E12");
 }
 
 function createWindow() {
@@ -206,8 +202,6 @@ function createWindow() {
     minHeight: 600,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     transparent: blurEnabled,
-    vibrancy:
-      blurEnabled && process.platform === "darwin" ? "under-window" : undefined,
     icon: path.join(
       __dirname,
       "../public",

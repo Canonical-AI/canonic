@@ -39,6 +39,9 @@
     --error: #e74c3c;
     --success: #4b7d6f;
     --warning: #f39c12;
+
+    /* Container background — transparent in window-blur mode */
+    --bg-container: var(--bg-base);
 }
 
 
@@ -90,13 +93,47 @@
     --warning: #d9a06f;
 }
 
+/* ── Window blur mode — transparent containers, rgba panels ── */
+/* --blur-opacity is set inline on <html> by JS (from config/localStorage) */
+html.window-blur {
+    --blur-opacity: 0.72;
+    --bg-container: transparent;
+    --bg-titlebar:  rgb(17 21 25 / var(--blur-opacity));
+    --bg-sidebar:   rgb(26 30 37 / var(--blur-opacity));
+    --bg-editor:    rgb(12 14 18 / var(--blur-opacity));
+    --bg-surface:   rgb(22 26 33 / var(--blur-opacity));
+    --bg-hover:     rgb(40 47 59 / var(--blur-opacity));
+    --bg-active:    rgb(30 36 46 / var(--blur-opacity));
+}
+html.window-blur[data-theme="auteur"] {
+    --bg-titlebar:  rgb(31 20 26 / var(--blur-opacity));
+    --bg-sidebar:   rgb(42 34 40 / var(--blur-opacity));
+    --bg-editor:    rgb(26 15 21 / var(--blur-opacity));
+    --bg-surface:   rgb(36 35 42 / var(--blur-opacity));
+    --bg-hover:     rgb(74 59 69 / var(--blur-opacity));
+    --bg-active:    rgb(53 48 58 / var(--blur-opacity));
+}
+html.window-blur[data-theme="paper"] {
+    --bg-titlebar:  rgb(237 233 239 / var(--blur-opacity));
+    --bg-sidebar:   rgb(220 213 223 / var(--blur-opacity));
+    --bg-editor:    rgb(246 244 247 / var(--blur-opacity));
+    --bg-surface:   rgb(255 255 255 / var(--blur-opacity));
+    --bg-hover:     rgb(230 225 232 / var(--blur-opacity));
+    --bg-active:    rgb(240 237 242 / var(--blur-opacity));
+}
+
+/* Modals always solid — override --bg-surface back to opaque within .modal */
+html.window-blur .modal { --bg-surface: #161a21; --bg-base: #0c0e12; }
+html.window-blur[data-theme="auteur"] .modal { --bg-surface: #24232a; --bg-base: #1a0f15; }
+html.window-blur[data-theme="paper"] .modal { --bg-surface: #ffffff; --bg-base: #f6f4f7; }
+
 html,
 body,
 #app {
     height: 100%;
     font-family: "Source Serif 4", Georgia, ui-serif, serif;
     font-size: 15px;
-    background: var(--bg-base);
+    background: var(--bg-container);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

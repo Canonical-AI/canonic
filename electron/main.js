@@ -6,6 +6,8 @@ const {
   shell,
   Menu,
   MenuItem,
+  protocol,
+  net,
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
@@ -26,6 +28,14 @@ let searchService;
 let shareService;
 const discoveryService = require("./discovery");
 const { flushPeerComments } = require("./comment-sync");
+
+// Register canonic-asset:// as a secure scheme before app is ready
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'canonic-asset', privileges: { secure: true, standard: true, supportFetchAPI: true } }
+])
+
+// Track active workspace for asset serving
+let activeWorkspacePath = null
 
 // In-memory list of currently discovered (online) peers
 const discoveredPeers = [];
@@ -666,6 +676,22 @@ app.whenReady().then(async () => {
     logError("[main] setupIpcHandlers failed:", err);
   }
 
+  // Serve workspace assets (images etc.) via canonic-asset:///relative/path
+  protocol.handle('canonic-asset', (request) => {
+    try {
+      if (!activeWorkspacePath) return new Response('no workspace', { status: 404 })
+      const url = new URL(request.url)
+      const relativePath = decodeURIComponent((url.hostname + url.pathname).replace(/^\//, ''))
+      const fullPath = resolveSafePath(activeWorkspacePath, relativePath)
+      const data = fs.readFileSync(fullPath)
+      const ext = path.extname(relativePath).slice(1).toLowerCase()
+      const mimeMap = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+      return new Response(data, { headers: { 'Content-Type': mimeMap[ext] || 'application/octet-stream' } })
+    } catch (e) {
+      return new Response('not found', { status: 404 })
+    }
+  })
+
   createMenu();
   createWindow();
   setupAutoUpdater();
@@ -866,6 +892,7 @@ function setupIpcHandlers() {
     "workspace:init",
     async (_, workspacePath, template = "blank") => {
       try {
+        activeWorkspacePath = workspacePath
         const result = await gitService.initWorkspace(workspacePath, template);
         startWatcher(workspacePath, (index, gitChanged) => {
           if (gitChanged) {
@@ -986,6 +1013,19 @@ function setupIpcHandlers() {
       return false;
     }
   });
+
+  ipcMain.handle("files:write-binary", async (_, workspacePath, filePath, buffer) => {
+    try {
+      const fullPath = resolveSafePath(workspacePath, filePath)
+      const dir = path.dirname(fullPath)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(fullPath, Buffer.from(buffer))
+      return filePath
+    } catch (err) {
+      console.error("[main:files:write-binary] error:", err.message)
+      return null
+    }
+  })
 
   ipcMain.handle("files:delete", async (_, workspacePath, filePath) => {
     const fullPath = resolveSafePath(workspacePath, filePath);
@@ -1173,6 +1213,10 @@ function setupIpcHandlers() {
 
   ipcMain.handle("git:file-status", async (_, workspacePath, filePath) => {
     return gitService.fileStatus(workspacePath, filePath);
+  });
+
+  ipcMain.handle("git:is-file-tracked", async (_, workspacePath, filePath) => {
+    return gitService.isFileTracked(workspacePath, filePath);
   });
 
   // --- Comments ---

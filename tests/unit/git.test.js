@@ -99,4 +99,64 @@ describe('git service', () => {
     const externalLog = await git.log(tmpDir, 'external.py')
     expect(externalLog.length).toBe(0)
   })
+
+  // --- isFileTracked ---
+
+  it('isFileTracked() returns false for untracked file', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+    fs.mkdirSync(path.join(tmpDir, 'assets'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'assets', 'image-123.png'), Buffer.from([0x89, 0x50]))
+    const tracked = await git.isFileTracked(tmpDir, 'assets/image-123.png')
+    expect(tracked).toBe(false)
+  })
+
+  it('isFileTracked() returns true after file is committed', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+    fs.mkdirSync(path.join(tmpDir, 'assets'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'assets', 'image-456.png'), Buffer.from([0x89, 0x50]))
+    await git.commit(tmpDir, 'assets/image-456.png', 'Add image')
+    const tracked = await git.isFileTracked(tmpDir, 'assets/image-456.png')
+    expect(tracked).toBe(true)
+  })
+
+  it('isFileTracked() returns false for nonexistent file', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+    const tracked = await git.isFileTracked(tmpDir, 'assets/ghost.png')
+    expect(tracked).toBe(false)
+  })
+
+  // --- commit() auto-stages assets ---
+
+  it('commit() auto-stages new assets/ files alongside the document', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+
+    // Write doc and a new asset
+    fs.writeFileSync(path.join(tmpDir, 'doc.md'), '![](canonic-asset://assets/img.png)')
+    fs.mkdirSync(path.join(tmpDir, 'assets'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'assets', 'img.png'), Buffer.from([0x89, 0x50]))
+
+    const result = await git.commit(tmpDir, 'doc.md', 'Add doc with image')
+    expect(result.success).toBe(true)
+
+    // Asset should now be tracked
+    const tracked = await git.isFileTracked(tmpDir, 'assets/img.png')
+    expect(tracked).toBe(true)
+  })
+
+  it('commit() does not auto-stage already-committed assets', async () => {
+    await git.initWorkspace(tmpDir, 'blank')
+    fs.mkdirSync(path.join(tmpDir, 'assets'), { recursive: true })
+
+    // Commit the asset first
+    fs.writeFileSync(path.join(tmpDir, 'assets', 'old.png'), Buffer.from([0x89, 0x50]))
+    await git.commit(tmpDir, 'assets/old.png', 'Add old image')
+
+    // Now commit a doc — should not re-commit the already-tracked asset
+    fs.writeFileSync(path.join(tmpDir, 'doc.md'), '# Doc')
+    const result = await git.commit(tmpDir, 'doc.md', 'Add doc')
+    expect(result.success).toBe(true)
+
+    const log = await git.log(tmpDir, 'assets/old.png')
+    expect(log.length).toBe(1) // still only one commit for the asset
+  })
 })

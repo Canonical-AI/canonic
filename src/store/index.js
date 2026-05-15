@@ -571,6 +571,25 @@ export const useAppStore = defineStore("app", () => {
     }
   }
 
+  async function maybeDeleteAsset(assetUrl) {
+    if (!workspacePath.value || isDemoMode.value) return
+    const match = assetUrl.match(/^canonic-asset:\/\/(.+)$/)
+    if (!match) return
+    const relativePath = match[1] // e.g. 'assets/image-1234.png'
+    const tracked = await api.git.isFileTracked(workspacePath.value, relativePath)
+    if (!tracked) {
+      await api.files.delete(workspacePath.value, relativePath)
+    }
+  }
+
+  async function saveAsset(uint8array, ext) {
+    if (!workspacePath.value || isDemoMode.value) return null
+    const safeExt = (ext || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '') || 'png'
+    const filename = `assets/image-${Date.now()}.${safeExt}`
+    const result = await api.files.writeBinary(workspacePath.value, filename, uint8array)
+    return result ? `canonic-asset://${filename}` : null
+  }
+
   async function checkFileStatus() {
     if (!workspacePath.value || !currentFile.value) {
       fileIsUncommitted.value = false;
@@ -1127,6 +1146,8 @@ export const useAppStore = defineStore("app", () => {
     openFile,
     openStandaloneFile,
     saveFile,
+    saveAsset,
+    maybeDeleteAsset,
     clearUnsaved,
     createFile,
     renameFile,

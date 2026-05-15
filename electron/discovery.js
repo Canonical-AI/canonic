@@ -15,6 +15,23 @@ function getBonjourCtor() {
   return _BonjourCtor
 }
 
+// Defensively convert TXT record values — bonjour-service returns Buffers on some platforms
+function txtStr(v) {
+  if (v == null) return v
+  if (Buffer.isBuffer(v)) return v.toString('utf8')
+  return String(v)
+}
+
+function getLanIP() {
+  const ifaces = os.networkInterfaces()
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address
+    }
+  }
+  return '127.0.0.1'
+}
+
 function startDiscovery() {
   if (bonjour) return
   const Bonjour = getBonjourCtor()
@@ -26,14 +43,29 @@ function startDiscovery() {
 
 function announceShare({ port, token, scope, permission, author, taggedOnly }) {
   if (!bonjour) return
+  const ip = getLanIP()
   const svc = bonjour.publish({
-    // Add port to name to prevent collision on same machine
     name: `${author} (${os.hostname()}) - ${port}`,
     type: 'canonic',
     port,
-    txt: { token, scope, permission, author, taggedOnly: !!taggedOnly }
+    // ip in TXT lets remote peers skip .local hostname resolution (cross-platform fix)
+    txt: { token, scope, permission, author, taggedOnly: !!taggedOnly, ip }
   })
   publishedServices.set(port, svc)
+
+  // mDNS doesn't loop back to our own browser — emit self so our UI shows us
+  emitter.emit('peer:found', {
+    id: `127.0.0.1:${port}`,
+    name: author,
+    host: '127.0.0.1',
+    port,
+    token,
+    scope,
+    permission,
+    taggedOnly: !!taggedOnly,
+    online: true,
+    isSelf: true,
+  })
 }
 
 function unpublishShare(port) {
@@ -41,6 +73,7 @@ function unpublishShare(port) {
   if (!svc) return
   svc.stop()
   publishedServices.delete(port)
+  emitter.emit('peer:lost', { id: `127.0.0.1:${port}` })
 }
 
 function stopDiscovery() {
@@ -51,49 +84,54 @@ function stopDiscovery() {
 }
 
 function svcToPeer(svc) {
-  // 1. Determine the best host (IP preferred over hostname)
-  let resolvedHost = svc.host;
-  if (svc.addresses && svc.addresses.length > 0) {
-    const ipv4 = svc.addresses.find(a => a.includes('.') && !a.includes(':'));
-    if (ipv4) resolvedHost = ipv4;
-    else resolvedHost = svc.addresses[0];
-  }
+  // Prefer explicit IP from TXT record — reliable across platforms/OS hostname resolution
+  const txtIp = txtStr(svc.txt?.ip)
+  let resolvedHost = (txtIp && /^\d+\.\d+\.\d+\.\d+$/.test(txtIp))
+    ? txtIp
+    : svc.host
 
-  // 2. Clean up hostnames (trim trailing dots, append .local if it's a bare hostname)
-  if (typeof resolvedHost === 'string') {
-    resolvedHost = resolvedHost.replace(/\.$/, ''); // Remove trailing dot if any
-    if (!resolvedHost.includes('.') && !resolvedHost.includes(':') && resolvedHost !== 'localhost') {
-      resolvedHost = `${resolvedHost}.local`;
+  if (!txtIp) {
+    // Fall back to addresses array
+    if (svc.addresses && svc.addresses.length > 0) {
+      const ipv4 = svc.addresses.find(a => a.includes('.') && !a.includes(':'))
+      if (ipv4) resolvedHost = ipv4
+      else resolvedHost = svc.addresses[0]
+    }
+    // Clean up hostnames
+    if (typeof resolvedHost === 'string') {
+      resolvedHost = resolvedHost.replace(/\.$/, '')
+      if (!resolvedHost.includes('.') && !resolvedHost.includes(':') && resolvedHost !== 'localhost') {
+        resolvedHost = `${resolvedHost}.local`
+      }
     }
   }
 
-  const author = svc.txt?.author || svc.name;
-  
   return {
-    // Stable ID based on network address, allows name updates without treating as new peer
     id: `${resolvedHost}:${svc.port}`,
-    name: author,
+    name: txtStr(svc.txt?.author) || svc.name,
     host: resolvedHost,
     port: svc.port,
-    token: svc.txt?.token,
-    scope: svc.txt?.scope,
-    permission: svc.txt?.permission,
-    taggedOnly: svc.txt?.taggedOnly === 'true',
+    token: txtStr(svc.txt?.token),
+    scope: txtStr(svc.txt?.scope),
+    permission: txtStr(svc.txt?.permission),
+    taggedOnly: txtStr(svc.txt?.taggedOnly) === 'true',
     online: true
   }
 }
 
 function peerIdFromSvc(svc) {
-  // Must match the ID logic in svcToPeer for 'down' events to work
-  let h = svc.host;
+  const txtIp = txtStr(svc.txt?.ip)
+  if (txtIp && /^\d+\.\d+\.\d+\.\d+$/.test(txtIp)) return `${txtIp}:${svc.port}`
+
+  let h = svc.host
   if (svc.addresses && svc.addresses.length > 0) {
-    const ipv4 = svc.addresses.find(a => a.includes('.') && !a.includes(':'));
-    if (ipv4) h = ipv4;
-    else h = svc.addresses[0];
+    const ipv4 = svc.addresses.find(a => a.includes('.') && !a.includes(':'))
+    if (ipv4) h = ipv4
+    else h = svc.addresses[0]
   }
   if (typeof h === 'string') {
-    h = h.replace(/\.$/, '');
-    if (!h.includes('.') && !h.includes(':') && h !== 'localhost') h = `${h}.local`;
+    h = h.replace(/\.$/, '')
+    if (!h.includes('.') && !h.includes(':') && h !== 'localhost') h = `${h}.local`
   }
   return `${h}:${svc.port}`
 }

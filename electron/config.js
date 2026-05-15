@@ -19,6 +19,8 @@ const DEFAULTS = {
     scope: "file",
     permission: "view",
   },
+  windowBlur: true,
+  windowBlurOpacity: 0.72,
   providers: [],
   assistant: {
     providerId: "",
@@ -46,7 +48,7 @@ const KNOWN_LABELS = {
   "codestral.mistral.ai": "Codestral",
   "api.deepseek.com": "DeepSeek",
   "api.groq.com": "Groq",
-  "localhost": "Local",
+  localhost: "Local",
 };
 
 function labelFromUrl(url) {
@@ -98,7 +100,7 @@ function migrate(raw) {
     const label = labelFromUrl(c.baseUrl) || "Completions";
     const id = uniqueSlug(
       slugify(label),
-      providers.map((p) => p.id)
+      providers.map((p) => p.id),
     );
     providers.push({ id, label, baseUrl: c.baseUrl, apiKey: c.apiKey });
     completionProviderId = id;
@@ -181,12 +183,14 @@ function write(config) {
           ...merged,
           providers: merged.providers.map((p) => ({
             ...p,
-            apiKey: p.apiKey ? p.apiKey.slice(0, 6) + "..." + p.apiKey.slice(-4) : "",
+            apiKey: p.apiKey
+              ? p.apiKey.slice(0, 6) + "..." + p.apiKey.slice(-4)
+              : "",
           })),
         },
         null,
-        2
-      )
+        2,
+      ),
     );
 
   if (!fs.existsSync(CANONIC_DIR)) {
@@ -207,4 +211,11 @@ function validate(config) {
   return { valid: Object.keys(errors).length === 0, errors };
 }
 
-module.exports = { read, write, exists, validate, resolveProvider, CONFIG_PATH };
+module.exports = {
+  read,
+  write,
+  exists,
+  validate,
+  resolveProvider,
+  CONFIG_PATH,
+};

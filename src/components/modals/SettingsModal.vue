@@ -249,6 +249,30 @@
                     <!-- Workspace tab -->
                     <div v-if="activeTab === 'workspace'" class="tab-content">
                         <div class="field">
+                            <div class="settings-card" :class="{ active: form.windowBlur }" @click="form.windowBlur = !form.windowBlur">
+                                <div class="card-header">
+                                    <span class="card-label">Window blur</span>
+                                    <div class="toggle" :class="{ on: form.windowBlur }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Frosted-glass effect — shows blurred desktop behind the window.</p>
+                            </div>
+                        </div>
+                        <div v-if="form.windowBlur" class="field">
+                            <label class="field-label">
+                                Blur opacity
+                                <span class="field-badge">{{ Math.round(form.windowBlurOpacity * 100) }}%</span>
+                            </label>
+                            <input
+                                type="range"
+                                v-model.number="form.windowBlurOpacity"
+                                min="0.3"
+                                max="0.95"
+                                step="0.05"
+                                class="opacity-slider"
+                            />
+                            <p class="field-hint">Lower = more see-through. Takes effect on save.</p>
+                        </div>
+                        <div class="field">
                             <label class="field-label">Default workspace location</label>
                             <div class="path-input">
                                 <input v-model="form.defaultWorkspacePath" class="field-input" />
@@ -369,6 +393,8 @@ const isDirty = ref(false);
 
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
+    windowBlur: true,
+    windowBlurOpacity: 0.72,
     autoShareWorkspace: false,
     autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
@@ -450,6 +476,8 @@ onMounted(async () => {
             assistant: { ...form.assistant, ...(cfg.assistant || {}) },
             completion: { ...form.completion, ...(cfg.completion || {}) },
             hotkeys: { ...form.hotkeys, ...(cfg.hotkeys || {}) },
+            windowBlur: cfg.windowBlur !== false,
+            windowBlurOpacity: cfg.windowBlurOpacity ?? 0.72,
         };
         Object.assign(form, loaded);
         initialState = JSON.parse(JSON.stringify(loaded));
@@ -561,6 +589,10 @@ async function confirmReset() {
 .field-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
 
 .field-hint { font-size: 0.8125rem; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
+
+.field-badge { font-weight: 400; font-size: 0.75rem; color: var(--accent); margin-left: 8px; }
+
+.opacity-slider { width: 100%; accent-color: var(--accent); cursor: pointer; }
 
 .section-heading { font-size: 0.8125rem; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-secondary); margin: 20px 0 10px; border-bottom: 1px solid var(--border-mid); padding-bottom: 6px; }
 .section-heading:first-child { margin-top: 0; }

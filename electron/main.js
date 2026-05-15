@@ -1,4 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, MenuItem } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  Menu,
+  MenuItem,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -56,8 +64,12 @@ function startNetworkWatcher() {
 }
 
 // ── Comment sync queue ─────────────────────────────────────────────────────
-const PEER_COMMENTS_DIR = path.join(os.homedir(), ".canonic", "comments", "peers");
-
+const PEER_COMMENTS_DIR = path.join(
+  os.homedir(),
+  ".canonic",
+  "comments",
+  "peers",
+);
 
 // Suppress harmless Chrome DevTools autofill protocol errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
@@ -138,7 +150,8 @@ let mainWindow;
 let updateDownloaded = false;
 
 // Track file passed via OS "open-file" event (macOS) or CLI (Win/Linux)
-let fileToOpenOnStartup = process.argv.find(arg => arg.endsWith('.md') && fs.existsSync(arg)) || null;
+let fileToOpenOnStartup =
+  process.argv.find((arg) => arg.endsWith(".md") && fs.existsSync(arg)) || null;
 
 app.on("open-file", (event, path) => {
   event.preventDefault();
@@ -161,19 +174,34 @@ function resolveSafePath(base, target) {
   const resolvedBase = path.resolve(base);
   const resolvedTarget = path.resolve(base, target);
   if (!resolvedTarget.startsWith(resolvedBase)) {
-    console.error("[resolveSafePath] Path traversal blocked:", { base, target, resolvedBase, resolvedTarget });
+    console.error("[resolveSafePath] Path traversal blocked:", {
+      base,
+      target,
+      resolvedBase,
+      resolvedTarget,
+    });
     throw new Error("Path traversal blocked: " + target);
   }
   return resolvedTarget;
 }
 
+function applyWindowBlur(win, enabled) {
+  if (!win) return;
+  // Transparency is CSS-only (rgba panels). No native vibrancy/blur.
+  win.setBackgroundColor(enabled ? "#00000000" : "#0C0E12");
+}
+
 function createWindow() {
+  const cfg = configService.read();
+  const blurEnabled = cfg.windowBlur !== false;
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    transparent: blurEnabled,
     icon: path.join(
       __dirname,
       "../public",
@@ -187,8 +215,10 @@ function createWindow() {
       nodeIntegration: false,
       spellcheck: true,
     },
-    backgroundColor: "#0C0E12",
+    backgroundColor: blurEnabled ? "#00000000" : "#0C0E12",
   });
+
+  applyWindowBlur(mainWindow, blurEnabled);
 
   mainWindow.webContents.on("context-menu", (event, params) => {
     const menu = new Menu();
@@ -225,9 +255,15 @@ function createWindow() {
     }
 
     // Standard Edit actions
-    menu.append(new MenuItem({ role: "cut", enabled: params.editFlags.canCut }));
-    menu.append(new MenuItem({ role: "copy", enabled: params.editFlags.canCopy }));
-    menu.append(new MenuItem({ role: "paste", enabled: params.editFlags.canPaste }));
+    menu.append(
+      new MenuItem({ role: "cut", enabled: params.editFlags.canCut }),
+    );
+    menu.append(
+      new MenuItem({ role: "copy", enabled: params.editFlags.canCopy }),
+    );
+    menu.append(
+      new MenuItem({ role: "paste", enabled: params.editFlags.canPaste }),
+    );
     menu.append(new MenuItem({ type: "separator" }));
 
     // macOS Spelling & Grammar
@@ -264,20 +300,22 @@ function createWindow() {
     }
   });
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const isDevUrl = isDev && url.startsWith(process.env.VITE_DEV_URL || "http://localhost:5173");
-    const isFileUrl = !isDev && url.startsWith('file://');
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    const isDevUrl =
+      isDev &&
+      url.startsWith(process.env.VITE_DEV_URL || "http://localhost:5173");
+    const isFileUrl = !isDev && url.startsWith("file://");
     if (!isDevUrl && !isFileUrl) {
       event.preventDefault();
     }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      const { shell } = require('electron');
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      const { shell } = require("electron");
       shell.openExternal(url);
     }
-    return { action: 'deny' };
+    return { action: "deny" };
   });
 
   // Prompt before closing if an update is ready
@@ -360,7 +398,8 @@ async function setDefaultEditor(value) {
         await dialog.showMessageBox(mainWindow, {
           type: "info",
           title: "Dev Mode",
-          message: "Default editor registration only works in a packaged build.",
+          message:
+            "Default editor registration only works in a packaged build.",
           detail: "Build and install the app, then try again.",
           buttons: ["OK"],
         });
@@ -408,13 +447,19 @@ async function setDefaultEditor(value) {
           'print("OK")',
         ].join("\n");
 
-        const tempScriptPath = path.join(os.tmpdir(), "set_default_" + Date.now() + ".swift");
+        const tempScriptPath = path.join(
+          os.tmpdir(),
+          "set_default_" + Date.now() + ".swift",
+        );
         fs.writeFileSync(tempScriptPath, script);
 
         let swiftStdout = "";
         let scriptSucceeded = false;
         try {
-          const result = spawnSync("swift", [tempScriptPath], { encoding: "utf8", timeout: 30000 });
+          const result = spawnSync("swift", [tempScriptPath], {
+            encoding: "utf8",
+            timeout: 30000,
+          });
           swiftStdout = (result.stdout || "").trim();
           console.log("[main] Swift output:\n", swiftStdout);
           if (result.status !== 0) {
@@ -430,7 +475,9 @@ async function setDefaultEditor(value) {
             scriptSucceeded = true;
           }
         } finally {
-          try { fs.unlinkSync(tempScriptPath); } catch {}
+          try {
+            fs.unlinkSync(tempScriptPath);
+          } catch {}
         }
 
         if (scriptSucceeded) {
@@ -485,7 +532,8 @@ function createMenu() {
                 click: async () => {
                   await setDefaultEditor(true);
                 },
-              },              { type: "separator" },
+              },
+              { type: "separator" },
               { role: "services" },
               { type: "separator" },
               { role: "hide" },
@@ -501,14 +549,33 @@ function createMenu() {
       label: "File",
       submenu: [
         {
+          label: "New Workspace...",
+          accelerator: "CmdOrCtrl+Shift+N",
+          click: async () => {
+            const { canceled, filePaths } = await dialog.showOpenDialog(
+              mainWindow,
+              {
+                properties: ["openDirectory", "createDirectory"],
+                title: "Choose a folder for your new workspace",
+              },
+            );
+            if (!canceled && filePaths[0]) {
+              mainWindow?.webContents.send("menu:new-workspace", filePaths[0]);
+            }
+          },
+        },
+        {
           label: "Open File...",
           accelerator: "CmdOrCtrl+O",
           click: async () => {
-            const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-              title: "Open Markdown File",
-              filters: [{ name: "Markdown", extensions: ["md"] }],
-              properties: ["openFile"],
-            });
+            const { canceled, filePaths } = await dialog.showOpenDialog(
+              mainWindow,
+              {
+                title: "Open Markdown File",
+                filters: [{ name: "Markdown", extensions: ["md"] }],
+                properties: ["openFile"],
+              },
+            );
             if (!canceled && filePaths[0]) {
               mainWindow?.webContents.send("menu:open-file", filePaths[0]);
             }
@@ -523,7 +590,10 @@ function createMenu() {
               title: "Open or create a Canonic workspace",
             });
             if (!result.canceled && result.filePaths[0]) {
-              mainWindow?.webContents.send("menu:open-workspace", result.filePaths[0]);
+              mainWindow?.webContents.send(
+                "menu:open-workspace",
+                result.filePaths[0],
+              );
             }
           },
         },
@@ -597,40 +667,50 @@ app.whenReady().then(async () => {
   } catch (err) {
     logError("[main] setupIpcHandlers failed:", err);
   }
-  
+
   createMenu();
   createWindow();
   setupAutoUpdater();
-  
+
   // Auto-share workspace if previously enabled
   const cfg = configService.read();
-  if (cfg?.autoShareWorkspace && cfg.defaultWorkspacePath && fs.existsSync(cfg.defaultWorkspacePath)) {
+  if (
+    cfg?.autoShareWorkspace &&
+    cfg.defaultWorkspacePath &&
+    fs.existsSync(cfg.defaultWorkspacePath)
+  ) {
     log("[main] auto-sharing workspace:", cfg.defaultWorkspacePath);
     const options = {
       ...(cfg.sharingDefaults || {}),
       excludedPaths: cfg.sharingExcludedPaths || [],
-      id: shareService.WORKSPACE_KEY
+      id: shareService.WORKSPACE_KEY,
     };
     const wsName = path.basename(cfg.defaultWorkspacePath);
-    shareService.startWorkspaceShare([{ path: cfg.defaultWorkspacePath, name: wsName }], options).then(result => {
-      if (result.success) {
-        const author = cfg.displayName || os.userInfo().username;
-        discoveryService.announceShare({
-          port: result.port,
-          token: result.token,
-          scope: "workspace",
-          permission: result.permission,
-          author,
-        });
-        startNetworkWatcher();
-      }
-    }).catch(err => {
-      logError("[main] auto-share failed:", err);
-    });
+    shareService
+      .startWorkspaceShare(
+        [{ path: cfg.defaultWorkspacePath, name: wsName }],
+        options,
+      )
+      .then((result) => {
+        if (result.success) {
+          const author = cfg.displayName || os.userInfo().username;
+          discoveryService.announceShare({
+            port: result.port,
+            token: result.token,
+            scope: "workspace",
+            permission: result.permission,
+            author,
+          });
+          startNetworkWatcher();
+        }
+      })
+      .catch((err) => {
+        logError("[main] auto-share failed:", err);
+      });
   }
 
   if (cfg?.autoShareAllWorkspaces) {
-    const ALL_WS_KEY = '__all_workspaces__';
+    const ALL_WS_KEY = "__all_workspaces__";
     // We don't have recentWorkspaces in main process easily accessible (they are in localStorage).
     // Actually, let's just trigger a 'menu:sync-all-workspaces' to the renderer or similar?
     // No, better to read the recentWorkspaces if they were stored in config?
@@ -675,7 +755,12 @@ function setupAutoUpdater() {
 
   autoUpdater.on("update-available", (info) => {
     if (!semver.gt(info.version, app.getVersion())) {
-      log("[updates] available version", info.version, "is not newer than", app.getVersion());
+      log(
+        "[updates] available version",
+        info.version,
+        "is not newer than",
+        app.getVersion(),
+      );
       return;
     }
 
@@ -742,7 +827,8 @@ function setupIpcHandlers() {
     // Upsert to peers.json
     const peers = readPeers();
     const pidx = peers.findIndex((p) => p.id === peer.id);
-    if (pidx >= 0) peers[pidx] = { ...peers[pidx], ...peer, lastSeen: Date.now() };
+    if (pidx >= 0)
+      peers[pidx] = { ...peers[pidx], ...peer, lastSeen: Date.now() };
     else peers.push({ ...peer, favorited: false, lastSeen: Date.now() });
     fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
 
@@ -785,11 +871,11 @@ function setupIpcHandlers() {
         const result = await gitService.initWorkspace(workspacePath, template);
         startWatcher(workspacePath, (index, gitChanged) => {
           if (gitChanged) {
-            mainWindow?.webContents.send('git:branch-updated')
+            mainWindow?.webContents.send("git:branch-updated");
           } else {
-            mainWindow?.webContents.send('files:index-update', index)
+            mainWindow?.webContents.send("files:index-update", index);
           }
-        })
+        });
         return result;
       } catch (err) {
         return { error: err.message, path: workspacePath };
@@ -846,7 +932,10 @@ function setupIpcHandlers() {
           "    print('')",
           "except: print('')",
         ].join("\n");
-        const result = spawnSync("python3", ["-c", pyCode], { encoding: "utf8", timeout: 5000 });
+        const result = spawnSync("python3", ["-c", pyCode], {
+          encoding: "utf8",
+          timeout: 5000,
+        });
         return (result.stdout || "").trim() === "ai.canonic.app";
       }
     } catch (e) {
@@ -861,7 +950,7 @@ function setupIpcHandlers() {
   });
 
   // --- Files ---
-  ipcMain.handle("files:index", () => getIndex())
+  ipcMain.handle("files:index", () => getIndex());
 
   ipcMain.handle("files:list", async (_, workspacePath) => {
     if (!workspacePath) return [];
@@ -1128,7 +1217,11 @@ function setupIpcHandlers() {
 
   // --- Sharing ---
   ipcMain.handle("share:start", async (_, workspacePath, filePath, options) => {
-    const result = await shareService.startShare(workspacePath, filePath, options);
+    const result = await shareService.startShare(
+      workspacePath,
+      filePath,
+      options,
+    );
     if (result.success) {
       const cfg = configService.read();
       const author = cfg?.displayName || os.userInfo().username;
@@ -1138,7 +1231,7 @@ function setupIpcHandlers() {
         scope: options?.scope || "file",
         permission: result.permission,
         author,
-        taggedOnly: options?.taggedOnly
+        taggedOnly: options?.taggedOnly,
       });
       startNetworkWatcher();
     }
@@ -1152,7 +1245,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("share:open-link", async (_, url) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
       shell.openExternal(url);
     }
   });
@@ -1167,11 +1260,14 @@ function setupIpcHandlers() {
 
   ipcMain.handle("share:start-workspace", async (_, workspacePath, options) => {
     const wsName = path.basename(workspacePath);
-    const result = await shareService.startWorkspaceShare([{ path: workspacePath, name: wsName }], {
-      ...options,
-      id: shareService.WORKSPACE_KEY
-    });
-    
+    const result = await shareService.startWorkspaceShare(
+      [{ path: workspacePath, name: wsName }],
+      {
+        ...options,
+        id: shareService.WORKSPACE_KEY,
+      },
+    );
+
     if (result.success) {
       const cfg = configService.read();
       const author = cfg?.displayName || os.userInfo().username;
@@ -1181,7 +1277,7 @@ function setupIpcHandlers() {
         scope: "workspace",
         permission: result.permission,
         author,
-        taggedOnly: options?.taggedOnly
+        taggedOnly: options?.taggedOnly,
       });
       startNetworkWatcher();
 
@@ -1194,44 +1290,50 @@ function setupIpcHandlers() {
     return result;
   });
 
-  ipcMain.handle("share:start-all-workspaces", async (_, workspaces, options) => {
-    const key = "__all_workspaces__";
-    const result = await shareService.startWorkspaceShare(workspaces, {
-      ...options,
-      id: key,
-      scope: "all-workspaces"
-    });
-
-    if (result.success) {
-      const cfg = configService.read();
-      const author = cfg?.displayName || os.userInfo().username;
-      discoveryService.announceShare({
-        port: result.port,
-        token: result.token,
+  ipcMain.handle(
+    "share:start-all-workspaces",
+    async (_, workspaces, options) => {
+      const key = "__all_workspaces__";
+      const result = await shareService.startWorkspaceShare(workspaces, {
+        ...options,
+        id: key,
         scope: "all-workspaces",
-        permission: result.permission,
-        author,
-        taggedOnly: options?.taggedOnly
       });
-      startNetworkWatcher();
-    }
-    return result;
-  });
 
-  ipcMain.handle("share:stop-workspace", async (_, key = shareService.WORKSPACE_KEY) => {
-    const result = shareService.stopWorkspaceShare(key);
-    if (result.success) {
-      discoveryService.unpublishShare(result.port);
-      
-      if (key === shareService.WORKSPACE_KEY) {
+      if (result.success) {
         const cfg = configService.read();
-        if (cfg) {
-          configService.write({ ...cfg, autoShareWorkspace: false });
+        const author = cfg?.displayName || os.userInfo().username;
+        discoveryService.announceShare({
+          port: result.port,
+          token: result.token,
+          scope: "all-workspaces",
+          permission: result.permission,
+          author,
+          taggedOnly: options?.taggedOnly,
+        });
+        startNetworkWatcher();
+      }
+      return result;
+    },
+  );
+
+  ipcMain.handle(
+    "share:stop-workspace",
+    async (_, key = shareService.WORKSPACE_KEY) => {
+      const result = shareService.stopWorkspaceShare(key);
+      if (result.success) {
+        discoveryService.unpublishShare(result.port);
+
+        if (key === shareService.WORKSPACE_KEY) {
+          const cfg = configService.read();
+          if (cfg) {
+            configService.write({ ...cfg, autoShareWorkspace: false });
+          }
         }
       }
-    }
-    return result;
-  });
+      return result;
+    },
+  );
 
   ipcMain.handle("share:workspace-stats", async () => {
     return shareService.getStats(shareService.WORKSPACE_KEY);
@@ -1269,10 +1371,12 @@ function setupIpcHandlers() {
       const { default: fetch } = await import("node-fetch");
       const res = await fetch(
         `http://${peer.host}:${peer.port}/manifest?token=${peer.token}`,
-        { timeout: 10000 }
+        { timeout: 10000 },
       );
       if (!res.ok) {
-        logError(`[peers] manifest fetch failed for ${peerId}: HTTP ${res.status}`);
+        logError(
+          `[peers] manifest fetch failed for ${peerId}: HTTP ${res.status}`,
+        );
         return { success: false, error: `HTTP ${res.status}` };
       }
       return { success: true, ...(await res.json()) };
@@ -1289,10 +1393,15 @@ function setupIpcHandlers() {
       const { default: fetch } = await import("node-fetch");
       let url = `http://${peer.host}:${peer.port}/file?path=${encodeURIComponent(relPath)}&token=${peer.token}`;
       if (wsName) url += `&workspace=${encodeURIComponent(wsName)}`;
-      
-      const res = await fetch(url, { timeout: 15000, headers: { Accept: "application/json" } });
+
+      const res = await fetch(url, {
+        timeout: 15000,
+        headers: { Accept: "application/json" },
+      });
       if (!res.ok) {
-        logError(`[peers] file fetch failed for ${peerId}/${relPath}: HTTP ${res.status}`);
+        logError(
+          `[peers] file fetch failed for ${peerId}/${relPath}: HTTP ${res.status}`,
+        );
         return { success: false, error: `HTTP ${res.status}` };
       }
       return { success: true, ...(await res.json()) };
@@ -1331,7 +1440,10 @@ function setupIpcHandlers() {
       name: saved.displayName,
       email: `${saved.displayName.replace(/\s+/g, ".")}@canonic.local`,
     });
-    
+
+    // Apply window blur toggle at runtime
+    applyWindowBlur(mainWindow, saved.windowBlur !== false);
+
     // Re-announce any active shares so peers see the new name
     const activeShares = shareService.listActiveShares();
     for (const share of activeShares) {
@@ -1339,10 +1451,15 @@ function setupIpcHandlers() {
       discoveryService.announceShare({
         port: share.port,
         token: share.token,
-        scope: share.key === shareService.WORKSPACE_KEY ? 'workspace' : (share.key === '__all_workspaces__' ? 'all-workspaces' : 'file'),
+        scope:
+          share.key === shareService.WORKSPACE_KEY
+            ? "workspace"
+            : share.key === "__all_workspaces__"
+              ? "all-workspaces"
+              : "file",
         permission: share.permission,
         author: saved.displayName || os.userInfo().username,
-        taggedOnly: share.taggedOnly
+        taggedOnly: share.taggedOnly,
       });
     }
 
@@ -1552,66 +1669,77 @@ function setupIpcHandlers() {
   );
 
   // --- Inline completion ---
-  ipcMain.handle("ai:complete", async (_, { prefix, suffix, model, apiKey, baseUrl, maxTokens, extraInstructions }) => {
-    if (!apiKey || !baseUrl) return { text: "" };
-    const base = baseUrl.replace(/\/+$/, "");
-    try {
-      let text = "";
-      if (base.includes("codestral.mistral.ai")) {
-        const response = await fetch(`${base}/fim/completions`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            prompt: prefix,
-            suffix,
-            max_tokens: maxTokens ?? 25,
-            stop: ["\n", "\n\n", "  "],
-          }),
-        });
-        if (!response.ok) return { text: "" };
-        const data = await response.json();
-        text = (data.choices?.[0]?.text || "").replace(/^\n+/, "");
-      } else {
-        const response = await fetch(`${base}/chat/completions`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are an inline text completion assistant for a markdown editor. " +
-                  "Complete the text at the cursor. Return ONLY the completion — no explanation, " +
-                  "no fences, no preamble. Keep it concise (1–2 sentences max). " +
-                  "Match the document tone. If no good completion exists, return empty string." +
-                  (extraInstructions ? `\n\nAdditional instructions:\n${extraInstructions}` : ""),
-              },
-              {
-                role: "user",
-                content: `<prefix>\n${prefix}\n</prefix>\n<suffix>\n${suffix}\n</suffix>\nComplete the text immediately after </prefix>.`,
-              },
-            ],
-            stream: false,
-            max_tokens: maxTokens ?? 25,
-          }),
-        });
-        if (!response.ok) return { text: "" };
-        const data = await response.json();
-        text = (data.choices?.[0]?.message?.content || "").replace(/^\n+/, "");
+  ipcMain.handle(
+    "ai:complete",
+    async (
+      _,
+      { prefix, suffix, model, apiKey, baseUrl, maxTokens, extraInstructions },
+    ) => {
+      if (!apiKey || !baseUrl) return { text: "" };
+      const base = baseUrl.replace(/\/+$/, "");
+      try {
+        let text = "";
+        if (base.includes("codestral.mistral.ai")) {
+          const response = await fetch(`${base}/fim/completions`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              prompt: prefix,
+              suffix,
+              max_tokens: maxTokens ?? 25,
+              stop: ["\n", "\n\n", "  "],
+            }),
+          });
+          if (!response.ok) return { text: "" };
+          const data = await response.json();
+          text = (data.choices?.[0]?.text || "").replace(/^\n+/, "");
+        } else {
+          const response = await fetch(`${base}/chat/completions`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "system",
+                  content:
+                    "You are an inline text completion assistant for a markdown editor. " +
+                    "Complete the text at the cursor. Return ONLY the completion — no explanation, " +
+                    "no fences, no preamble. Keep it concise (1–2 sentences max). " +
+                    "Match the document tone. If no good completion exists, return empty string." +
+                    (extraInstructions
+                      ? `\n\nAdditional instructions:\n${extraInstructions}`
+                      : ""),
+                },
+                {
+                  role: "user",
+                  content: `<prefix>\n${prefix}\n</prefix>\n<suffix>\n${suffix}\n</suffix>\nComplete the text immediately after </prefix>.`,
+                },
+              ],
+              stream: false,
+              max_tokens: maxTokens ?? 25,
+            }),
+          });
+          if (!response.ok) return { text: "" };
+          const data = await response.json();
+          text = (data.choices?.[0]?.message?.content || "").replace(
+            /^\n+/,
+            "",
+          );
+        }
+        return { text: text.trim() };
+      } catch {
+        return { text: "" };
       }
-      return { text: text.trim() };
-    } catch {
-      return { text: "" };
-    }
-  });
+    },
+  );
 
   // --- Agent session ---
   ipcMain.handle("agent:submit", async (_, { sessionId, prompt, content }) => {
@@ -1624,4 +1752,3 @@ function setupIpcHandlers() {
 
   log("[ipc] all handlers registered successfully");
 }
-

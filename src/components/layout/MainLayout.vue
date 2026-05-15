@@ -279,13 +279,13 @@ const router = useRouter();
 
 // ── Font toggle ──────────────────────────────────────────────────────────────
 const FONT_KEY = "canonic:fontMode";
-const fontMode = ref(localStorage.getItem(FONT_KEY) || "sans");
+const fontMode = ref(localStorage.getItem(FONT_KEY) || "serif");
 
 function applyFont(mode) {
-    if (mode === "serif") {
-        document.documentElement.classList.add("font-serif");
+    if (mode === "sans") {
+        document.documentElement.classList.add("font-sans");
     } else {
-        document.documentElement.classList.remove("font-serif");
+        document.documentElement.classList.remove("font-sans");
     }
 }
 
@@ -315,8 +315,7 @@ const allThemes = computed(() => {
 const filteredThemes = computed(() => {
     if (!themeSearch.value) return allThemes.value;
     const s = themeSearch.value.toLowerCase();
-    // exact case-insensitive match for the filter
-    return allThemes.value.filter(t => t.name.toLowerCase() === s);
+    return allThemes.value.filter(t => t.name.toLowerCase().includes(s));
 });
 
 function applyTheme(name) {
@@ -396,6 +395,17 @@ onMounted(async () => {
     if (window.canonic?.menu) {
         window.canonic.menu.onOpenSettings(() => {
             showSettings.value = true;
+        });
+
+        window.canonic.menu.onNewWorkspace(async (workspacePath) => {
+            if (workspacePath) {
+                try {
+                    await store.openWorkspace(workspacePath, "blank");
+                    router.push("/workspace");
+                } catch (err) {
+                    console.error("Failed to create workspace from menu:", err);
+                }
+            }
         });
 
         window.canonic.menu.onOpenWorkspace(async (workspacePath) => {
@@ -510,7 +520,7 @@ function onResizeStart(e) {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background: var(--bg-base);
+    background: var(--bg-container);
     color: var(--text-primary);
 }
 

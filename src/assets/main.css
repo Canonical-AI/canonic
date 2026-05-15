@@ -1,233 +1,311 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
 /* ── HAL2001 theme (default) — dark blue-black with warm beige text ── */
 :root {
-  /* Backgrounds — from HAL2001 surface hierarchy */
-  --bg-base:      #0C0E12;   /* background */
-  --bg-titlebar:  #111519;   /* just above base */
-  --bg-sidebar:   #1A1E25;   /* surface-variant */
-  --bg-surface:   #161A21;   /* surface */
-  --bg-editor:    #0C0E12;   /* background */
-  --bg-hover:     #282F3B;   /* surface-light */
-  --bg-active:    #1E242E;   /* surface-bright */
+    /* Backgrounds — from HAL2001 surface hierarchy */
+    --bg-base: #0c0e12; /* background */
+    --bg-titlebar: #111519; /* just above base */
+    --bg-sidebar: #1a1e25; /* surface-variant */
+    --bg-surface: #161a21; /* surface */
+    --bg-editor: #0c0e12; /* background */
+    --bg-hover: #282f3b; /* surface-light */
+    --bg-active: #1e242e; /* surface-bright */
 
-  /* Borders — warm beige at low opacity on dark */
-  --border:       rgba(214, 207, 203, 0.12);
-  --border-mid:   rgba(214, 207, 203, 0.20);
+    /* Borders — warm beige at low opacity on dark */
+    --border: rgba(214, 207, 203, 0.12);
+    --border-mid: rgba(214, 207, 203, 0.2);
 
-  /* Text — warm beige tones, not cold gray */
-  --text-primary:   #D6CFCB;   /* on-surface-variant — warm off-white */
-  --text-secondary: #A899AD;   /* medium emphasis — muted lavender-beige */
-  --text-muted:     #5A5560;   /* low emphasis */
+    /* Text — warm beige tones, not cold gray */
+    --text-primary: #d6cfcb; /* on-surface-variant — warm off-white */
+    --text-secondary: #a899ad; /* medium emphasis — muted lavender-beige */
+    --text-muted: #5a5560; /* low emphasis */
 
-  /* Accent — HAL2001 primary blue */
-  --accent:         #4A7A9B;
-  --accent-light:   #6A97B5;
-  --accent-muted:   rgba(74, 122, 155, 0.18);
+    /* Accent — HAL2001 primary blue */
+    --accent: #4a7a9b;
+    --accent-light: #6a97b5;
+    --accent-muted: rgba(74, 122, 155, 0.18);
 
-  /* Secondary — warm beige-orange from HAL2001 secondary */
-  --secondary:      #D1A181;
-  --secondary-muted: rgba(209, 161, 129, 0.15);
+    /* Secondary — warm beige-orange from HAL2001 secondary */
+    --secondary: #d1a181;
+    --secondary-muted: rgba(209, 161, 129, 0.15);
 
-  /* Semantic */
-  --error:    #E74C3C;
-  --success:  #4B7D6F;
-  --warning:  #F39C12;
+    /* Semantic */
+    --error: #e74c3c;
+    --success: #4b7d6f;
+    --warning: #f39c12;
+
+    /* Container background — transparent in window-blur mode */
+    --bg-container: var(--bg-base);
 }
+
 
 /* ── Auteur theme — dark eggplant ── */
 [data-theme="auteur"] {
-  --bg-base:      #1A0F15;
-  --bg-titlebar:  #1F141A;
-  --bg-sidebar:   #2A2228;
-  --bg-surface:   #24232A;
-  --bg-editor:    #1A0F15;
-  --bg-hover:     #4A3B45;
-  --bg-active:    #35303A;
-  --border:       rgba(168, 153, 173, 0.12);
-  --border-mid:   rgba(168, 153, 173, 0.20);
-  --text-primary:   #C6B2B5;
-  --text-secondary: #9A8A8E;
-  --text-muted:     #5A4A50;
-  --accent:         #4A7A9B;
-  --accent-light:   #6A97B5;
-  --accent-muted:   rgba(74, 122, 155, 0.18);
-  --secondary:      #D1A181;
-  --secondary-muted: rgba(209, 161, 129, 0.15);
-  --error:    #E74C3C;
-  --success:  #4B7D6F;
-  --warning:  #F39C12;
+    --bg-base: #1a0f15;
+    --bg-titlebar: #1f141a;
+    --bg-sidebar: #2a2228;
+    --bg-surface: #24232a;
+    --bg-editor: #1a0f15;
+    --bg-hover: #4a3b45;
+    --bg-active: #35303a;
+    --border: rgba(168, 153, 173, 0.12);
+    --border-mid: rgba(168, 153, 173, 0.2);
+    --text-primary: #c6b2b5;
+    --text-secondary: #9a8a8e;
+    --text-muted: #5a4a50;
+    --accent: #4a7a9b;
+    --accent-light: #6a97b5;
+    --accent-muted: rgba(74, 122, 155, 0.18);
+    --secondary: #d1a181;
+    --secondary-muted: rgba(209, 161, 129, 0.15);
+    --error: #e74c3c;
+    --success: #4b7d6f;
+    --warning: #f39c12;
 }
 
 /* ── Paper theme — light ── */
 [data-theme="paper"] {
-  --bg-base:      #F6F4F7;
-  --bg-titlebar:  #EDE9EF;
-  --bg-sidebar:   #DCD5DF;
-  --bg-surface:   #FFFFFF;
-  --bg-editor:    #F6F4F7;
-  --bg-hover:     #E6E1E8;
-  --bg-active:    #F0EDF2;
-  --border:       rgba(74, 58, 78, 0.12);
-  --border-mid:   rgba(74, 58, 78, 0.22);
-  --text-primary:   #2A1F2E;
-  --text-secondary: #4A3A4E;
-  --text-muted:     #8A7A8E;
-  --accent:         #5B7FA5;
-  --accent-light:   #7A9BBF;
-  --accent-muted:   rgba(91, 127, 165, 0.15);
-  --secondary:      #6BA396;
-  --secondary-muted: rgba(107, 163, 150, 0.15);
-  --error:    #D45D5D;
-  --success:  #6BA396;
-  --warning:  #D9A06F;
+    --bg-base: #f6f4f7;
+    --bg-titlebar: #ede9ef;
+    --bg-sidebar: #dcd5df;
+    --bg-surface: #ffffff;
+    --bg-editor: #f6f4f7;
+    --bg-hover: #e6e1e8;
+    --bg-active: #f0edf2;
+    --border: rgba(74, 58, 78, 0.12);
+    --border-mid: rgba(74, 58, 78, 0.22);
+    --text-primary: #2a1f2e;
+    --text-secondary: #4a3a4e;
+    --text-muted: #8a7a8e;
+    --accent: #5b7fa5;
+    --accent-light: #7a9bbf;
+    --accent-muted: rgba(91, 127, 165, 0.15);
+    --secondary: #6ba396;
+    --secondary-muted: rgba(107, 163, 150, 0.15);
+    --error: #d45d5d;
+    --success: #6ba396;
+    --warning: #d9a06f;
 }
 
-html, body, #app {
-  height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 15px;
-  background: var(--bg-base);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ── Window blur mode — transparent containers, rgba panels ── */
+/* --blur-opacity is set inline on <html> by JS (from config/localStorage) */
+html.window-blur {
+    --blur-opacity: 0.72;
+    --bg-container: transparent;
+    --bg-titlebar:  rgb(17 21 25 / var(--blur-opacity));
+    --bg-sidebar:   rgb(26 30 37 / var(--blur-opacity));
+    --bg-editor:    rgb(12 14 18 / var(--blur-opacity));
+    --bg-surface:   rgb(22 26 33 / var(--blur-opacity));
+    --bg-hover:     rgb(40 47 59 / var(--blur-opacity));
+    --bg-active:    rgb(30 36 46 / var(--blur-opacity));
+}
+html.window-blur[data-theme="auteur"] {
+    --bg-titlebar:  rgb(31 20 26 / var(--blur-opacity));
+    --bg-sidebar:   rgb(42 34 40 / var(--blur-opacity));
+    --bg-editor:    rgb(26 15 21 / var(--blur-opacity));
+    --bg-surface:   rgb(36 35 42 / var(--blur-opacity));
+    --bg-hover:     rgb(74 59 69 / var(--blur-opacity));
+    --bg-active:    rgb(53 48 58 / var(--blur-opacity));
+}
+html.window-blur[data-theme="paper"] {
+    --bg-titlebar:  rgb(237 233 239 / var(--blur-opacity));
+    --bg-sidebar:   rgb(220 213 223 / var(--blur-opacity));
+    --bg-editor:    rgb(246 244 247 / var(--blur-opacity));
+    --bg-surface:   rgb(255 255 255 / var(--blur-opacity));
+    --bg-hover:     rgb(230 225 232 / var(--blur-opacity));
+    --bg-active:    rgb(240 237 242 / var(--blur-opacity));
 }
 
-/* Font mode override — applied via class on <html> */
-html.font-serif,
-html.font-serif body,
-html.font-serif #app {
-  font-family: 'Source Serif 4', Georgia, ui-serif, serif;
+/* Modals always solid — override --bg-surface back to opaque within .modal */
+html.window-blur .modal { --bg-surface: #161a21; --bg-base: #0c0e12; }
+html.window-blur[data-theme="auteur"] .modal { --bg-surface: #24232a; --bg-base: #1a0f15; }
+html.window-blur[data-theme="paper"] .modal { --bg-surface: #ffffff; --bg-base: #f6f4f7; }
+
+html,
+body,
+#app {
+    height: 100%;
+    font-family: "Source Serif 4", Georgia, ui-serif, serif;
+    font-size: 15px;
+    background: var(--bg-container);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Form elements don't inherit font-family by default — force it */
+input, button, textarea, select {
+    font-family: inherit;
+}
+
+/* Sans-serif override */
+html.font-sans,
+html.font-sans body,
+html.font-sans #app {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+html.font-sans input,
+html.font-sans button,
+html.font-sans textarea,
+html.font-sans select {
+    font-family: inherit;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(214, 207, 203, 0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(214, 207, 203, 0.2); }
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(214, 207, 203, 0.1);
+    border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(214, 207, 203, 0.2);
+}
 
 /* Selection */
-::selection { background: rgba(74, 122, 155, 0.35); color: var(--text-primary); }
+::selection {
+    background: rgba(74, 122, 155, 0.35);
+    color: var(--text-primary);
+}
 
 /* Remove click outline */
-button:focus:not(:focus-visible) { outline: none; }
+button:focus:not(:focus-visible) {
+    outline: none;
+}
 
 /* Modal stacking */
-.modal-backdrop { isolation: isolate; }
+.modal-backdrop {
+    isolation: isolate;
+}
 
 /* Inline completions */
 /* ── Task list checkboxes ── */
 .editor ul li[data-item-type="task"] {
-  list-style: none;
-  margin-left: -1.25em;
-  padding-left: 2em;
-  position: relative;
+    list-style: none;
+    margin-left: -1.25em;
+    padding-left: 2em;
+    position: relative;
 }
 
 .editor ul li[data-item-type="task"]::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.1em;
-  width: 1.25em;
-  height: 1.25em;
-  border: 1.5px solid var(--text-muted, #6b7280);
-  border-radius: 3px;
-  background: transparent;
-  transition: background 0.12s, border-color 0.12s;
-  cursor: pointer;
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.275em;
+    width: 1.25em;
+    height: 1.25em;
+    border: 1.5px solid var(--text-muted, #6b7280);
+    border-radius: 3px;
+    background: transparent;
+    transition:
+        background 0.12s,
+        border-color 0.12s;
+    cursor: pointer;
 }
 
 .editor ul li[data-item-type="task"][data-checked="true"]::before {
-  background: var(--accent, #6366f1);
-  border-color: var(--accent, #6366f1);
+    background: var(--accent, #6366f1);
+    border-color: var(--accent, #6366f1);
 }
 
 .editor ul li[data-item-type="task"][data-checked="true"]::after {
-  content: '';
-  position: absolute;
-  left: 0.25em;
-  top: 0.45em;
-  width: 0.75em;
-  height: 0.4em;
-  border-left: 2px solid #fff;
-  border-bottom: 2px solid #fff;
-  transform: rotate(-45deg);
+    content: "";
+    position: absolute;
+    left: 0.25em;
+    top: 0.625em;
+    width: 0.75em;
+    height: 0.4em;
+    border-left: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    transform: rotate(-45deg);
 }
 
 .editor ul li[data-item-type="task"][data-checked="true"] > p {
-  opacity: 0.5;
-  text-decoration: line-through;
+    opacity: 0.5;
+    text-decoration: line-through;
 }
 
-
 .inline-completion-ghost {
-  display: inline;
-  color: var(--text-muted, #6b7280);
-  opacity: 0.5;
-  pointer-events: none;
-  user-select: none;
-  white-space: pre;
+    display: inline;
+    color: var(--text-muted, #6b7280);
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+    white-space: pre;
 }
 /* ── Editor Gutter & Line Numbers ── */
 .editor-gutter {
-  display: none;
-  position: absolute;
-  left: -32px; /* Pull gutter closer to sidebar */
-  top: 0;
-  width: 24px; /* Slightly narrower gutter */
-  user-select: none;
-  pointer-events: none;
-  text-align: right;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  opacity: 0.6;
+    display: none;
+    position: absolute;
+    left: -32px; /* Pull gutter closer to sidebar */
+    top: 4px;
+    width: 24px; /* Slightly narrower gutter */
+    user-select: none;
+    pointer-events: none;
+    text-align: right;
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
 }
 
 [data-line-numbers="true"] .editor-gutter {
-  display: block;
+    display: block;
 }
 
 [data-line-numbers="true"] .milkdown {
-  position: relative;
+    position: relative;
 }
 
 .gutter-line {
-  position: absolute;
-  right: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding-top: 0.1em;
+    position: absolute;
+    right: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-top: 0.1em;
 }
 
 /* ── Block Handles & Drag-and-Drop ── */
 .milkdown .block-handle-dom {
-  position: absolute;
-  left: -22px; /* Positioned just to the left of content */
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
+    position: absolute;
+    left: -22px; /* Positioned just to the left of content */
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
 }
 
 /* If line numbers are on, shift the block handle further left so they don't overlap */
 [data-line-numbers="true"] .milkdown .block-handle-dom {
-  left: -58px; /* Offset to clear the 48px gutter area */
+    left: -58px; /* Offset to clear the 48px gutter area */
 }
 
 /* Drop indicator styling */
 .milkdown .block-drag-placeholder {
-  height: 2px;
-  background: var(--accent);
-  margin: 4px 0;
-  border-radius: 1px;
+    height: 2px;
+    background: var(--accent);
+    margin: 4px 0;
+    border-radius: 1px;
 }
 
 /* Selection highlight for active dragging */
 .milkdown.is-dragging {
-  cursor: grabbing;
+    cursor: grabbing;
 }
 
 /* Fix spacing between adjacent lists created by block reordering */
@@ -235,16 +313,16 @@ button:focus:not(:focus-visible) { outline: none; }
 .milkdown ol + ol,
 .milkdown ul + ol,
 .milkdown ol + ul {
-  margin-top: -1em;
+    margin-top: -1em;
 }
 
 .drop-indicator {
-  position: absolute;
-  height: 2px;
-  background: var(--accent);
-  z-index: 1000;
-  pointer-events: none;
-  display: none;
-  border-radius: 1px;
-  box-shadow: 0 0 4px var(--accent);
+    position: absolute;
+    height: 2px;
+    background: var(--accent);
+    z-index: 1000;
+    pointer-events: none;
+    display: none;
+    border-radius: 1px;
+    box-shadow: 0 0 4px var(--accent);
 }

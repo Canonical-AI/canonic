@@ -249,9 +249,19 @@ export const useAppStore = defineStore("app", () => {
     await api.docBranches.set(workspacePath.value, docBranchMap.value);
   }
 
+  function applyWindowBlurClass(enabled, opacity) {
+    const on = enabled !== false;
+    document.documentElement.classList.toggle('window-blur', on);
+    localStorage.setItem('canonic:window-blur', String(on));
+    const op = opacity ?? 0.72;
+    document.documentElement.style.setProperty('--blur-opacity', String(op));
+    localStorage.setItem('canonic:blur-opacity', String(op));
+  }
+
   async function loadConfig() {
     if (import.meta.env.DEV) console.log("[Store] Loading config...");
     config.value = await api.config.read();
+    applyWindowBlurClass(config.value?.windowBlur, config.value?.windowBlurOpacity);
     if (import.meta.env.DEV) {
       if (config.value) {
         console.log("[Store] Config loaded:", {
@@ -274,6 +284,7 @@ export const useAppStore = defineStore("app", () => {
     const result = await api.config.write(newConfig);
     if (result.success) {
       config.value = result.config;
+      applyWindowBlurClass(result.config.windowBlur, result.config.windowBlurOpacity);
       if (import.meta.env.DEV) console.log("[Store] Config saved successfully");
     } else {
       if (import.meta.env.DEV)

@@ -186,28 +186,22 @@ function resolveSafePath(base, target) {
 }
 
 function applyWindowBlur(win, enabled) {
-  if (!win) return;
-  if (process.platform === "win32") {
-    // Mica: wallpaper-tinted transparency, no blur. Falls back gracefully on Win10.
-    win.setBackgroundMaterial(enabled ? "mica" : "none");
-  }
+  if (!win || process.platform === "win32") return;
   win.setBackgroundColor(enabled ? "#00000000" : "#0C0E12");
 }
 
 function createWindow() {
   const cfg = configService.read();
-  const blurEnabled = cfg.windowBlur !== false;
-
   const isWin = process.platform === "win32";
+  const blurEnabled = !isWin && cfg.windowBlur !== false;
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // Windows ignores `transparent` with a native titlebar; use backgroundMaterial instead
-    transparent: !isWin && blurEnabled,
-    ...(isWin && blurEnabled ? { backgroundMaterial: "mica" } : {}),
+    transparent: blurEnabled,
     icon: path.join(
       __dirname,
       "../public",

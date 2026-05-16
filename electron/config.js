@@ -20,7 +20,7 @@ const DEFAULTS = {
     permission: "view",
   },
   windowBlur: true,
-  windowBlurOpacity: 0.95,
+  windowBlurOpacity: 0.72,
   providers: [],
   assistant: {
     providerId: "",

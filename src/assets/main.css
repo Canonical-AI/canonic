@@ -289,6 +289,7 @@
 /* --blur-opacity is set inline on <html> by JS (from config/localStorage) */
 html.window-blur {
     --blur-opacity: 0.72;
+
     --bg-container: transparent;
     --bg-titlebar:  rgb(17 21 25 / var(--blur-opacity));
     --bg-sidebar:   rgb(26 30 37 / var(--blur-opacity));
@@ -379,6 +380,7 @@ html.window-blur[data-theme="tokyo"] {
 }
 
 /* Modals always solid — override --bg-surface back to opaque within .modal */
+
 html.window-blur .modal { --bg-surface: #161a21; --bg-base: #0c0e12; }
 html.window-blur[data-theme="auteur"] .modal { --bg-surface: #24232a; --bg-base: #1a0f15; }
 html.window-blur[data-theme="paper"] .modal { --bg-surface: #ffffff; --bg-base: #f6f4f7; }

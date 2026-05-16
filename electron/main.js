@@ -789,12 +789,6 @@ function setupAutoUpdater() {
     }
 
     mainWindow?.webContents.send("update:available", info);
-    // Re-read config live so toggling autoUpdate in Settings takes effect
-    // without requiring a restart
-    const liveCfg = configService.read();
-    if (liveCfg?.autoUpdate !== false) {
-      autoUpdater.downloadUpdate();
-    }
   });
 
   autoUpdater.on("download-progress", (progressObj) => {

@@ -394,7 +394,7 @@ const isDirty = ref(false);
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
     windowBlur: true,
-    windowBlurOpacity: 0.72,
+    windowBlurOpacity: 0.95,
     autoShareWorkspace: false,
     autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
@@ -477,7 +477,7 @@ onMounted(async () => {
             completion: { ...form.completion, ...(cfg.completion || {}) },
             hotkeys: { ...form.hotkeys, ...(cfg.hotkeys || {}) },
             windowBlur: cfg.windowBlur !== false,
-            windowBlurOpacity: cfg.windowBlurOpacity ?? 0.72,
+            windowBlurOpacity: cfg.windowBlurOpacity ?? 0.95,
         };
         Object.assign(form, loaded);
         initialState = JSON.parse(JSON.stringify(loaded));

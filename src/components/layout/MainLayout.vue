@@ -229,6 +229,16 @@
             </aside>
         </div>
 
+        <!-- Update prompt -->
+        <Transition name="update-prompt">
+            <div v-if="showUpdatePrompt" class="update-prompt">
+                <ArrowUpCircle :size="15" class="update-prompt-icon" />
+                <span class="update-prompt-text">v{{ updateInfo?.version }} available</span>
+                <button class="update-prompt-btn update-prompt-btn--primary" @click="handlePromptDownload">Download now</button>
+                <button class="update-prompt-btn" @click="showUpdatePrompt = false">Later</button>
+            </div>
+        </Transition>
+
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
         <SettingsModal v-if="showSettings" :initial-tab="settingsInitialTab" @close="showSettings = false; settingsInitialTab = 'profile'" />
@@ -459,6 +469,17 @@ function handleHintNavigate(target) {
     showSettings.value = true
 }
 const { updateReady, updateAvailable, updateDownloading, updateInfo, downloadProgress, downloadUpdate, installUpdate } = store;
+
+const showUpdatePrompt = ref(false)
+watch(updateAvailable, (val) => {
+    if (val && !updateDownloading.value && !updateReady.value) {
+        setTimeout(() => { showUpdatePrompt.value = true }, 2000)
+    }
+})
+function handlePromptDownload() {
+    showUpdatePrompt.value = false
+    downloadUpdate()
+}
 
 provide("showNewDoc", () => {
     showNewDoc.value = true;
@@ -768,6 +789,45 @@ function onResizeStart(e) {
 }
 
 /* ── Titlebar update indicator ── */
+.update-prompt {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    z-index: 9999;
+    font-size: 0.8125rem;
+    color: var(--text);
+}
+.update-prompt-icon { color: var(--accent); flex-shrink: 0; }
+.update-prompt-text { font-weight: 500; white-space: nowrap; }
+.update-prompt-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+.update-prompt-btn:hover { background: var(--bg-hover); }
+.update-prompt-btn--primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.update-prompt-btn--primary:hover { opacity: 0.88; background: var(--accent); }
+.update-prompt-enter-active, .update-prompt-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.update-prompt-enter-from, .update-prompt-leave-to { opacity: 0; transform: translateY(8px); }
+
 .update-ready-btn {
     display: flex;
     align-items: center;

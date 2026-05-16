@@ -119,6 +119,30 @@ describe('api-server', () => {
     expect(capturedEvents[0].type).toBe('session-cancel')
   })
 
+  it('POST /activity returns 400 when no active session', async () => {
+    const res = await request('POST', '/activity', { type: 'web_search' })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /activity fires onEvent with activityType and label', async () => {
+    await request('POST', '/session/start', {
+      file: 'spec.md', agentName: 'A', callbackUrl: 'http://127.0.0.1:9/done',
+    })
+    capturedEvents.length = 0
+    const res = await request('POST', '/activity', { type: 'web_search', label: 'Searching docs…' })
+    expect(res.status).toBe(200)
+    expect(capturedEvents[0].type).toBe('activity')
+    expect(capturedEvents[0].data.activityType).toBe('web_search')
+    expect(capturedEvents[0].data.label).toBe('Searching docs…')
+  })
+
+  it('POST /activity defaults activityType to thinking when type omitted', async () => {
+    capturedEvents.length = 0
+    const res = await request('POST', '/activity', {})
+    expect(res.status).toBe(200)
+    expect(capturedEvents[0].data.activityType).toBe('thinking')
+  })
+
   it('GET /nonexistent returns 404', async () => {
     const res = await request('GET', '/nonexistent', null, false)
     expect(res.status).toBe(404)

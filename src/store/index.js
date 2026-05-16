@@ -70,6 +70,7 @@ export const useAppStore = defineStore("app", () => {
   const _demoComments = ref({});
 
   const agentSession = ref(null);   // null | { sessionId, agentName, file, startedAt }
+  const agentActivity = ref(null);  // null | { activityType, label }
   const actionPickerOpen = ref(false);
 
   // Peer discovery state
@@ -159,9 +160,15 @@ export const useAppStore = defineStore("app", () => {
   // Register agent session IPC listeners once
   if (api.agentSession) {
     api.agentSession.onSessionStart((data) => startAgentSession(data))
-    api.agentSession.onComment((data) => addAgentComment(data))
-    api.agentSession.onSessionDone(() => { agentSession.value = null; actionPickerOpen.value = false })
-    api.agentSession.onSessionCancel(() => { agentSession.value = null; actionPickerOpen.value = false })
+    api.agentSession.onComment((data) => {
+      agentActivity.value = { activityType: 'writing_comment', label: 'Writing comment…' }
+      addAgentComment(data)
+    })
+    api.agentSession.onActivity?.((data) => {
+      agentActivity.value = { activityType: data.activityType, label: data.label }
+    })
+    api.agentSession.onSessionDone(() => { agentSession.value = null; agentActivity.value = null; actionPickerOpen.value = false })
+    api.agentSession.onSessionCancel(() => { agentSession.value = null; agentActivity.value = null; actionPickerOpen.value = false })
   }
 
   // Wire share stats listener once — updates whichever file is being shared
@@ -1009,6 +1016,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function startAgentSession({ sessionId, file, agentName, workspacePath: wsParam }) {
+    agentActivity.value = null
     agentSession.value = { sessionId, agentName, file, startedAt: Date.now() }
     const ws = wsParam || workspacePath.value
     if (ws && ws !== workspacePath.value) {
@@ -1185,6 +1193,7 @@ export const useAppStore = defineStore("app", () => {
     disableDemoMode,
     logEvent,
     agentSession,
+    agentActivity,
     actionPickerOpen,
     startAgentSession,
     cancelAgentSession,

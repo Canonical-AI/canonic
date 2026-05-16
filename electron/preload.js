@@ -239,6 +239,7 @@ contextBridge.exposeInMainWorld("canonic", {
   agentSession: {
     onSessionStart: (cb) => { ipcRenderer.on('agent:session-start', (_, data) => cb(data)) },
     onComment: (cb) => { ipcRenderer.on('agent:comment', (_, data) => cb(data)) },
+    onActivity: (cb) => { ipcRenderer.on('agent:activity', (_, data) => cb(data)) },
     onSessionCancel: (cb) => { ipcRenderer.on('agent:session-cancel', (_, data) => cb(data)) },
     onSessionDone: (cb) => { ipcRenderer.on('agent:session-done', (_, data) => cb(data)) },
     submit: (params) => ipcRenderer.invoke('agent:submit', params),

@@ -80,7 +80,7 @@ async function handleRequest(req, res) {
     return sendJson(res, 200, { ok: true, version: getAppVersion() })
   }
 
-  const knownRoutes = ['/session/start', '/session/cancel', '/comments']
+  const knownRoutes = ['/session/start', '/session/cancel', '/comments', '/activity']
   if (!knownRoutes.includes(pathname)) {
     return sendJson(res, 404, { error: 'not found' })
   }
@@ -128,6 +128,16 @@ async function handleRequest(req, res) {
       data: { commentId, file: body.file, anchor: body.anchor || {}, text: body.text, agentName: body.agentName || 'Agent' },
     })
     return sendJson(res, 200, { ok: true, commentId })
+  }
+
+  if (req.method === 'POST' && pathname === '/activity') {
+    const body = await readBody(req)
+    if (!activeSession) return sendJson(res, 400, { error: 'no active session' })
+    onEventCallback?.({
+      type: 'activity',
+      data: { sessionId: activeSession.sessionId, activityType: body.type || 'thinking', label: body.label || null },
+    })
+    return sendJson(res, 200, { ok: true })
   }
 
   sendJson(res, 405, { error: 'method not allowed' })

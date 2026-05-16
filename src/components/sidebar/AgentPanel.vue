@@ -6,6 +6,10 @@
     </div>
     <div class="agent-name">{{ store.agentSession.agentName }}</div>
     <div class="agent-file">{{ store.agentSession.file }}</div>
+    <div class="agent-status">
+      <span class="status-dot" :class="activityClass"></span>
+      <span>{{ activityLabel }}</span>
+    </div>
     <div class="agent-elapsed">{{ elapsed }}</div>
     <button class="return-btn" @click="store.openActionPicker()">
       Return →
@@ -19,6 +23,30 @@ import { useAppStore } from '../../store'
 import { Zap } from 'lucide-vue-next'
 
 const store = useAppStore()
+
+const ACTIVITY_LABELS = {
+  thinking: 'Thinking…',
+  web_search: 'Searching the web…',
+  browsing: 'Browsing…',
+  reading_file: 'Reading file…',
+  writing_comment: 'Writing comment…',
+  file_edit: 'Editing file…',
+  running_code: 'Running code…',
+  analyzing: 'Analyzing…',
+  waiting_for_input: 'Waiting for you',
+}
+
+const activityLabel = computed(() => {
+  const a = store.agentActivity
+  if (!a) return 'Working…'
+  return a.label || ACTIVITY_LABELS[a.activityType] || 'Working…'
+})
+
+const activityClass = computed(() => {
+  const t = store.agentActivity?.activityType
+  if (t === 'waiting_for_input') return 'dot--waiting'
+  return 'dot--active'
+})
 const now = ref(Date.now())
 let timer = null
 
@@ -74,6 +102,31 @@ const elapsed = computed(() => {
   font-size: 0.8rem;
   color: var(--text, #ddd);
   font-weight: 500;
+}
+
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot--active {
+  background: var(--accent, #7c8cf8);
+  animation: dot-pulse 1.5s ease-in-out infinite;
+}
+.dot--waiting {
+  background: var(--text-muted, #888);
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 .agent-file, .agent-elapsed {

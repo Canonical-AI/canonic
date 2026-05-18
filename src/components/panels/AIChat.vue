@@ -36,6 +36,7 @@
 
             <div v-if="streaming" class="message assistant">
                 <div class="message-content thinking">
+                    <span class="thinking-label">{{ currentActivityLabel }}</span>
                     <span class="dot"></span>
                     <span class="dot"></span>
                     <span class="dot"></span>
@@ -136,6 +137,20 @@ const userInput = ref("");
 const messages = ref([]);
 const streaming = ref(false);
 const streamBuffer = ref("");
+const activityStatus = ref(null);
+
+const AI_ACTIVITY_LABELS = {
+    thinking: 'Thinking',
+    web_search: 'Searching the web',
+    browsing: 'Browsing',
+    reading_file: 'Reading file',
+}
+
+const currentActivityLabel = computed(() => {
+    const a = activityStatus.value
+    if (!a) return 'Thinking'
+    return a.label || AI_ACTIVITY_LABELS[a.type] || 'Thinking'
+})
 
 const sessionStats = ref({ messages: 0, approxTokens: 0 });
 const indexedDocCount = ref(0);
@@ -341,6 +356,7 @@ async function sendMessage() {
 
     streaming.value = true;
     streamBuffer.value = "";
+    activityStatus.value = null;
     store.logEvent("ai:chat_sent", { model });
 
     // Clean up any previous listeners before adding new ones
@@ -353,6 +369,7 @@ async function sendMessage() {
 
     window.canonic.ai.onDone(() => {
         if (import.meta.env.DEV) console.log("[AIChat] Stream complete");
+        activityStatus.value = null;
         const rawResponse = streamBuffer.value;
         const response = parseAndPostComments(rawResponse);
         messages.value.push({
@@ -373,6 +390,7 @@ async function sendMessage() {
 
     window.canonic.ai.onError((msg) => {
         if (import.meta.env.DEV) console.error("[AIChat] Stream error:", msg);
+        activityStatus.value = null;
         messages.value.push({
             id: uuidv4(),
             role: "assistant",
@@ -523,8 +541,14 @@ onUnmounted(() => {
 
 .thinking {
     display: flex;
+    align-items: center;
     gap: 4px;
     padding: 12px 16px !important;
+}
+.thinking-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-right: 4px;
 }
 
 .thinking .dot {

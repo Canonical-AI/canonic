@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAppStore } from '../../src/store/index.js'
 
-let sessionStartCb, commentCb, sessionDoneCb, sessionCancelCb
+let sessionStartCb, commentCb, activityCb, sessionDoneCb, sessionCancelCb
 
 const mockApi = {
   config: { read: vi.fn().mockResolvedValue(null), write: vi.fn(), exists: vi.fn(), validate: vi.fn() },
@@ -32,6 +32,7 @@ const mockApi = {
   agentSession: {
     onSessionStart: vi.fn((cb) => { sessionStartCb = cb }),
     onComment: vi.fn((cb) => { commentCb = cb }),
+    onActivity: vi.fn((cb) => { activityCb = cb }),
     onSessionDone: vi.fn((cb) => { sessionDoneCb = cb }),
     onSessionCancel: vi.fn((cb) => { sessionCancelCb = cb }),
     submit: vi.fn().mockResolvedValue({ ok: true }),
@@ -55,6 +56,7 @@ describe('agent session store', () => {
     // Re-register mocks after clearAllMocks
     mockApi.agentSession.onSessionStart.mockImplementation((cb) => { sessionStartCb = cb })
     mockApi.agentSession.onComment.mockImplementation((cb) => { commentCb = cb })
+    mockApi.agentSession.onActivity.mockImplementation((cb) => { activityCb = cb })
     mockApi.agentSession.onSessionDone.mockImplementation((cb) => { sessionDoneCb = cb })
     mockApi.agentSession.onSessionCancel.mockImplementation((cb) => { sessionCancelCb = cb })
   })
@@ -163,5 +165,50 @@ describe('agent session store', () => {
   it('cancelAgentSession() does nothing when no session active', async () => {
     await expect(store.cancelAgentSession()).resolves.not.toThrow()
     expect(store.agentSession).toBeNull()
+  })
+
+  // --- agentActivity ---
+
+  it('agentActivity is null initially', () => {
+    expect(store.agentActivity).toBeNull()
+  })
+
+  it('onActivity callback sets agentActivity from activityType', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    activityCb({ sessionId: 'sid1', activityType: 'web_search', label: null })
+    expect(store.agentActivity).toEqual({ activityType: 'web_search', label: null })
+  })
+
+  it('onActivity callback uses custom label when provided', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    activityCb({ sessionId: 'sid1', activityType: 'thinking', label: 'Reviewing requirements…' })
+    expect(store.agentActivity?.label).toBe('Reviewing requirements…')
+  })
+
+  it('onComment sets agentActivity to writing_comment', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    commentCb({ commentId: 'c1', file: 'spec.md', anchor: {}, text: 'Nice', agentName: 'Claude Code' })
+    expect(store.agentActivity?.activityType).toBe('writing_comment')
+  })
+
+  it('startAgentSession() clears previous agentActivity', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    activityCb({ sessionId: 'sid1', activityType: 'web_search', label: null })
+    await store.startAgentSession({ sessionId: 'sid2', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    expect(store.agentActivity).toBeNull()
+  })
+
+  it('onSessionDone clears agentActivity', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    activityCb({ sessionId: 'sid1', activityType: 'thinking', label: null })
+    sessionDoneCb()
+    expect(store.agentActivity).toBeNull()
+  })
+
+  it('onSessionCancel clears agentActivity', async () => {
+    await store.startAgentSession({ sessionId: 'sid1', file: 'spec.md', agentName: 'Claude Code', workspacePath: '/ws' })
+    activityCb({ sessionId: 'sid1', activityType: 'thinking', label: null })
+    sessionCancelCb()
+    expect(store.agentActivity).toBeNull()
   })
 })

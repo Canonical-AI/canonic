@@ -67,9 +67,43 @@ export const useAppStore = defineStore("app", () => {
 
   const isDemoMode = ref(false);
   const demoPeers = ref([]);
+  const demoFiles = ref({});
   const _demoComments = ref({});
 
+  const searchViewOpen = ref(false);
+
+  // Workspace find & replace state
+  const wsSearch = reactive({
+    query: '',
+    replace: '',
+    include: '',
+    exclude: '',
+    opts: { case: false, word: false, regex: false },
+    allBranches: false,
+    results: { branch: [], other: [] },
+    searching: false,
+    lastError: '',
+    pendingFocus: null, // { filePath, line } — UI consumes to scroll editor
+  });
+
+  const FIND_HOTKEY_DEFAULTS = {
+    findInDoc: 'Mod-f',
+    findInWorkspace: 'Mod-Shift-f',
+    findNext: 'Mod-g',
+    findPrev: 'Mod-Shift-g',
+  };
+
+  const findHotkeys = computed(() => {
+    const cfgKeys = config.value?.hotkeys || {};
+    const merged = {};
+    for (const k of Object.keys(FIND_HOTKEY_DEFAULTS)) {
+      merged[k] = cfgKeys[k] || FIND_HOTKEY_DEFAULTS[k];
+    }
+    return merged;
+  });
+
   const agentSession = ref(null);   // null | { sessionId, agentName, file, startedAt }
+  const agentActivity = ref(null);  // null | { activityType, label }
   const actionPickerOpen = ref(false);
 
   // Peer discovery state
@@ -159,9 +193,15 @@ export const useAppStore = defineStore("app", () => {
   // Register agent session IPC listeners once
   if (api.agentSession) {
     api.agentSession.onSessionStart((data) => startAgentSession(data))
-    api.agentSession.onComment((data) => addAgentComment(data))
-    api.agentSession.onSessionDone(() => { agentSession.value = null; actionPickerOpen.value = false })
-    api.agentSession.onSessionCancel(() => { agentSession.value = null; actionPickerOpen.value = false })
+    api.agentSession.onComment((data) => {
+      agentActivity.value = { activityType: 'writing_comment', label: 'Writing comment…' }
+      addAgentComment(data)
+    })
+    api.agentSession.onActivity?.((data) => {
+      agentActivity.value = { activityType: data.activityType, label: data.label }
+    })
+    api.agentSession.onSessionDone(() => { agentSession.value = null; agentActivity.value = null; actionPickerOpen.value = false })
+    api.agentSession.onSessionCancel(() => { agentSession.value = null; agentActivity.value = null; actionPickerOpen.value = false })
   }
 
   // Wire share stats listener once — updates whichever file is being shared
@@ -507,6 +547,9 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function openFile(filePath) {
+    // Close search view if open — user navigated to a doc
+    if (searchViewOpen.value) searchViewOpen.value = false;
+
     // Buffer unsaved changes for the file we're leaving
     if (isDirty.value && currentFile.value) {
       unsavedBuffer[currentFile.value] = currentContent.value;
@@ -909,6 +952,7 @@ export const useAppStore = defineStore("app", () => {
 
     _demoComments.value = cfg.comments || {};
     demoPeers.value = cfg.peers || [];
+    demoFiles.value = cfg.files ? { ...cfg.files } : {};
     isDemoMode.value = true;
 
     await openWorkspace(demoPath, cfg.template || "pm-framework");
@@ -924,6 +968,7 @@ export const useAppStore = defineStore("app", () => {
   function disableDemoMode() {
     isDemoMode.value = false;
     demoPeers.value = [];
+    demoFiles.value = {};
     _demoComments.value = {};
     comments.value = comments.value.filter((c) => !c.isDemo);
   }
@@ -1001,6 +1046,175 @@ export const useAppStore = defineStore("app", () => {
     return results;
   }
 
+  // --- Workspace find & replace ---
+
+  function _buildSearchRegex(query, opts) {
+    if (!query) return null;
+    try {
+      const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let pattern = opts.regex ? query : escape(query);
+      if (opts.word) pattern = `\\b(?:${pattern})\\b`;
+      const flags = 'g' + (opts.case ? '' : 'i');
+      return new RegExp(pattern, flags);
+    } catch {
+      return null;
+    }
+  }
+
+  function _findInTextByLines(text, re) {
+    if (!re) return [];
+    const out = [];
+    const lines = text.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const m of line.matchAll(re)) {
+        if (m[0].length === 0) continue;
+        out.push({ line: i + 1, col: m.index, text: line, length: m[0].length });
+      }
+    }
+    return out;
+  }
+
+  function _demoWorkspaceSearch() {
+    const re = _buildSearchRegex(wsSearch.query, wsSearch.opts);
+    if (!re) {
+      wsSearch.results = { branch: [], other: [] };
+      wsSearch.lastError = 'Invalid regex';
+      return;
+    }
+    wsSearch.lastError = '';
+    const branchResults = [];
+    for (const [filePath, content] of Object.entries(demoFiles.value || {})) {
+      const matches = _findInTextByLines(content, re);
+      if (matches.length) {
+        branchResults.push({ filePath, branch: 'current', matches });
+      }
+    }
+    wsSearch.results = { branch: branchResults, other: [] };
+  }
+
+  async function runWorkspaceSearch() {
+    const q = (wsSearch.query || '').trim();
+    if (!q) {
+      wsSearch.results = { branch: [], other: [] };
+      wsSearch.lastError = '';
+      return;
+    }
+    wsSearch.searching = true;
+    wsSearch.lastError = '';
+    try {
+      if (isDemoMode.value) {
+        _demoWorkspaceSearch();
+        return;
+      }
+      const res = await api.workspaceSearch.search({
+        workspacePath: workspacePath.value,
+        query: wsSearch.query,
+        opts: { ...wsSearch.opts },
+        include: wsSearch.include,
+        exclude: wsSearch.exclude,
+        allBranches: wsSearch.allBranches,
+      });
+      wsSearch.results = { branch: res.branch || [], other: res.other || [] };
+      if (res.error) wsSearch.lastError = res.error;
+    } finally {
+      wsSearch.searching = false;
+    }
+  }
+
+  function _applyReplacementToText(content, query, replacement, opts) {
+    const re = _buildSearchRegex(query, opts);
+    if (!re) return content;
+    return content.replace(re, replacement);
+  }
+
+  async function replaceAllInWorkspace() {
+    if (isDemoMode.value) {
+      wsSearch.lastError = 'Demo mode is read-only.';
+      return { replaced: 0, skipped: 0 };
+    }
+    if (!wsSearch.query) return { replaced: 0, skipped: 0 };
+    const targets = wsSearch.results.branch || [];
+    const skipped = (wsSearch.results.other || []).length;
+    let replacedFiles = 0;
+    for (const fileResult of targets) {
+      const filePath = fileResult.filePath;
+      let original;
+      if (currentFile.value === filePath) {
+        original = currentContent.value;
+      } else if (unsavedBuffer[filePath] !== undefined) {
+        original = unsavedBuffer[filePath];
+      } else {
+        try {
+          original = await api.files.read(workspacePath.value, filePath);
+        } catch {
+          continue;
+        }
+      }
+      const next = _applyReplacementToText(
+        original || '',
+        wsSearch.query,
+        wsSearch.replace,
+        wsSearch.opts,
+      );
+      if (next === original) continue;
+      if (currentFile.value === filePath) {
+        currentContent.value = next;
+        isDirty.value = true;
+      } else {
+        unsavedBuffer[filePath] = next;
+      }
+      replacedFiles++;
+    }
+    await runWorkspaceSearch();
+    return { replaced: replacedFiles, skipped };
+  }
+
+  async function replaceNextInWorkspace() {
+    if (isDemoMode.value) {
+      wsSearch.lastError = 'Demo mode is read-only.';
+      return { replaced: 0, skipped: 0 };
+    }
+    const targets = wsSearch.results.branch || [];
+    if (!targets.length || !wsSearch.query) return { replaced: 0, skipped: 0 };
+    const first = targets[0];
+    const filePath = first.filePath;
+    let original;
+    if (currentFile.value === filePath) {
+      original = currentContent.value;
+    } else if (unsavedBuffer[filePath] !== undefined) {
+      original = unsavedBuffer[filePath];
+    } else {
+      original = await api.files.read(workspacePath.value, filePath);
+    }
+    const re = _buildSearchRegex(wsSearch.query, wsSearch.opts);
+    if (!re) return { replaced: 0, skipped: 0 };
+    const next = (original || '').replace(re, (match, ...rest) => {
+      re.lastIndex = 0;
+      return wsSearch.replace;
+    });
+    // Above replaces all on the line — for true "next only" semantics use a one-shot regex.
+    const oneShot = new RegExp(re.source, re.flags.replace('g', ''));
+    const single = (original || '').replace(oneShot, wsSearch.replace);
+    if (single === original) return { replaced: 0, skipped: (wsSearch.results.other || []).length };
+    if (currentFile.value === filePath) {
+      currentContent.value = single;
+      isDirty.value = true;
+    } else {
+      unsavedBuffer[filePath] = single;
+    }
+    await runWorkspaceSearch();
+    return { replaced: 1, skipped: (wsSearch.results.other || []).length };
+  }
+
+  function openWorkspaceSearchResult(result) {
+    wsSearch.pendingFocus = { filePath: result.filePath, line: result.line || 1 };
+    searchViewOpen.value = false;
+    if (result.filePath !== currentFile.value) {
+      openFile(result.filePath);
+    }
+  }
+
   async function logEvent(event, details = {}) {
     if (!config.value) await loadConfig();
     if (config.value?.telemetryEnabled) {
@@ -1009,6 +1223,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function startAgentSession({ sessionId, file, agentName, workspacePath: wsParam }) {
+    agentActivity.value = null
     agentSession.value = { sessionId, agentName, file, startedAt: Date.now() }
     const ws = wsParam || workspacePath.value
     if (ws && ws !== workspacePath.value) {
@@ -1135,6 +1350,15 @@ export const useAppStore = defineStore("app", () => {
     showLineNumbers,
     isDemoMode,
     demoPeers,
+    demoFiles,
+    wsSearch,
+    searchViewOpen,
+    findHotkeys,
+    unsavedBuffer,
+    runWorkspaceSearch,
+    replaceAllInWorkspace,
+    replaceNextInWorkspace,
+    openWorkspaceSearchResult,
     docVersions,
     docBranchMap,
     currentDocBranch,
@@ -1185,6 +1409,7 @@ export const useAppStore = defineStore("app", () => {
     disableDemoMode,
     logEvent,
     agentSession,
+    agentActivity,
     actionPickerOpen,
     startAgentSession,
     cancelAgentSession,

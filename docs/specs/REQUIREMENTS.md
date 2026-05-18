@@ -574,4 +574,178 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user pastes in the editor
   then: normal paste behavior occurs (image plugin does not interfere)
 
-*Last updated: 2026-05-15*
+***
+
+## Find & Replace (FND)
+
+> Zed-style find-and-replace. In-document find via Cmd+F (floating bar over editor). Workspace-wide find and replace via Cmd+Shift+F (sidebar panel) with results grouped by file and per-branch awareness. Keybindings are configurable in Settings → Hotkeys.
+
+### In-document Find (Cmd+F)
+
+* scenario: open find bar in current doc
+  given: a document is open in the editor
+  when: the user presses Cmd+F (or Ctrl+F)
+  then: a floating find bar appears at the top of the editor with an input focused
+
+* scenario: close find bar
+  given: the find bar is open
+  when: the user presses Escape or clicks the close (×) button
+  then: the find bar closes, all highlights are cleared, and editor focus is restored
+
+* scenario: matches highlighted on type
+  given: the find bar is open
+  when: the user types a query
+  then: all matches in the current document are highlighted and the first match is accent-colored as the current match
+
+* scenario: match count displayed
+  given: the find bar shows N matches for a query
+  when: the user views the bar
+  then: a label reads "X of N" where X is the 1-based index of the current match
+
+* scenario: cycle next match
+  given: the find bar has matches and a current match selected
+  when: the user presses Enter (or clicks the next ↓ button)
+  then: the current match advances to the next match; wraps to the first match after the last
+
+* scenario: cycle previous match
+  given: the find bar has matches and a current match selected
+  when: the user presses Shift+Enter (or clicks the prev ↑ button)
+  then: the current match moves to the previous match; wraps to the last match before the first
+
+* scenario: case-sensitive toggle
+  given: the find bar is open
+  when: the user toggles the Aa button on
+  then: matching becomes case-sensitive and the highlighted matches update
+
+* scenario: whole-word toggle
+  given: the find bar is open
+  when: the user toggles the ab| button on
+  then: only matches surrounded by word boundaries are highlighted
+
+* scenario: regex toggle
+  given: the find bar is open
+  when: the user toggles the .* button on and types a regex
+  then: matches are computed via regex; if regex is invalid, an error indicator is shown and no matches are highlighted
+
+* scenario: prefill from selection
+  given: the user has text selected in the editor
+  when: the user presses Cmd+F
+  then: the find bar opens with the selected text as the initial query
+
+* scenario: no matches
+  given: the find bar has a query with zero matches in the doc
+  when: the user views the bar
+  then: the label reads "0 of 0" and no highlights are shown
+
+### Workspace Find & Replace (Cmd+Shift+F)
+
+* scenario: open workspace search view
+  given: a workspace is open
+  when: the user presses Cmd+Shift+F (or Ctrl+Shift+F)
+  then: the main content area shows the workspace find-and-replace view (replacing the editor) with the query input focused
+
+* scenario: close search view restores editor
+  given: the workspace search view is open and a document was previously open
+  when: the user presses Escape or clicks the close (×) button
+  then: the search view closes and the previously open document is shown in the editor
+
+* scenario: clicking match closes view and opens file
+  given: the workspace search view is open with results
+  when: the user clicks a match row for a checked-out file
+  then: the search view closes and the file opens in the editor at the matching line
+
+* scenario: search across current branch
+  given: the search panel is open and "across all branches" is OFF
+  when: the user enters a query
+  then: results are returned by scanning files in the workspace working tree (excluding .git, node_modules, .canonic), grouped by file path with line number and line text for each match
+
+* scenario: search across all branches
+  given: the search panel is open and "across all branches" is ON
+  when: the user enters a query
+  then: results include matches from files in non-checked-out branches, shown under an "Other branches" group with the branch name labeled
+
+* scenario: include glob filter
+  given: the search panel is open
+  when: the user enters a pattern in "files to include" (e.g. `*.md`)
+  then: only files matching the glob are searched
+
+* scenario: exclude glob filter
+  given: the search panel is open
+  when: the user enters a pattern in "files to exclude" (e.g. `assets/**`)
+  then: files matching the glob are skipped
+
+* scenario: case-sensitive search
+  given: the search panel is open and case-sensitive toggle is ON
+  when: the user enters a query
+  then: matches are case-sensitive
+
+* scenario: whole-word search
+  given: the search panel is open and whole-word toggle is ON
+  when: the user enters a query
+  then: only matches surrounded by word boundaries are returned
+
+* scenario: regex search
+  given: the search panel is open and regex toggle is ON
+  when: the user enters a valid regex
+  then: matches are computed via regex; if invalid, an error message is shown and the result list is empty
+
+* scenario: jump to match
+  given: the search results contain a match in a checked-out file
+  when: the user clicks the match row
+  then: the file opens in the editor at the matching line and the match is highlighted in the editor
+
+* scenario: jump to cross-branch match
+  given: a result row is from a file on a non-checked-out branch
+  when: the user clicks the row
+  then: a read-only viewer opens showing that branch's file with the match highlighted
+
+* scenario: replace next match
+  given: the user has a query, a replacement string, and at least one match on a checked-out file
+  when: the user clicks Replace
+  then: the next checked-out-branch match is replaced in the file's in-memory buffer and that file is marked dirty
+
+* scenario: replace all matches
+  given: the user has a query, a replacement string, and matches on checked-out files
+  when: the user clicks Replace All
+  then: every match on checked-out files is replaced in-memory and each affected file is marked dirty
+
+* scenario: cross-branch replace skipped
+  given: the search includes matches from non-checked-out branches
+  when: the user clicks Replace All
+  then: cross-branch matches are skipped and the status line reports "K skipped on other branches"
+
+* scenario: empty query
+  given: the search panel is open
+  when: the query input is empty
+  then: no search runs and the result list is empty
+
+### Configurable Keybindings (FND-KB)
+
+* scenario: hotkeys tab shows find shortcuts
+  given: Settings → Hotkeys is open
+  when: the user views the tab
+  then: rows are present for "Find in document," "Find in workspace," "Find next," and "Find previous"
+
+* scenario: default shortcuts
+  given: the user has not customized find shortcuts
+  when: the Hotkeys tab loads
+  then: defaults shown are Mod-f, Mod-Shift-f, Mod-g, Mod-Shift-g
+
+* scenario: change a shortcut
+  given: the Hotkeys tab is open
+  when: the user types a new binding string (e.g. `Mod-Shift-h`) into a find shortcut field
+  then: the binding is saved to `~/.canonic/config.json` under `hotkeys.findInDoc` (etc.) and takes effect on next keypress without restart
+
+### Demo Mode (FND-DEMO)
+
+* scenario: workspace search in demo mode
+  given: the app is in demo mode and the Search view is open
+  when: the user enters a query that matches demo content
+  then: results are returned from demo workspace files (in-memory) and shown in the same UI as live mode
+
+* scenario: replace in demo mode
+  given: the user runs Replace or Replace All in demo mode
+  when: the action fires
+  then: no file is written; a hint informs the user that demo mode is read-only
+
+*Last updated: 2026-05-17*

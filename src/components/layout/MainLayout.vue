@@ -134,10 +134,10 @@
                     <button
                         :class="[
                             'tab',
-                            store.sidebarTab === 'search' && 'active',
+                            store.searchViewOpen && 'active',
                         ]"
-                        @click="handleTabClick('search')"
-                        title="Search"
+                        @click="toggleSearchView"
+                        title="Find & Replace"
                     >
                         <Search :size="15" />
                     </button>
@@ -155,7 +155,6 @@
 
                 <template v-if="!store.sidebarCollapsed">
                     <FileTree v-if="store.sidebarTab === 'files'" />
-                    <SearchPanel v-else-if="store.sidebarTab === 'search'" />
                     <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
                     <HintsPanel :config="store.config" @navigate="handleHintNavigate" />
                 </template>
@@ -163,7 +162,8 @@
 
             <!-- Editor -->
             <main class="editor-area">
-                <PeerFileViewer v-if="store.peerFileContent" />
+                <SearchView v-if="store.searchViewOpen" ref="searchViewRef" />
+                <PeerFileViewer v-else-if="store.peerFileContent" />
                 <Editor v-else-if="store.currentFile" />
                 <div v-else class="empty-state">
                     <p>Open a document or create a new one</p>
@@ -229,6 +229,16 @@
             </aside>
         </div>
 
+        <!-- Update prompt -->
+        <Transition name="update-prompt">
+            <div v-if="showUpdatePrompt" class="update-prompt">
+                <ArrowUpCircle :size="15" class="update-prompt-icon" />
+                <span class="update-prompt-text">v{{ updateInfo?.version }} available</span>
+                <button class="update-prompt-btn update-prompt-btn--primary" @click="handlePromptDownload">Download now</button>
+                <button class="update-prompt-btn" @click="showUpdatePrompt = false">Later</button>
+            </div>
+        </Transition>
+
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
         <SettingsModal v-if="showSettings" :initial-tab="settingsInitialTab" @close="showSettings = false; settingsInitialTab = 'profile'" />
@@ -238,7 +248,7 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, provide, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
 import {
@@ -259,8 +269,8 @@ import {
     ArrowUpCircle,
 } from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
-import SearchPanel from "../sidebar/SearchPanel.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
+import SearchView from "../panels/SearchView.vue";
 import HintsPanel from "../sidebar/HintsPanel.vue";
 import { markDefaultEditorActive } from "../../composables/useHints.js";
 import Editor from "../editor/Editor.vue";
@@ -273,9 +283,18 @@ import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
+import { matchesHotkey } from "../../utils/hotkey.js";
 
 const store = useAppStore();
 const router = useRouter();
+const searchViewRef = ref(null);
+
+function toggleSearchView() {
+    store.searchViewOpen = !store.searchViewOpen;
+    if (store.searchViewOpen) {
+        nextTick(() => searchViewRef.value?.focusInput?.());
+    }
+}
 
 // ── Font toggle ──────────────────────────────────────────────────────────────
 const FONT_KEY = "canonic:fontMode";
@@ -444,8 +463,26 @@ onMounted(async () => {
     }
 });
 
+function onGlobalKeydown(e) {
+    const hk = store.findHotkeys;
+    if (matchesHotkey(e, hk.findInWorkspace)) {
+        e.preventDefault();
+        store.searchViewOpen = true;
+        nextTick(() => searchViewRef.value?.focusInput?.());
+        return;
+    }
+    if (store.searchViewOpen && e.key === 'Escape') {
+        store.searchViewOpen = false;
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('keydown', onGlobalKeydown);
+});
+
 onBeforeUnmount(() => {
     document.removeEventListener("click", onDocClick, true);
+    document.removeEventListener('keydown', onGlobalKeydown);
 });
 
 const showNewDoc = ref(false);
@@ -459,6 +496,17 @@ function handleHintNavigate(target) {
     showSettings.value = true
 }
 const { updateReady, updateAvailable, updateDownloading, updateInfo, downloadProgress, downloadUpdate, installUpdate } = store;
+
+const showUpdatePrompt = ref(false)
+watch(updateAvailable, (val) => {
+    if (val && !updateDownloading.value && !updateReady.value) {
+        setTimeout(() => { showUpdatePrompt.value = true }, 2000)
+    }
+})
+function handlePromptDownload() {
+    showUpdatePrompt.value = false
+    downloadUpdate()
+}
 
 provide("showNewDoc", () => {
     showNewDoc.value = true;
@@ -768,6 +816,45 @@ function onResizeStart(e) {
 }
 
 /* ── Titlebar update indicator ── */
+.update-prompt {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    z-index: 9999;
+    font-size: 0.8125rem;
+    color: var(--text);
+}
+.update-prompt-icon { color: var(--accent); flex-shrink: 0; }
+.update-prompt-text { font-weight: 500; white-space: nowrap; }
+.update-prompt-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+.update-prompt-btn:hover { background: var(--bg-hover); }
+.update-prompt-btn--primary {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.update-prompt-btn--primary:hover { opacity: 0.88; background: var(--accent); }
+.update-prompt-enter-active, .update-prompt-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.update-prompt-enter-from, .update-prompt-leave-to { opacity: 0; transform: translateY(8px); }
+
 .update-ready-btn {
     display: flex;
     align-items: center;

@@ -3,7 +3,10 @@
     <!-- Floating pill button -->
     <button class="agent-pill" @click="store.openActionPicker()" aria-haspopup="dialog" :aria-expanded="store.actionPickerOpen">
       <Zap :size="13" aria-hidden="true" />
-      <span>{{ store.agentSession.agentName }} is waiting</span>
+      <span class="pill-agent-name">{{ store.agentSession.agentName }}</span>
+      <span class="pill-divider">·</span>
+      <span class="pill-activity">{{ activityLabel }}</span>
+      <span class="pill-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
     </button>
 
     <!-- Action picker modal overlay -->
@@ -47,11 +50,29 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAppStore } from '../../store'
 import { Zap } from 'lucide-vue-next'
 
 const store = useAppStore()
+
+const ACTIVITY_LABELS = {
+  thinking: 'Thinking',
+  web_search: 'Searching the web',
+  browsing: 'Browsing',
+  reading_file: 'Reading file',
+  writing_comment: 'Writing comment',
+  file_edit: 'Editing file',
+  running_code: 'Running code',
+  analyzing: 'Analyzing',
+  waiting_for_input: 'Waiting for you',
+}
+
+const activityLabel = computed(() => {
+  const a = store.agentActivity
+  if (!a) return 'Working'
+  return a.label || ACTIVITY_LABELS[a.activityType] || 'Working'
+})
 const customPrompt = ref('')
 const isSubmitting = ref(false)
 
@@ -117,6 +138,20 @@ async function cancelSession() {
 
 .agent-pill:hover {
   filter: brightness(1.1);
+}
+
+.pill-agent-name { opacity: 0.8; font-weight: 400; }
+.pill-divider { opacity: 0.5; }
+.pill-activity { font-weight: 600; }
+.pill-dots span {
+  animation: dot-blink 1.4s infinite;
+  animation-fill-mode: both;
+}
+.pill-dots span:nth-child(2) { animation-delay: 0.2s; }
+.pill-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dot-blink {
+  0%, 80%, 100% { opacity: 0; }
+  40% { opacity: 1; }
 }
 
 @keyframes pulse-glow {

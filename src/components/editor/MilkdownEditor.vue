@@ -23,6 +23,14 @@ import { wikiLinkRemarkPlugin, wikiLinkNode } from './wiki-link/index.js'
 import WikiLinkChip from './wiki-link/WikiLinkChip.vue'
 import WikiLinkTooltip from './wiki-link/WikiLinkTooltip.vue'
 import { createInlineCompletionPlugin } from './inline-completion/index.js'
+import {
+  findReplacePlugin,
+  findReplaceSet,
+  findReplaceCycle,
+  findReplaceClear,
+  findReplaceState,
+  FIND_KEY,
+} from './findReplacePlugin.js'
 
 const props = defineProps({ content: String, comments: Array, readonly: Boolean })
 const emit = defineEmits(['update'])
@@ -684,7 +692,7 @@ const { loading, get } = useEditor((root) =>
         const fixed = markdown.replace(/\\\[\\\[/g, '[[')
         emit('update', fixed)
       })
-      ctx.update(prosePluginsCtx, (plugins) => [...plugins, highlightPlugin])
+      ctx.update(prosePluginsCtx, (plugins) => [...plugins, highlightPlugin, findReplacePlugin()])
       ctx.update(remarkPluginsCtx, (plugins) => [
         ...plugins,
         { plugin: mermaidRemarkPlugin, options: {} },
@@ -786,5 +794,69 @@ function focusEditor() {
   })
 }
 
-defineExpose({ hasLinkAtSelection, addLink, removeLink, focusEditor })
+function findReplaceApply(query, opts) {
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (view) findReplaceSet(view, query, opts)
+  })
+}
+
+function findReplaceMove(direction) {
+  let idx = null
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (!view) return
+    idx = findReplaceCycle(view, direction)
+    const state = findReplaceState(view)
+    if (state && state.matches[idx]) {
+      const match = state.matches[idx]
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to)).scrollIntoView()
+      view.dispatch(tr)
+    }
+  })
+  return idx
+}
+
+function findReplaceReset() {
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (view) findReplaceClear(view)
+  })
+}
+
+function findReplaceReadState() {
+  let snap = null
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (!view) return
+    const s = findReplaceState(view)
+    if (!s) return
+    snap = { total: s.matches.length, current: s.current }
+  })
+  return snap || { total: 0, current: -1 }
+}
+
+function getSelectedText() {
+  let out = ''
+  get()?.action((ctx) => {
+    const view = ctx.get(editorViewCtx)
+    if (!view) return
+    const { from, to } = view.state.selection
+    if (from === to) return
+    out = view.state.doc.textBetween(from, to, ' ')
+  })
+  return out
+}
+
+defineExpose({
+  hasLinkAtSelection,
+  addLink,
+  removeLink,
+  focusEditor,
+  findReplaceApply,
+  findReplaceMove,
+  findReplaceReset,
+  findReplaceReadState,
+  getSelectedText,
+})
 </script>

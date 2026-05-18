@@ -123,6 +123,17 @@
             </button>
         </div>
 
+        <InDocFindBar
+            :visible="findBarVisible"
+            :initial-query="findBarInitialQuery"
+            :total-matches="findTotal"
+            :current-match="findCurrent"
+            @update="onFindUpdate"
+            @next="onFindNext"
+            @prev="onFindPrev"
+            @close="closeFindBar"
+        />
+
         <div class="editor-scroll" ref="editorScrollEl">
             <div
                 class="editor-content"
@@ -196,6 +207,8 @@ import { useAppStore } from "../../store";
 import { v4 as uuidv4 } from "uuid";
 import { Tag, GitFork, GitBranch, ArrowLeft } from "lucide-vue-next";
 import MilkdownEditor from "./MilkdownEditor.vue";
+import InDocFindBar from "./InDocFindBar.vue";
+import { matchesHotkey } from "../../utils/hotkey.js";
 import ForkDocModal from "../modals/ForkDocModal.vue";
 import SaveVersionModal from "../modals/SaveVersionModal.vue";
 
@@ -245,6 +258,47 @@ const isMerging = ref(false);
 const mergeError = ref("");
 const renamingTitle = ref(false);
 const titleValue = ref("");
+
+const findBarVisible = ref(false);
+const findBarInitialQuery = ref("");
+const findTotal = ref(0);
+const findCurrent = ref(-1);
+
+function refreshFindState() {
+    const s = milkdownEditor.value?.findReplaceReadState?.() || { total: 0, current: -1 };
+    findTotal.value = s.total;
+    findCurrent.value = s.current;
+}
+
+function onFindUpdate({ query, opts }) {
+    milkdownEditor.value?.findReplaceApply?.(query, opts);
+    nextTick(refreshFindState);
+}
+
+function onFindNext() {
+    const idx = milkdownEditor.value?.findReplaceMove?.(1);
+    if (idx != null) findCurrent.value = idx;
+}
+
+function onFindPrev() {
+    const idx = milkdownEditor.value?.findReplaceMove?.(-1);
+    if (idx != null) findCurrent.value = idx;
+}
+
+function openFindBar() {
+    const sel = milkdownEditor.value?.getSelectedText?.() || "";
+    if (sel) findBarInitialQuery.value = sel;
+    findBarVisible.value = true;
+}
+
+function closeFindBar() {
+    findBarVisible.value = false;
+    findBarInitialQuery.value = "";
+    findTotal.value = 0;
+    findCurrent.value = -1;
+    milkdownEditor.value?.findReplaceReset?.();
+    milkdownEditor.value?.focusEditor?.();
+}
 
 const docTitle = computed(() => {
     if (!store.currentFile) return "";
@@ -477,6 +531,23 @@ onMounted(() => {
         if ((e.metaKey || e.ctrlKey) && e.key === "s") {
             e.preventDefault();
             if (store.isDirty) save();
+        }
+
+        const hk = store.findHotkeys;
+        if (matchesHotkey(e, hk.findInDoc)) {
+            e.preventDefault();
+            openFindBar();
+            return;
+        }
+        if (findBarVisible.value && matchesHotkey(e, hk.findNext)) {
+            e.preventDefault();
+            onFindNext();
+            return;
+        }
+        if (findBarVisible.value && matchesHotkey(e, hk.findPrev)) {
+            e.preventDefault();
+            onFindPrev();
+            return;
         }
 
         // Comment hotkey: Cmd+Alt+M or Ctrl+Alt+M
@@ -1051,6 +1122,18 @@ onMounted(() => {
 
 .demo-highlight:hover {
     background: rgba(139, 92, 246, 0.28);
+}
+
+/* Find & replace match highlights */
+.find-match {
+    background: rgba(250, 204, 21, 0.28);
+    border-radius: 2px;
+}
+
+.find-match-current {
+    background: rgba(250, 204, 21, 0.65);
+    outline: 1px solid rgba(250, 204, 21, 0.95);
+    border-radius: 2px;
 }
 
 .agent-highlight {

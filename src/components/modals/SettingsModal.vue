@@ -151,6 +151,24 @@
                             <label class="field-label">Move block down</label>
                             <input v-model="form.hotkeys.moveDown" class="field-input kbd-input" />
                         </div>
+
+                        <p class="section-heading">Find &amp; Replace</p>
+                        <div class="field">
+                            <label class="field-label">Find in document</label>
+                            <input v-model="form.hotkeys.findInDoc" class="field-input kbd-input" placeholder="Mod-f" />
+                        </div>
+                        <div class="field">
+                            <label class="field-label">Find in workspace</label>
+                            <input v-model="form.hotkeys.findInWorkspace" class="field-input kbd-input" placeholder="Mod-Shift-f" />
+                        </div>
+                        <div class="field">
+                            <label class="field-label">Find next</label>
+                            <input v-model="form.hotkeys.findNext" class="field-input kbd-input" placeholder="Mod-g" />
+                        </div>
+                        <div class="field">
+                            <label class="field-label">Find previous</label>
+                            <input v-model="form.hotkeys.findPrev" class="field-input kbd-input" placeholder="Mod-Shift-g" />
+                        </div>
                     </div>
 
                     <!-- Sharing tab -->
@@ -402,7 +420,15 @@ const form = reactive({
     providers: [],
     assistant: { providerId: "", model: "", name: "Spark", extraInstructions: "" },
     completion: { enabled: false, providerId: "", model: "codestral-latest", debounceMs: 350, maxTokens: 25, wordBoundaryOnly: true, extraInstructions: "" },
-    hotkeys: { selectLine: "Mod-l", moveUp: "Shift-ArrowUp", moveDown: "Shift-ArrowDown" },
+    hotkeys: {
+        selectLine: "Mod-l",
+        moveUp: "Shift-ArrowUp",
+        moveDown: "Shift-ArrowDown",
+        findInDoc: "Mod-f",
+        findInWorkspace: "Mod-Shift-f",
+        findNext: "Mod-g",
+        findPrev: "Mod-Shift-g",
+    },
 });
 
 const newExcludedPath = ref("");

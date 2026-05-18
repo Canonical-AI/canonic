@@ -134,10 +134,10 @@
                     <button
                         :class="[
                             'tab',
-                            store.sidebarTab === 'search' && 'active',
+                            store.searchViewOpen && 'active',
                         ]"
-                        @click="handleTabClick('search')"
-                        title="Search"
+                        @click="toggleSearchView"
+                        title="Find & Replace"
                     >
                         <Search :size="15" />
                     </button>
@@ -155,7 +155,6 @@
 
                 <template v-if="!store.sidebarCollapsed">
                     <FileTree v-if="store.sidebarTab === 'files'" />
-                    <SearchPanel v-else-if="store.sidebarTab === 'search'" />
                     <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
                     <HintsPanel :config="store.config" @navigate="handleHintNavigate" />
                 </template>
@@ -163,7 +162,8 @@
 
             <!-- Editor -->
             <main class="editor-area">
-                <PeerFileViewer v-if="store.peerFileContent" />
+                <SearchView v-if="store.searchViewOpen" ref="searchViewRef" />
+                <PeerFileViewer v-else-if="store.peerFileContent" />
                 <Editor v-else-if="store.currentFile" />
                 <div v-else class="empty-state">
                     <p>Open a document or create a new one</p>
@@ -248,7 +248,7 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, watch, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, provide, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
 import {
@@ -269,8 +269,8 @@ import {
     ArrowUpCircle,
 } from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
-import SearchPanel from "../sidebar/SearchPanel.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
+import SearchView from "../panels/SearchView.vue";
 import HintsPanel from "../sidebar/HintsPanel.vue";
 import { markDefaultEditorActive } from "../../composables/useHints.js";
 import Editor from "../editor/Editor.vue";
@@ -283,9 +283,18 @@ import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
+import { matchesHotkey } from "../../utils/hotkey.js";
 
 const store = useAppStore();
 const router = useRouter();
+const searchViewRef = ref(null);
+
+function toggleSearchView() {
+    store.searchViewOpen = !store.searchViewOpen;
+    if (store.searchViewOpen) {
+        nextTick(() => searchViewRef.value?.focusInput?.());
+    }
+}
 
 // ── Font toggle ──────────────────────────────────────────────────────────────
 const FONT_KEY = "canonic:fontMode";
@@ -454,8 +463,26 @@ onMounted(async () => {
     }
 });
 
+function onGlobalKeydown(e) {
+    const hk = store.findHotkeys;
+    if (matchesHotkey(e, hk.findInWorkspace)) {
+        e.preventDefault();
+        store.searchViewOpen = true;
+        nextTick(() => searchViewRef.value?.focusInput?.());
+        return;
+    }
+    if (store.searchViewOpen && e.key === 'Escape') {
+        store.searchViewOpen = false;
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('keydown', onGlobalKeydown);
+});
+
 onBeforeUnmount(() => {
     document.removeEventListener("click", onDocClick, true);
+    document.removeEventListener('keydown', onGlobalKeydown);
 });
 
 const showNewDoc = ref(false);

@@ -1251,6 +1251,14 @@ function setupIpcHandlers() {
     },
   );
 
+  const wsSearchService = require("./workspace-search");
+  ipcMain.handle("search:workspace", async (_, params) => {
+    return wsSearchService.searchWorkspace(params || {});
+  });
+  ipcMain.handle("search:workspace-replace", async (_, params) => {
+    return wsSearchService.applyReplacement(params || {});
+  });
+
   // --- Sharing ---
   ipcMain.handle("share:start", async (_, workspacePath, filePath, options) => {
     const result = await shareService.startShare(

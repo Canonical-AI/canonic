@@ -117,6 +117,13 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("search:index", workspacePath, filePath, content),
   },
 
+  // Workspace find & replace
+  workspaceSearch: {
+    search: (params) => ipcRenderer.invoke("search:workspace", params),
+    applyReplacement: (params) =>
+      ipcRenderer.invoke("search:workspace-replace", params),
+  },
+
   // Sharing
   share: {
     start: (workspacePath, filePath, options) =>

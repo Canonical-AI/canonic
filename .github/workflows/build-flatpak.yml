@@ -1,8 +1,8 @@
-name: Build postmarketOS (arm64 Flatpak)
+name: Build arm64 Flatpak
 
-# Builds an aarch64 Flatpak bundle for sideloading onto postmarketOS / GNOME
-# devices. Flatpak is used (not AppImage) because postmarketOS is Alpine-based
-# (musl libc) and the Flatpak runtime ships glibc inside the sandbox.
+# Builds an aarch64 Flatpak bundle for arm64 Linux devices. Flatpak is used
+# (not AppImage) because its runtime ships glibc inside the sandbox, so it
+# runs on glibc-less distros too (e.g. Alpine-based postmarketOS).
 # Trigger manually from the Actions tab.
 
 on:

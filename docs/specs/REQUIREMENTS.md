@@ -748,4 +748,66 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the action fires
   then: no file is written; a hint informs the user that demo mode is read-only
 
-*Last updated: 2026-05-17*
+### Split Panels (SPLIT)
+
+* scenario: open a reference pane
+  given: a document is open in the editor and at least one other document exists
+  when: the user clicks the Split button
+  then: a read-only reference pane opens beside the editor showing another document
+
+* scenario: switch a pane's document with quicksearch
+  given: a reference pane is open
+  when: the user clicks the pane's document switcher and picks a document from the search list
+  then: the pane loads and displays the chosen document
+
+* scenario: activate a reference pane
+  given: a reference pane shows document B while document A is the active editor
+  when: the user clicks the reference pane
+  then: document B becomes the active editable document and document A moves into the reference pane
+
+* scenario: close a reference pane
+  given: a reference pane is open
+  when: the user clicks the pane's close button
+  then: the pane is removed and the active editor expands to fill the space
+
+* scenario: pane limit
+  given: two reference panes are already open
+  when: the user looks at the Split button
+  then: the Split button is disabled (maximum three panes total)
+
+* scenario: drag a document onto a reference pane
+  given: a reference pane is open
+  when: the user drags a document from the file tree and drops it on the pane
+  then: the pane loads the dropped document
+
+* scenario: drag a document onto the active editor
+  given: the editor is open
+  when: the user drags a document from the file tree and drops it on the editor pane
+  then: the dropped document opens as the active editable document
+
+* scenario: reference panes are read-only
+  given: a reference pane is showing a document
+  when: the user views the pane
+  then: the content cannot be edited; only the active editor pane accepts edits
+
+* scenario: opening a referenced doc removes the duplicate pane
+  given: document B is shown in a reference pane
+  when: the user opens document B as the active document
+  then: the reference pane showing B is removed so the document is not displayed twice
+
+* scenario: split view in demo mode
+  given: the user launches demo mode
+  when: the demo workspace loads
+  then: the app opens with the editor and one reference pane visible
+
+* scenario: panes stack top/bottom by default
+  given: the user has not changed the split layout setting
+  when: a reference pane opens
+  then: the panes are arranged top-to-bottom
+
+* scenario: switch to side-by-side layout
+  given: split panels are open
+  when: the user unchecks "Stack split panels" in the theme menu
+  then: the panes are arranged side by side, and the choice persists across restarts
+
+*Last updated: 2026-05-19*

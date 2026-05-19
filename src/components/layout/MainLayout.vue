@@ -81,6 +81,13 @@
                                     v-model="store.showLineNumbers"
                                 />
                             </label>
+                            <label class="theme-control-item" @click.stop>
+                                <span>Stack split panels</span>
+                                <input
+                                    type="checkbox"
+                                    v-model="store.splitStacked"
+                                />
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -164,7 +171,27 @@
             <main class="editor-area">
                 <SearchView v-if="store.searchViewOpen" ref="searchViewRef" />
                 <PeerFileViewer v-else-if="store.peerFileContent" />
-                <Editor v-else-if="store.currentFile" />
+                <div
+                    v-else-if="store.currentFile"
+                    class="split-row"
+                    :class="{ 'split-row--stacked': store.splitStacked }"
+                >
+                    <div
+                        class="split-pane split-pane--active"
+                        :class="{ 'split-pane--dragover': activeDragOver }"
+                        @dragover.capture="onActiveDragOver"
+                        @dragleave="activeDragOver = false"
+                        @drop.capture="onActiveDrop"
+                    >
+                        <Editor />
+                    </div>
+                    <RefDocPane
+                        v-for="(p, i) in store.refPanes"
+                        :key="p + ':' + i"
+                        :file-path="p"
+                        :index="i"
+                    />
+                </div>
                 <div v-else class="empty-state">
                     <p>Open a document or create a new one</p>
                     <button class="btn-primary" @click="newDoc">
@@ -274,6 +301,7 @@ import SearchView from "../panels/SearchView.vue";
 import HintsPanel from "../sidebar/HintsPanel.vue";
 import { markDefaultEditorActive } from "../../composables/useHints.js";
 import Editor from "../editor/Editor.vue";
+import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
 import AIChat from "../panels/AIChat.vue";
@@ -288,6 +316,25 @@ import { matchesHotkey } from "../../utils/hotkey.js";
 const store = useAppStore();
 const router = useRouter();
 const searchViewRef = ref(null);
+
+// Drag a doc from the file tree onto the active editor pane to open it there.
+// Capture phase so we intercept before the ProseMirror editor's own drop handler.
+const activeDragOver = ref(false);
+function onActiveDragOver(e) {
+    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activeDragOver.value = true;
+    e.dataTransfer.dropEffect = "move";
+}
+function onActiveDrop(e) {
+    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activeDragOver.value = false;
+    const path = e.dataTransfer.getData("application/canonic-path");
+    if (path && path.endsWith(".md")) store.openFile(path);
+}
 
 function toggleSearchView() {
     store.searchViewOpen = !store.searchViewOpen;
@@ -709,6 +756,31 @@ function onResizeStart(e) {
     flex-direction: column;
     overflow: hidden;
     background: var(--bg-editor);
+}
+
+/* Split panels — active editor + read-only reference panes side by side */
+.split-row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.split-row--stacked {
+    flex-direction: column;
+}
+
+.split-pane--active {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+.split-pane--dragover {
+    box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .empty-state {

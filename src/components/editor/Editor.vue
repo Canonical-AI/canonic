@@ -65,6 +65,16 @@
                         store.currentDocBranch !== "main" ? "New Draft" : "Fork"
                     }}
                 </button>
+                <div class="topbar-divider" />
+                <button
+                    class="action-btn icon-label"
+                    @click="splitPane"
+                    :disabled="!canSplit"
+                    title="Open a document beside this one"
+                >
+                    <Columns2 :size="13" />
+                    Split
+                </button>
             </div>
         </div>
 
@@ -205,7 +215,7 @@ import { MilkdownProvider } from "@milkdown/vue";
 import { ProsemirrorAdapterProvider } from "@prosemirror-adapter/vue";
 import { useAppStore } from "../../store";
 import { v4 as uuidv4 } from "uuid";
-import { Tag, GitFork, GitBranch, ArrowLeft } from "lucide-vue-next";
+import { Tag, GitFork, GitBranch, ArrowLeft, Columns2 } from "lucide-vue-next";
 import MilkdownEditor from "./MilkdownEditor.vue";
 import InDocFindBar from "./InDocFindBar.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
@@ -222,6 +232,20 @@ const editorInitialized = ref(false);
 
 const selectionPopover = ref({ visible: false, x: 0, y: 0, text: "" });
 const commentInput = ref({ visible: false, text: "" });
+
+// ── Split panels ─────────────────────────────────────────────────────────────
+function nextSplitDoc() {
+    return store.flatDocList.find(
+        (d) => d.path !== store.currentFile && !store.refPanes.includes(d.path),
+    );
+}
+const canSplit = computed(
+    () => store.refPanes.length < 2 && !!nextSplitDoc(),
+);
+function splitPane() {
+    const doc = nextSplitDoc();
+    if (doc) store.addRefPane(doc.path);
+}
 
 provide("openCommentFromToolbar", (selectedText, fixedCoords) => {
     const wrapperRect = editorContentEl.value?.getBoundingClientRect() ?? {

@@ -79,7 +79,25 @@ brew install --cask canonic
 Download the latest version for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
 - **macOS:** `.dmg` (Apple Silicon)
 - **Windows:** `.exe`
-- **Linux:** `.AppImage`
+- **Linux:** `.AppImage` (x64)
+
+#### Linux (arm64 Flatpak)
+
+For arm64 Linux, and for distros without glibc (e.g. Alpine-based systems
+like postmarketOS, where the glibc-linked AppImage will not run), use the
+Flatpak — its runtime ships glibc inside the sandbox.
+
+Build the bundle from the **Build arm64 Flatpak** workflow in the GitHub
+Actions tab, then download the `canonic-arm64-flatpak` artifact.
+
+Install:
+```bash
+# one-time, if the flathub remote is missing:
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+flatpak install --user canonic-arm64.flatpak
+flatpak run ai.canonic.app
+```
 
 ---
 

@@ -1,0 +1,58 @@
+name: Build arm64 Flatpak
+
+# Builds an aarch64 Flatpak bundle for arm64 Linux devices. Flatpak is used
+# (not AppImage) because its runtime ships glibc inside the sandbox, so it
+# runs on glibc-less distros too (e.g. Alpine-based postmarketOS).
+# Trigger manually from the Actions tab.
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build-flatpak-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
+
+      - name: Install Flatpak toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder elfutils
+
+      - name: Install Flatpak runtimes (aarch64)
+        run: |
+          flatpak remote-add --if-not-exists --user \
+            flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//24.08 \
+            org.freedesktop.Sdk//24.08 \
+            org.electronjs.Electron2.BaseApp//24.08
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build arm64 Flatpak
+        run: npm run build:flatpak
+        env:
+          DEBUG: "electron-builder"
+
+      - name: Upload Flatpak bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonic-arm64-flatpak
+          path: dist-electron/*.flatpak
+          if-no-files-found: error

@@ -11,6 +11,20 @@ export const useAppStore = defineStore("app", () => {
   const files = ref([]);
   const currentFile = ref(null);
   const currentContent = ref("");
+  // Split panels: file paths of read-only reference panes shown beside the active editor
+  const refPanes = ref([]);
+  // Flat list of every doc in the workspace — used by the split-panel quicksearch switcher
+  const flatDocList = computed(() => {
+    const out = [];
+    const walk = (items) => {
+      for (const it of items || []) {
+        if (it.type === "file") out.push({ path: it.path, name: it.name });
+        else if (it.children) walk(it.children);
+      }
+    };
+    walk(files.value);
+    return out;
+  });
   const branches = ref([]);
   const currentBranch = ref("main");
   const isExternalRepo = ref(false);
@@ -59,6 +73,13 @@ export const useAppStore = defineStore("app", () => {
     } else {
       document.documentElement.removeAttribute("data-line-numbers");
     }
+  });
+  // Split panels: true = stacked top/bottom (default), false = side by side
+  const splitStacked = ref(
+    localStorage.getItem("canonic:splitStacked") !== "false",
+  );
+  watch(splitStacked, (val) => {
+    localStorage.setItem("canonic:splitStacked", String(val));
   });
   const docVersions = ref([]);
   const docBranchMap = ref({}); // { 'path/to/file.md': { activeBranch: 'branch', branches: ['branch'] } }
@@ -354,6 +375,7 @@ export const useAppStore = defineStore("app", () => {
         "canonic:recentWorkspaces",
         JSON.stringify(recentWorkspaces.value),
       );
+      refPanes.value = [];
       currentFile.value = null;
       currentContent.value = "";
       comments.value = [];
@@ -401,6 +423,8 @@ export const useAppStore = defineStore("app", () => {
     const oldDocId = oldPath.replace(/[\\/]/g, "_");
     const newDocId = newPath.replace(/[\\/]/g, "_");
     await api.comments.move(oldDocId, newDocId);
+    const renamedRefIdx = refPanes.value.indexOf(oldPath);
+    if (renamedRefIdx !== -1) refPanes.value[renamedRefIdx] = newPath;
     if (currentFile.value === oldPath) {
       currentFile.value = newPath;
       if (docBranchMap.value[oldPath]) {
@@ -416,6 +440,8 @@ export const useAppStore = defineStore("app", () => {
   async function deleteFile(filePath) {
     if (!workspacePath.value) return;
     await api.files.trash.delete(workspacePath.value, filePath, false);
+    const deletedRefIdx = refPanes.value.indexOf(filePath);
+    if (deletedRefIdx !== -1) refPanes.value.splice(deletedRefIdx, 1);
     if (currentFile.value === filePath) {
       currentFile.value = null;
       currentContent.value = "";
@@ -438,6 +464,7 @@ export const useAppStore = defineStore("app", () => {
   async function deleteDirectory(dirPath) {
     if (!workspacePath.value) return;
     const prefix = dirPath + "/";
+    refPanes.value = refPanes.value.filter((p) => !p.startsWith(prefix));
     if (currentFile.value?.startsWith(prefix)) {
       currentFile.value = null;
       currentContent.value = "";
@@ -480,6 +507,13 @@ export const useAppStore = defineStore("app", () => {
       const newDocId = movedFile.replace(/[\\/]/g, "_");
       await api.comments.move(oldDocId, newDocId);
     }
+
+    // Update reference panes if a shown doc (or its parent) was moved
+    refPanes.value = refPanes.value.map((p) => {
+      if (p === filePath) return newPath;
+      if (p.startsWith(filePath + "/")) return p.replace(filePath, newPath);
+      return p;
+    });
 
     // Update currentFile if it or its parent was moved
     if (currentFile.value === filePath) {
@@ -546,9 +580,68 @@ export const useAppStore = defineStore("app", () => {
     delete unsavedBuffer[filePath];
   }
 
+  // ── Split panels ────────────────────────────────────────────────────────────
+  // Active editor + up to MAX_REF_PANES read-only reference panes = 3 panes total.
+  const MAX_REF_PANES = 2;
+
+  function addRefPane(filePath) {
+    if (!filePath || filePath === currentFile.value) return;
+    if (refPanes.value.includes(filePath)) return;
+    if (refPanes.value.length >= MAX_REF_PANES) return;
+    refPanes.value.push(filePath);
+  }
+
+  function removeRefPane(index) {
+    if (index < 0 || index >= refPanes.value.length) return;
+    refPanes.value.splice(index, 1);
+  }
+
+  function setRefPaneFile(index, filePath) {
+    if (index < 0 || index >= refPanes.value.length || !filePath) return;
+    // Picking the active doc, or a doc already shown in another pane, would duplicate it
+    if (filePath === currentFile.value) {
+      refPanes.value.splice(index, 1);
+      return;
+    }
+    const existing = refPanes.value.indexOf(filePath);
+    if (existing !== -1 && existing !== index) {
+      refPanes.value.splice(index, 1);
+      return;
+    }
+    refPanes.value[index] = filePath;
+  }
+
+  // Swap a reference pane with the active editor: the pane's doc becomes editable,
+  // the previously-active doc takes the pane's slot.
+  async function activateRefPane(index) {
+    const target = refPanes.value[index];
+    if (!target) return;
+    const prevActive = currentFile.value;
+    await openFile(target); // openFile() removes `target` from refPanes
+    if (
+      prevActive &&
+      prevActive !== target &&
+      !refPanes.value.includes(prevActive)
+    ) {
+      refPanes.value.splice(index, 0, prevActive);
+    }
+  }
+
+  // When the active doc closes (deleted, etc.) while panes are open, promote one.
+  watch(currentFile, (val) => {
+    if (!val && refPanes.value.length > 0) {
+      const next = refPanes.value.shift();
+      openFile(next);
+    }
+  });
+
   async function openFile(filePath) {
     // Close search view if open — user navigated to a doc
     if (searchViewOpen.value) searchViewOpen.value = false;
+
+    // If this file is shown in a reference pane, drop it — it is becoming the active doc
+    const refIdx = refPanes.value.indexOf(filePath);
+    if (refIdx !== -1) refPanes.value.splice(refIdx, 1);
 
     // Buffer unsaved changes for the file we're leaving
     if (isDirty.value && currentFile.value) {
@@ -962,6 +1055,9 @@ export const useAppStore = defineStore("app", () => {
         await api.files.write(workspacePath.value, filePath, content);
       }
       await refreshFiles();
+      // Land in split view so the side-by-side panels feature is visible in demo
+      await openFile("Vision/product-vision.md");
+      addRefPane("Strategy/strategy.md");
     }
   }
 
@@ -1348,6 +1444,7 @@ export const useAppStore = defineStore("app", () => {
     sidebarCollapsed,
     rightPanelCollapsed,
     showLineNumbers,
+    splitStacked,
     isDemoMode,
     demoPeers,
     demoFiles,
@@ -1369,6 +1466,12 @@ export const useAppStore = defineStore("app", () => {
     refreshFiles,
     openFile,
     openStandaloneFile,
+    refPanes,
+    flatDocList,
+    addRefPane,
+    removeRefPane,
+    setRefPaneFile,
+    activateRefPane,
     saveFile,
     saveAsset,
     maybeDeleteAsset,

@@ -79,7 +79,25 @@ brew install --cask canonic
 Download the latest version for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
 - **macOS:** `.dmg` (Apple Silicon)
 - **Windows:** `.exe`
-- **Linux:** `.AppImage`
+- **Linux:** `.AppImage` (x64)
+
+#### postmarketOS / mobile Linux (arm64 Flatpak)
+
+postmarketOS is Alpine-based (musl libc), so the glibc-linked AppImage will
+not run. Use the arm64 Flatpak instead — its runtime ships glibc inside the
+sandbox.
+
+Build the bundle from the **Build postmarketOS (arm64 Flatpak)** workflow in
+the GitHub Actions tab, then download the `canonic-arm64-flatpak` artifact.
+
+Install on the device:
+```bash
+# one-time, if the flathub remote is missing:
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+flatpak install --user canonic-arm64.flatpak
+flatpak run ai.canonic.app
+```
 
 ---
 

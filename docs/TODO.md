@@ -47,7 +47,7 @@ when complete move stuff to complete. its just that easy
 
 * [ ] **Collapsible sidebar** — toggle button collapses left sidebar to icon-only strip (~40px); persist state in localStorage. *(MainLayout + FileTree, UI only)*
 
-* [ ] **Shared / connected documents in browser** — peer docs section with display name, last-synced timestamp, online/offline indicator; clicking opens read-only from `~/.canonic/peers/`; refresh triggers `git fetch`. *(PeersPanel + peer sync in share.js + mDNS in main.js)*
+* [ ] **Shared / connected documents in browser** — peer docs section with display name, last-synced timestamp, online/offline indicator; clicking opens read-only from `~/.config/canonic/peers/`; refresh triggers `git fetch`. *(PeersPanel + peer sync in share.js + mDNS in main.js)*
 
 * [ ] **Sharing version radio** — when sharing a doc or workspace, let the user choose what the recipient sees: *Current WIP* (live file on disk), *Last committed* (HEAD of current branch), or *Main only* (always the `main` branch). Stored in `sharingDefaults` config and overridable per-share in ShareModal. *(ShareModal + share.js + config)*
 
@@ -121,7 +121,7 @@ when complete move stuff to complete. its just that easy
 
 * \[x] Canonical logo in UI
 
-* [x] Inline comments (selection + line-anchored) persisted to `~/.canonic/comments/`
+* [x] Inline comments (selection + line-anchored) persisted to `~/.config/canonic/comments/`
 
 * \[x] Search with workspace isolation
 

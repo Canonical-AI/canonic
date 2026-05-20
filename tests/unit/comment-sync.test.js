@@ -202,7 +202,7 @@ const workspaceDir2 = path.join(tmpBase, 'workspace2')
 fs.mkdirSync(workspaceDir2, { recursive: true })
 fs.writeFileSync(path.join(workspaceDir2, 'spec.md'), '# Spec', 'utf-8')
 
-const RECEIVED_FILE = path.join(os.homedir(), '.canonic', 'comments', 'spec.md.json')
+const RECEIVED_FILE = path.join(os.homedir(), '.config', 'canonic', 'comments', 'spec.md.json')
 
 function cleanupReceived() {
   if (fs.existsSync(RECEIVED_FILE)) fs.unlinkSync(RECEIVED_FILE)

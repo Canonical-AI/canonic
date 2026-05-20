@@ -4,7 +4,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
-const LOCKFILE = path.join(os.homedir(), '.canonic', 'api.lock')
+const LOCKFILE = path.join(os.homedir(), '.config', 'canonic', 'api.lock')
 const apiServer = await import('../../electron/api-server.js')
 
 let port, token

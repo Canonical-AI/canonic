@@ -29,7 +29,7 @@ async function post(url, body) {
   })
 }
 
-const COMMENTS_FILE = path.join(os.homedir(), '.canonic', 'comments', 'doc.md.json')
+const COMMENTS_FILE = path.join(os.homedir(), '.config', 'canonic', 'comments', 'doc.md.json')
 
 function cleanupComments() {
   if (fs.existsSync(COMMENTS_FILE)) fs.unlinkSync(COMMENTS_FILE)

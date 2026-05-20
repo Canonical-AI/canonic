@@ -232,7 +232,7 @@
 
                     <p class="field-hint" style="margin-top: 20px">
                         You can change this preference anytime in Settings. Logs
-                        are stored locally in <code>~/.canonic/usage.log</code>.
+                        are stored locally in <code>~/.config/canonic/usage.log</code>.
                     </p>
 
                     <div class="step-actions">

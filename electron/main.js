@@ -76,7 +76,8 @@ function startNetworkWatcher() {
 // ── Comment sync queue ─────────────────────────────────────────────────────
 const PEER_COMMENTS_DIR = path.join(
   os.homedir(),
-  ".canonic",
+  ".config",
+  "canonic",
   "comments",
   "peers",
 );
@@ -85,7 +86,7 @@ const PEER_COMMENTS_DIR = path.join(
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
 
 const isDev = !app.isPackaged;
-const CANONIC_DIR = path.join(os.homedir(), ".canonic");
+const CANONIC_DIR = path.join(os.homedir(), ".config", "canonic");
 
 // File-based logging — readable at ~/Library/Logs/Canonic/main.log (mac)
 // or at app.getPath('logs')/main.log on all platforms.

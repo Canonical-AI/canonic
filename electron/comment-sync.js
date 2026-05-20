@@ -2,7 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-const PEER_COMMENTS_DIR = path.join(os.homedir(), '.canonic', 'comments', 'peers')
+const PEER_COMMENTS_DIR = path.join(os.homedir(), '.config', 'canonic', 'comments', 'peers')
 
 /**
  * Flush locally-queued peer comments to their respective share servers.

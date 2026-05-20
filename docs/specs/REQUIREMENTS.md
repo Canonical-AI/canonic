@@ -3,7 +3,7 @@
 Source of truth for product requirements. When a requirement changes, update this file first, then tests, then code.
 
 * scenario: first launch with no config
-  given: no config file exists at \~/.canonic/config.json
+  given: no config file exists at \~/.config/canonic/config.json
   when: the app launches
   then: the Setup screen appears before the Workspace screen
 
@@ -11,10 +11,10 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ## Global Configuration (CFG)
 
-> First-run setup and persistent user preferences. Config lives at `~/.canonic/config.json`. Setup screen appears on first launch; settings are always accessible from the titlebar gear icon.
+> First-run setup and persistent user preferences. Config lives at `~/.config/canonic/config.json`. Setup screen appears on first launch; settings are always accessible from the titlebar gear icon.
 
 * scenario: first launch with valid config
-  given: \~/.canonic/config.json exists and is valid
+  given: \~/.config/canonic/config.json exists and is valid
   when: the app launches
   then: the Setup screen is skipped and the Workspace screen loads directly
 
@@ -36,12 +36,12 @@ Source of truth for product requirements. When a requirement changes, update thi
 * scenario: setup submission writes config
   given: all required fields are filled with valid values
   when: the user clicks Continue
-  then: \~/.canonic/config.json is written with fields displayName, apiKey, model, defaultWorkspacePath, and sharingDefaults
+  then: \~/.config/canonic/config.json is written with fields displayName, apiKey, model, defaultWorkspacePath, and sharingDefaults
 
 * scenario: config file not tracked by git
   given: a workspace is open
   when: the user runs git status inside the workspace
-  then: \~/.canonic/config.json does not appear in the output
+  then: \~/.config/canonic/config.json does not appear in the output
 
 * scenario: settings accessible after setup
   given: setup has been completed
@@ -184,7 +184,7 @@ Source of truth for product requirements. When a requirement changes, update thi
 * scenario: API key source
   given: an AI chat message is sent
   when: the request is made to the AI provider
-  then: the API key from \~/.canonic/config.json is used, not any .env file
+  then: the API key from \~/.config/canonic/config.json is used, not any .env file
 
 * scenario: model selection
   given: the user has selected a model in Settings
@@ -734,7 +734,7 @@ Source of truth for product requirements. When a requirement changes, update thi
 * scenario: change a shortcut
   given: the Hotkeys tab is open
   when: the user types a new binding string (e.g. `Mod-Shift-h`) into a find shortcut field
-  then: the binding is saved to `~/.canonic/config.json` under `hotkeys.findInDoc` (etc.) and takes effect on next keypress without restart
+  then: the binding is saved to `~/.config/canonic/config.json` under `hotkeys.findInDoc` (etc.) and takes effect on next keypress without restart
 
 ### Demo Mode (FND-DEMO)
 

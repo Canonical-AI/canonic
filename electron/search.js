@@ -3,7 +3,7 @@ const os = require("os");
 const fs = require("fs");
 
 const CANONIC_DIR =
-  process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), ".canonic");
+  process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), ".config", "canonic");
 const INDEX_FILE = path.join(CANONIC_DIR, "search-index.json");
 
 // In-memory index. We persist document metadata to disk for cold-start search.

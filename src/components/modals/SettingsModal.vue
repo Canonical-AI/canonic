@@ -86,7 +86,7 @@
                             <ProviderForm :existing-ids="form.providers.map(p => p.id)" @save="addProvider($event)" @cancel="addingProvider = false" />
                         </template>
                         <button v-else class="add-provider-btn" @click="addingProvider = true">+ Add provider</button>
-                        <p class="field-hint" style="margin-top: 8px">⚠ API keys stored as plain text in <code>~/.canonic/config.json</code>.</p>
+                        <p class="field-hint" style="margin-top: 8px">⚠ API keys stored as plain text in <code>~/.config/canonic/config.json</code>.</p>
 
                         <p class="section-heading">AI Assistant</p>
                         <div class="field">
@@ -320,7 +320,7 @@
                                     <strong>We never collect your API keys or document content.</strong>
                                 </p>
                             </div>
-                            <p class="field-hint" style="margin-top: 12px">Logs are stored locally in <code>~/.canonic/usage.log</code>.</p>
+                            <p class="field-hint" style="margin-top: 12px">Logs are stored locally in <code>~/.config/canonic/usage.log</code>.</p>
                         </div>
                     </div>
 
@@ -366,7 +366,7 @@
                             <p class="danger-title" style="color: var(--text-primary)">Uninstall script</p>
                             <p class="danger-desc">Run this in your terminal to remove all data:</p>
                             <div class="code-block">
-                                <pre>rm -rf ~/.canonic</pre>
+                                <pre>rm -rf ~/.config/canonic</pre>
                                 <button class="btn-icon-sm" @click="copyUninstall" title="Copy script">📋</button>
                             </div>
                         </div>
@@ -540,7 +540,7 @@ async function copyWsLink() {
     setTimeout(() => { wsShareCopied.value = false; }, 2000);
 }
 function openWsInBrowser() { if (store.workspaceShareInfo?.localUrl) window.canonic.share.openLink(store.workspaceShareInfo.localUrl); }
-async function copyUninstall() { await navigator.clipboard.writeText("rm -rf ~/.canonic"); }
+async function copyUninstall() { await navigator.clipboard.writeText("rm -rf ~/.config/canonic"); }
 async function confirmReset() {
     if (!confirm("Delete all settings? This is irreversible.")) return;
     dangerBusy.value = true;

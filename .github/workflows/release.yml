@@ -98,7 +98,7 @@ jobs:
           DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  release-linux:
+  release-linux-x64:
     needs: create-draft
     permissions:
       contents: write
@@ -114,10 +114,33 @@ jobs:
           node-version: 24
           cache: "npm"
 
-      - name: Install Flatpak toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder elfutils
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build and Publish (linux x64)
+        run: npm run build:linux -- --x64 --publish always
+        env:
+          DEBUG: "electron-builder"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-linux-arm64:
+    needs: create-draft
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "npm"
 
       - name: Install dependencies
         run: npm install
@@ -125,14 +148,14 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Build and Publish (linux)
-        run: npm run build:linux -- --publish always
+      - name: Build and Publish (linux arm64)
+        run: npm run build:linux -- --arm64 --publish always
         env:
           DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-release:
-    needs: [create-draft, release-mac, release-win, release-linux]
+    needs: [create-draft, release-mac, release-win, release-linux-x64, release-linux-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write

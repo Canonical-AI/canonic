@@ -146,7 +146,7 @@ function readPeers() {
 }
 const USAGE_LOG_PATH = path.join(CANONIC_DIR, "usage.log");
 
-// Ensure ~/.canonic exists
+// Ensure ~/.config/canonic exists
 if (!fs.existsSync(CANONIC_DIR)) {
   fs.mkdirSync(CANONIC_DIR, { recursive: true });
 }

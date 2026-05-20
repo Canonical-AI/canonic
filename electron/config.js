@@ -19,8 +19,9 @@ const DEFAULTS = {
     scope: "file",
     permission: "view",
   },
-  windowBlur: true,
-  windowBlurOpacity: 0.72,
+  windowBlur: false,
+  windowTransparency: true,
+  windowTransparencyOpacity: 0.88,
   providers: [],
   assistant: {
     providerId: "",

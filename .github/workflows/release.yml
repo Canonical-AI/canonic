@@ -117,7 +117,7 @@ jobs:
       - name: Install Flatpak toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder elfutils
+          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools cpio libgdk-pixbuf2.0-dev
 
       - name: Install dependencies
         run: npm install
@@ -128,8 +128,8 @@ jobs:
       - name: Build and Publish (linux)
         run: npm run build:linux -- --publish always
         env:
-          DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: "electron-builder"
 
   publish-release:
     needs: [create-draft, release-mac, release-win, release-linux]

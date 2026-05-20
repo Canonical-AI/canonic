@@ -15,7 +15,7 @@ cask "canonic" do
   app "Canonic.app"
 
   zap trash: [
-    "~/.canonic",
+    "~/.config/canonic",
     "~/Library/Application Support/Canonic",
     "~/Library/Preferences/ai.canonic.app.plist",
     "~/Library/Saved Application State/ai.canonic.app.savedState",

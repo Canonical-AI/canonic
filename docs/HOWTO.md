@@ -18,7 +18,7 @@ On first launch, Canonic shows a setup screen. Fill in:
 
 * **Default workspace path** — where new workspaces are created
 
-Your settings are saved to `~/.canonic/config.json`. You can change them anytime via the gear icon in the top-right.
+Your settings are saved to `~/.config/canonic/config.json`. You can change them anytime via the gear icon in the top-right.
 
 ### Opening the App Again
 
@@ -223,7 +223,7 @@ Access settings via the **gear icon** in the top-right.
 
 ### Danger Zone
 
-* **Uninstall** — removes `~/.canonic/` config and data
+* **Uninstall** — removes `~/.config/canonic/` config and data
 
 ***
 

@@ -27,7 +27,7 @@ const crypto = require('crypto')
 // Singleton emitter — main.js listens here to forward stats to renderer
 const emitter = new EventEmitter()
 
-const PEERS_FILE = path.join(os.homedir(), '.canonic', 'peers.json')
+const PEERS_FILE = path.join(os.homedir(), '.config', 'canonic', 'peers.json')
 
 // Active shares: filePath -> { app, server, wss, token, port, shutdownTimer }
 const activeShares = new Map()
@@ -443,7 +443,7 @@ async function startWorkspaceShare(workspaces, options = {}) {
     const { filePath: commentFilePath, comments } = req.body
     if (!commentFilePath || !Array.isArray(comments)) return res.status(400).json({ error: 'Invalid payload' })
 
-    const commentsFile = path.join(os.homedir(), '.canonic', 'comments',
+    const commentsFile = path.join(os.homedir(), '.config', 'canonic', 'comments',
       `${commentFilePath.replace(/\//g, '_')}.json`)
     const existing = fs.existsSync(commentsFile)
       ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8'))
@@ -533,7 +533,7 @@ async function startWorkspaceShare(workspaces, options = {}) {
         content = fs.readFileSync(resolved, 'utf-8')
       }
 
-      const commentsFile = path.join(os.homedir(), '.canonic', 'comments', `${relPath.replace(/\//g, '_')}.json`)
+      const commentsFile = path.join(os.homedir(), '.config', 'canonic', 'comments', `${relPath.replace(/\//g, '_')}.json`)
       const comments = fs.existsSync(commentsFile) ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8')) : []
 
       const accept = req.headers['accept'] || ''
@@ -645,7 +645,7 @@ async function startShare(workspacePath, filePath, options = {}) {
     const { filePath: commentFilePath, comments } = req.body
     if (!commentFilePath || !Array.isArray(comments)) return res.status(400).json({ error: 'Invalid payload' })
 
-    const commentsFile = path.join(os.homedir(), '.canonic', 'comments',
+    const commentsFile = path.join(os.homedir(), '.config', 'canonic', 'comments',
       `${commentFilePath.replace(/\//g, '_')}.json`)
     const existing = fs.existsSync(commentsFile)
       ? JSON.parse(fs.readFileSync(commentsFile, 'utf-8'))
@@ -668,7 +668,7 @@ async function startShare(workspacePath, filePath, options = {}) {
 
     const content = fs.readFileSync(fullPath, 'utf-8')
     const commentsFile = path.join(
-      os.homedir(), '.canonic', 'comments',
+      os.homedir(), '.config', 'canonic', 'comments',
       `${filePath.replace(/\//g, '_')}.json`
     )
     const comments = fs.existsSync(commentsFile)
@@ -713,7 +713,7 @@ async function startShare(workspacePath, filePath, options = {}) {
 
     const content = fs.readFileSync(resolved, 'utf-8')
     const commentsFile = path.join(
-      os.homedir(), '.canonic', 'comments',
+      os.homedir(), '.config', 'canonic', 'comments',
       `${relPath.replace(/\//g, '_')}.json`
     )
     const comments = fs.existsSync(commentsFile)
@@ -842,7 +842,7 @@ async function fetchSharedDoc(url, token) {
     const data = await response.json()
 
     // Cache locally
-    const cacheDir = path.join(os.homedir(), '.canonic', 'peers', data.author)
+    const cacheDir = path.join(os.homedir(), '.config', 'canonic', 'peers', data.author)
     fs.mkdirSync(cacheDir, { recursive: true })
     fs.writeFileSync(path.join(cacheDir, path.basename(data.filePath)), data.content, 'utf-8')
 

@@ -169,14 +169,14 @@ canonic/
 **Key design decisions:**
 - Two-process Electron architecture — renderer never touches the filesystem directly
 - Per-document Git branching — each doc lives on its own branch, merged back on save
-- Sidecar storage — comments and config live in `~/.canonic/`, separate from workspace files
+- Sidecar storage — comments and config live in `~/.config/canonic/`, separate from workspace files
 - IPC-first — all file, git, and AI operations go through typed IPC handlers
 
 ---
 
 ## Configuration
 
-User preferences and AI API keys are stored in `~/.canonic/config.json`. Canonic supports any OpenAI-compatible provider via [OpenRouter](https://openrouter.ai/).
+User preferences and AI API keys are stored in `~/.config/canonic/config.json`. Canonic supports any OpenAI-compatible provider via [OpenRouter](https://openrouter.ai/).
 
 Set your API key in **Settings → AI** within the app.
 

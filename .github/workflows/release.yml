@@ -114,6 +114,11 @@ jobs:
           node-version: 24
           cache: "npm"
 
+      - name: Install Flatpak toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder elfutils
+
       - name: Install dependencies
         run: npm install
 

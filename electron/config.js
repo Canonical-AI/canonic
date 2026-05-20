@@ -3,7 +3,7 @@ const path = require("path");
 const os = require("os");
 
 const CANONIC_DIR =
-  process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), ".canonic");
+  process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), ".config", "canonic");
 const CONFIG_PATH = path.join(CANONIC_DIR, "config.json");
 
 const DEFAULTS = {

@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 
-const CANONIC_DIR = path.join(os.homedir(), '.canonic')
+const CANONIC_DIR = path.join(os.homedir(), '.config', 'canonic')
 const LOCKFILE = path.join(CANONIC_DIR, 'api.lock')
 
 let server = null

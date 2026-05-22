@@ -659,6 +659,83 @@ function createMenu() {
         { role: "zoomOut" },
         { type: "separator" },
         { role: "togglefullscreen" },
+        { type: "separator" },
+        {
+          label: "Theme",
+          submenu: [
+            {
+              label: "HAL 2001 (Dark)",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "hal2001");
+              },
+            },
+            {
+              label: "Nord",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "nord");
+              },
+            },
+            {
+              label: "Dracula",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "dracula");
+              },
+            },
+            {
+              label: "Mocha",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "mocha");
+              },
+            },
+            {
+              label: "Macchiato",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "macchiato");
+              },
+            },
+            {
+              label: "Latte",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "latte");
+              },
+            },
+            {
+              label: "Tokyo",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "tokyo");
+              },
+            },
+            {
+              label: "Solarized",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "solarized");
+              },
+            },
+            {
+              label: "Gruvbox",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-theme", "gruvbox");
+              },
+            },
+          ],
+        },
+        {
+          label: "Typography",
+          submenu: [
+            {
+              label: "Sans-serif",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-font", "sans");
+              },
+            },
+            {
+              label: "Serif",
+              click: () => {
+                mainWindow?.webContents.send("menu:change-font", "serif");
+              },
+            },
+          ],
+        },
       ],
     },
     {

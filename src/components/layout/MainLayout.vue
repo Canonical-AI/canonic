@@ -1,7 +1,7 @@
 <template>
     <div class="layout" :class="{ 'is-resizing': isResizing }">
         <!-- Titlebar -->
-        <div class="titlebar">
+        <div v-if="isMac" class="titlebar">
             <div class="titlebar-left">
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name"
@@ -364,6 +364,7 @@ function toggleFont() {
 }
 
 // ── Theme switcher ───────────────────────────────────────────────────────────
+const isMac = ref(typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || ''));
 const THEME_KEY = "canonic:theme";
 const BUILTIN_THEMES = ["hal2001", "auteur", "paper", "mocha", "macchiato", "latte", "dracula", "nord", "solarized", "gruvbox", "tokyo"];
 
@@ -463,6 +464,18 @@ onMounted(async () => {
     if (window.canonic?.menu) {
         window.canonic.menu.onOpenSettings(() => {
             showSettings.value = true;
+        });
+
+        window.canonic.menu.onChangeTheme((theme) => {
+            if (theme) setTheme(theme);
+        });
+
+        window.canonic.menu.onChangeFont((font) => {
+            if (font) {
+                fontMode.value = font;
+                storage.setItem(FONT_KEY, fontMode.value);
+                applyFont(fontMode.value);
+            }
         });
 
         window.canonic.menu.onNewWorkspace(async (workspacePath) => {

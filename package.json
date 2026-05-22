@@ -125,6 +125,27 @@
             "x64",
             "arm64"
           ]
+        },
+        {
+          "target": "flatpak",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "pacman",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ]
     },
@@ -133,7 +154,15 @@
       "runtimeVersion": "24.08",
       "sdk": "org.freedesktop.Sdk",
       "base": "org.electronjs.Electron2.BaseApp",
-      "baseVersion": "24.08"
+      "baseVersion": "24.08",
+      "finishArgs": [
+        "--share=network",
+        "--filesystem=home",
+        "--socket=wayland",
+        "--socket=x11",
+        "--share=ipc",
+        "--device=dri"
+      ]
     },
     "win": {
       "artifactName": "${name}-${arch}.${ext}",

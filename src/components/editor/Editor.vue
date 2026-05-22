@@ -219,6 +219,7 @@ import { Tag, GitFork, GitBranch, ArrowLeft, Columns2 } from "lucide-vue-next";
 import MilkdownEditor from "./MilkdownEditor.vue";
 import InDocFindBar from "./InDocFindBar.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
+import { storage } from "../../utils/storage.js";
 import ForkDocModal from "../modals/ForkDocModal.vue";
 import SaveVersionModal from "../modals/SaveVersionModal.vue";
 
@@ -509,7 +510,7 @@ async function doMerge() {
 const EDITOR_FONT_KEY = "canonic:editorFontSize";
 const DEFAULT_FONT_SIZE = 15;
 const editorFontSize = ref(
-    parseInt(localStorage.getItem(EDITOR_FONT_KEY) || DEFAULT_FONT_SIZE),
+    parseInt(storage.getItem(EDITOR_FONT_KEY) || DEFAULT_FONT_SIZE),
 );
 
 function editorHasFocus() {
@@ -584,15 +585,15 @@ onMounted(() => {
             if (e.key === "=" || e.key === "+") {
                 e.preventDefault();
                 editorFontSize.value = Math.min(editorFontSize.value + 1, 28);
-                localStorage.setItem(EDITOR_FONT_KEY, editorFontSize.value);
+                storage.setItem(EDITOR_FONT_KEY, String(editorFontSize.value));
             } else if (e.key === "-") {
                 e.preventDefault();
                 editorFontSize.value = Math.max(editorFontSize.value - 1, 11);
-                localStorage.setItem(EDITOR_FONT_KEY, editorFontSize.value);
+                storage.setItem(EDITOR_FONT_KEY, String(editorFontSize.value));
             } else if (e.key === "0") {
                 e.preventDefault();
                 editorFontSize.value = DEFAULT_FONT_SIZE;
-                localStorage.setItem(EDITOR_FONT_KEY, editorFontSize.value);
+                storage.setItem(EDITOR_FONT_KEY, String(editorFontSize.value));
             }
         }
     });

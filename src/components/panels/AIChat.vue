@@ -127,6 +127,7 @@
 <script setup>
 import { ref, reactive, computed, nextTick, onUnmounted } from "vue";
 import { useAppStore } from "../../store";
+import { storage } from "../../utils/storage.js";
 import { v4 as uuidv4 } from "uuid";
 import { Sparkles, SendHorizonal, ChevronDown } from "lucide-vue-next";
 
@@ -161,15 +162,28 @@ const CAPS_OPEN_KEY = "canonic:agentCapsOpen";
 const DEFAULT_CAPS = { indexWorkspace: true, readDocs: false, webSearch: false, postComments: false, suggestEdits: false };
 
 function loadAgentCaps() {
-    try { const s = localStorage.getItem(CAPS_KEY); if (s) return { ...DEFAULT_CAPS, ...JSON.parse(s) }; } catch {}
+    const s = storage.getItem(CAPS_KEY);
+    if (s) {
+        try {
+            return { ...DEFAULT_CAPS, ...JSON.parse(s) };
+        } catch {}
+    }
     return { ...DEFAULT_CAPS };
 }
 
 const agentCaps = reactive(loadAgentCaps());
-const agentCapsOpen = ref((() => { try { const s = localStorage.getItem(CAPS_OPEN_KEY); return s ? JSON.parse(s) : false; } catch { return false; } })());
+const agentCapsOpen = ref((() => {
+    const s = storage.getItem(CAPS_OPEN_KEY);
+    return s === "true";
+})());
 
-function saveAgentCaps() { localStorage.setItem(CAPS_KEY, JSON.stringify({ ...agentCaps })); }
-function toggleAgentCapsOpen() { agentCapsOpen.value = !agentCapsOpen.value; localStorage.setItem(CAPS_OPEN_KEY, JSON.stringify(agentCapsOpen.value)); }
+function saveAgentCaps() {
+    storage.setItem(CAPS_KEY, JSON.stringify({ ...agentCaps }));
+}
+function toggleAgentCapsOpen() {
+    agentCapsOpen.value = !agentCapsOpen.value;
+    storage.setItem(CAPS_OPEN_KEY, String(agentCapsOpen.value));
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 function resolveAssistant() {
@@ -219,11 +233,13 @@ You can include multiple comment tags. They will be posted to the document's com
 const COMMENT_TAG_RE = /<canonic:comment\s+anchor="([^"]*)">([\s\S]*?)<\/canonic:comment>/g;
 
 function getAgentCaps() {
-    try {
-        return JSON.parse(localStorage.getItem("canonic:agentCaps") || "{}");
-    } catch {
-        return {};
+    const s = storage.getItem("canonic:agentCaps");
+    if (s) {
+        try {
+            return JSON.parse(s);
+        } catch {}
     }
+    return {};
 }
 
 function parseAndPostComments(responseText) {

@@ -30,7 +30,15 @@ const mockApi = {
   ai: { chat: vi.fn(), onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn(), removeListeners: vi.fn() }
 }
 
-vi.stubGlobal('window', { canonic: mockApi })
+const mockLocalStorage = {
+  store: {},
+  getItem(key) { return this.store[key] || null; },
+  setItem(key, val) { this.store[key] = String(val); },
+  removeItem(key) { delete this.store[key]; },
+  clear() { this.store = {}; }
+};
+vi.stubGlobal("localStorage", mockLocalStorage);
+vi.stubGlobal("window", { canonic: mockApi, localStorage: mockLocalStorage });
 
 describe('peers store', () => {
   let store

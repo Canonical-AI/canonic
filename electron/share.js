@@ -416,7 +416,7 @@ async function startWorkspaceShare(workspaces, options = {}) {
   }
 
   const token = generateToken()
-  const PORT = 3800 + Math.floor(Math.random() * 200)
+  const PORT = 13800 + Math.floor(Math.random() * 10000)
   const permission = options.permission || 'view'
   const author = os.userInfo().username
   const taggedOnly = !!options.taggedOnly
@@ -607,7 +607,7 @@ async function startShare(workspacePath, filePath, options = {}) {
   }
 
   const token = generateToken()
-  const PORT = 3800 + Math.floor(Math.random() * 200)
+  const PORT = 13800 + Math.floor(Math.random() * 10000)
   const scope = options.scope || 'file'
   const permission = options.permission || 'view'
   const ignore = loadIgnorePatterns(workspacePath)

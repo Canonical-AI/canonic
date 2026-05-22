@@ -267,28 +267,37 @@
                     <!-- Workspace tab -->
                     <div v-if="activeTab === 'workspace'" class="tab-content">
                         <div class="field">
-                            <div class="settings-card" :class="{ active: form.windowBlur }" @click="form.windowBlur = !form.windowBlur">
+                            <div class="settings-card" :class="{ active: form.windowTransparency }" @click="form.windowTransparency = !form.windowTransparency">
                                 <div class="card-header">
-                                    <span class="card-label">Window blur</span>
-                                    <div class="toggle" :class="{ on: form.windowBlur }"><div class="toggle-thumb"></div></div>
+                                    <span class="card-label">Window transparency</span>
+                                    <div class="toggle" :class="{ on: form.windowTransparency }"><div class="toggle-thumb"></div></div>
                                 </div>
-                                <p class="card-desc">Frosted-glass effect — shows blurred desktop behind the window.</p>
+                                <p class="card-desc">Semi-transparent panel backgrounds. Desktop shows through.</p>
                             </div>
                         </div>
-                        <div v-if="form.windowBlur" class="field">
+                        <div v-if="form.windowTransparency" class="field">
                             <label class="field-label">
-                                Blur opacity
-                                <span class="field-badge">{{ Math.round(form.windowBlurOpacity * 100) }}%</span>
+                                Transparency opacity
+                                <span class="field-badge">{{ Math.round(form.windowTransparencyOpacity * 100) }}%</span>
                             </label>
                             <input
                                 type="range"
-                                v-model.number="form.windowBlurOpacity"
+                                v-model.number="form.windowTransparencyOpacity"
                                 min="0.3"
                                 max="0.95"
                                 step="0.05"
                                 class="opacity-slider"
                             />
                             <p class="field-hint">Lower = more see-through. Takes effect on save.</p>
+                        </div>
+                        <div class="field">
+                            <div class="settings-card" :class="{ active: form.windowBlur }" @click="form.windowBlur = !form.windowBlur">
+                                <div class="card-header">
+                                    <span class="card-label">Window blur</span>
+                                    <div class="toggle" :class="{ on: form.windowBlur }"><div class="toggle-thumb"></div></div>
+                                </div>
+                                <p class="card-desc">Native frosted-glass blur behind window. macOS only.</p>
+                            </div>
                         </div>
                         <div class="field">
                             <label class="field-label">Default workspace location</label>
@@ -411,8 +420,9 @@ const isDirty = ref(false);
 
 const form = reactive({
     displayName: "", defaultWorkspacePath: "", telemetryEnabled: false, autoUpdate: true, updateChannel: "stable",
-    windowBlur: true,
-    windowBlurOpacity: 0.72,
+    windowBlur: false,
+    windowTransparency: true,
+    windowTransparencyOpacity: 0.88,
     autoShareWorkspace: false,
     autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
@@ -502,8 +512,9 @@ onMounted(async () => {
             assistant: { ...form.assistant, ...(cfg.assistant || {}) },
             completion: { ...form.completion, ...(cfg.completion || {}) },
             hotkeys: { ...form.hotkeys, ...(cfg.hotkeys || {}) },
-            windowBlur: cfg.windowBlur !== false,
-            windowBlurOpacity: cfg.windowBlurOpacity ?? 0.72,
+            windowBlur: cfg.windowBlur === true,
+            windowTransparency: cfg.windowTransparency !== false,
+            windowTransparencyOpacity: cfg.windowTransparencyOpacity ?? 0.88,
         };
         Object.assign(form, loaded);
         initialState = JSON.parse(JSON.stringify(loaded));

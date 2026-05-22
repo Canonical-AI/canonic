@@ -146,7 +146,7 @@ function readPeers() {
 }
 const USAGE_LOG_PATH = path.join(CANONIC_DIR, "usage.log");
 
-// Ensure ~/.canonic exists
+// Ensure ~/.config/canonic exists
 if (!fs.existsSync(CANONIC_DIR)) {
   fs.mkdirSync(CANONIC_DIR, { recursive: true });
 }
@@ -196,23 +196,31 @@ function resolveSafePath(base, target) {
   return resolvedTarget;
 }
 
-function applyWindowBlur(win, enabled) {
-  if (!win || process.platform === "win32") return;
-  win.setBackgroundColor(enabled ? "#00000000" : "#0C0E12");
+function applyWindowEffects(win, { blur, transparency }) {
+  if (!win) return;
+  const isMac = process.platform === "darwin";
+  if (isMac) {
+    win.setVibrancy(blur ? "under-window" : null);
+  }
+  win.setBackgroundColor(transparency ? "#0C0E1200" : "#0C0E12");
 }
 
 function createWindow() {
   const cfg = configService.read();
+  const isMac = process.platform === "darwin";
   const isWin = process.platform === "win32";
-  const blurEnabled = !isWin && cfg.windowBlur !== false;
+  const blurEnabled = isMac && cfg.windowBlur === true;
+  const transparencyEnabled = cfg.windowTransparency !== false;
+  const needsTransparent = blurEnabled || transparencyEnabled;
 
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    transparent: blurEnabled,
+    titleBarStyle: isMac ? "hiddenInset" : "default",
+    transparent: needsTransparent,
+    vibrancy: blurEnabled ? "under-window" : undefined,
     icon: path.join(
       __dirname,
       "../public",
@@ -224,10 +232,10 @@ function createWindow() {
       nodeIntegration: false,
       spellcheck: true,
     },
-    backgroundColor: blurEnabled ? "#00000000" : "#0C0E12",
+    backgroundColor: needsTransparent ? "#0C0E1200" : "#0C0E12",
   });
 
-  applyWindowBlur(mainWindow, blurEnabled);
+  applyWindowEffects(mainWindow, { blur: blurEnabled, transparency: transparencyEnabled });
 
   mainWindow.webContents.on("context-menu", (event, params) => {
     const menu = new Menu();
@@ -1486,8 +1494,11 @@ function setupIpcHandlers() {
       email: `${saved.displayName.replace(/\s+/g, ".")}@canonic.local`,
     });
 
-    // Apply window blur toggle at runtime
-    applyWindowBlur(mainWindow, saved.windowBlur !== false);
+    // Apply window effects at runtime
+    applyWindowEffects(mainWindow, {
+      blur: process.platform === "darwin" && saved.windowBlur === true,
+      transparency: saved.windowTransparency !== false,
+    });
 
     // Re-announce any active shares so peers see the new name
     const activeShares = shareService.listActiveShares();

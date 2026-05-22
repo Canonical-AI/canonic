@@ -5,12 +5,14 @@ import router from './router'
 import './assets/main.css'
 import 'prosemirror-view/style/prosemirror.css'
 
-if (localStorage.getItem('canonic:window-blur') !== 'false') {
-    document.documentElement.classList.add('window-blur')
+import { storage } from './utils/storage.js'
+
+if (storage.getItem('canonic:window-transparency') !== 'false') {
+    document.documentElement.classList.add('window-transparency')
 }
 document.documentElement.style.setProperty(
     '--blur-opacity',
-    localStorage.getItem('canonic:blur-opacity') ?? '0.72'
+    storage.getItem('canonic:transparency-opacity') ?? '0.88'
 )
 
 const app = createApp(App)

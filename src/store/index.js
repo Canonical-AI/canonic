@@ -1,16 +1,28 @@
 import { defineStore } from "pinia";
 import { ref, reactive, computed, watch } from "vue";
 import demoConfig from "../demo/config.json";
+import { storage } from "../utils/storage.js";
 
 export const useAppStore = defineStore("app", () => {
+  // ==========================================
+  // ── WORKSPACE INITIALIZATION & HISTORY ──
+  // ==========================================
   const workspacePath = ref(null);
   const workspaceName = ref(null);
   const recentWorkspaces = ref(
-    JSON.parse(localStorage.getItem("canonic:recentWorkspaces") || "[]"),
+    JSON.parse(storage.getItem("canonic:recentWorkspaces") || "[]"),
   );
+
+  // ==========================================
+  // ── ACTIVE DOCUMENT & FILE TREE ──
+  // ==========================================
   const files = ref([]);
   const currentFile = ref(null);
   const currentContent = ref("");
+
+  // ==========================================
+  // ── SPLIT REFERENCE PANES & INTERFACE ──
+  // ==========================================
   // Split panels: file paths of read-only reference panes shown beside the active editor
   const refPanes = ref([]);
   // Flat list of every doc in the workspace — used by the split-panel quicksearch switcher
@@ -25,15 +37,27 @@ export const useAppStore = defineStore("app", () => {
     walk(files.value);
     return out;
   });
+
+  // ==========================================
+  // ── GIT VERSIONING & REPOSITORY STATE ──
+  // ==========================================
   const branches = ref([]);
   const currentBranch = ref("main");
   const isExternalRepo = ref(false);
   const commitLog = ref([]);
-  const comments = ref([]);
+  const fileIsUncommitted = ref(false);
   const isDirty = ref(false);
   const unsavedBuffer = reactive({});
-  const fileIsUncommitted = ref(false);
   const isLoading = ref(false);
+
+  // ==========================================
+  // ── INLINE COMMENTS ──
+  // ==========================================
+  const comments = ref([]);
+
+  // ==========================================
+  // ── PEER-TO-PEER SHARING ──
+  // ==========================================
   // Per-file share state — persists across doc switches
   const sharesByFile = reactive({});    // filePath -> shareInfo object
   const shareStatsByFile = reactive({}); // filePath -> { reads, connected }
@@ -44,30 +68,33 @@ export const useAppStore = defineStore("app", () => {
   const WORKSPACE_KEY = '__workspace__';
   const workspaceShareInfo = computed(() => sharesByFile[WORKSPACE_KEY] || null);
   const workspaceShareStats = computed(() => shareStatsByFile[WORKSPACE_KEY] || { reads: 0, connected: 0 });
-  const searchResults = ref([]);
+
+  // ==========================================
+  // ── SYSTEM CONFIG & PREFERENCES ──
+  // ==========================================
   const config = ref(null);
   const sidebarTab = ref("files");
   const rightPanelTab = ref("comments");
   const sidebarCollapsed = ref(
-    localStorage.getItem("canonic:sidebarCollapsed") === "true",
+    storage.getItem("canonic:sidebarCollapsed") === "true",
   );
   watch(sidebarCollapsed, (val) => {
-    localStorage.setItem("canonic:sidebarCollapsed", String(val));
+    storage.setItem("canonic:sidebarCollapsed", String(val));
   });
   const rightPanelCollapsed = ref(
-    localStorage.getItem("canonic:rightPanelCollapsed") !== "false",
+    storage.getItem("canonic:rightPanelCollapsed") !== "false",
   );
   watch(rightPanelCollapsed, (val) => {
-    localStorage.setItem("canonic:rightPanelCollapsed", String(val));
+    storage.setItem("canonic:rightPanelCollapsed", String(val));
   });
   const showLineNumbers = ref(
-    localStorage.getItem("canonic:line-numbers") === "true",
+    storage.getItem("canonic:line-numbers") === "true",
   );
   if (showLineNumbers.value) {
     document.documentElement.setAttribute("data-line-numbers", "true");
   }
   watch(showLineNumbers, (val) => {
-    localStorage.setItem("canonic:line-numbers", String(val));
+    storage.setItem("canonic:line-numbers", String(val));
     if (val) {
       document.documentElement.setAttribute("data-line-numbers", "true");
     } else {
@@ -76,21 +103,31 @@ export const useAppStore = defineStore("app", () => {
   });
   // Split panels: true = stacked top/bottom (default), false = side by side
   const splitStacked = ref(
-    localStorage.getItem("canonic:splitStacked") !== "false",
+    storage.getItem("canonic:splitStacked") !== "false",
   );
   watch(splitStacked, (val) => {
-    localStorage.setItem("canonic:splitStacked", String(val));
+    storage.setItem("canonic:splitStacked", String(val));
   });
+
+  // ==========================================
+  // ── VERSION SNAPSHOTS & TRASH ──
+  // ==========================================
   const docVersions = ref([]);
   const docBranchMap = ref({}); // { 'path/to/file.md': { activeBranch: 'branch', branches: ['branch'] } }
-
   const trashItems = ref([]);
 
+  // ==========================================
+  // ── DEMO MODE ──
+  // ==========================================
   const isDemoMode = ref(false);
   const demoPeers = ref([]);
   const demoFiles = ref({});
   const _demoComments = ref({});
 
+  // ==========================================
+  // ── SEARCH INTERFACE ──
+  // ==========================================
+  const searchResults = ref([]);
   const searchViewOpen = ref(false);
 
   // Workspace find & replace state
@@ -310,13 +347,16 @@ export const useAppStore = defineStore("app", () => {
     await api.docBranches.set(workspacePath.value, docBranchMap.value);
   }
 
+  // ==========================================
+  // ── PREFERENCES & APP CONFIGURATION ──
+  // ==========================================
   function applyWindowTransparencyClass(enabled, opacity) {
     const on = enabled !== false;
     document.documentElement.classList.toggle('window-transparency', on);
-    localStorage.setItem('canonic:window-transparency', String(on));
+    storage.setItem('canonic:window-transparency', String(on));
     const op = opacity ?? 0.88;
     document.documentElement.style.setProperty('--blur-opacity', String(op));
-    localStorage.setItem('canonic:transparency-opacity', String(op));
+    storage.setItem('canonic:transparency-opacity', String(op));
   }
 
   async function loadConfig() {
@@ -354,6 +394,9 @@ export const useAppStore = defineStore("app", () => {
     return result;
   }
 
+  // ==========================================
+  // ── WORKSPACE & DIRECTORY MANAGEMENT ──
+  // ==========================================
   async function openWorkspace(chosenPath, template = "blank") {
     isLoading.value = true;
     try {
@@ -371,7 +414,7 @@ export const useAppStore = defineStore("app", () => {
         openedAt: Date.now(),
       });
       recentWorkspaces.value = recent.slice(0, 8);
-      localStorage.setItem(
+      storage.setItem(
         "canonic:recentWorkspaces",
         JSON.stringify(recentWorkspaces.value),
       );
@@ -550,6 +593,9 @@ export const useAppStore = defineStore("app", () => {
     return newPath;
   }
 
+  // ==========================================
+  // ── TRASH BIN MANAGEMENT ──
+  // ==========================================
   async function loadTrash() {
     if (!workspacePath.value) {
       trashItems.value = [];
@@ -580,8 +626,9 @@ export const useAppStore = defineStore("app", () => {
     delete unsavedBuffer[filePath];
   }
 
-  // ── Split panels ────────────────────────────────────────────────────────────
-  // Active editor + up to MAX_REF_PANES read-only reference panes = 3 panes total.
+  // ==========================================
+  // ── SPLIT MULTI-PANEL EDITOR ──
+  // ==========================================
   const MAX_REF_PANES = 2;
 
   function addRefPane(filePath) {
@@ -635,6 +682,9 @@ export const useAppStore = defineStore("app", () => {
     }
   });
 
+  // ==========================================
+  // ── ACTIVE FILE LOAD & SAVE ──
+  // ==========================================
   async function openFile(filePath) {
     // Close search view if open — user navigated to a doc
     if (searchViewOpen.value) searchViewOpen.value = false;
@@ -726,6 +776,9 @@ export const useAppStore = defineStore("app", () => {
     return result ? `canonic-asset://${filename}` : null
   }
 
+  // ==========================================
+  // ── GIT VERSION CONTROL & BRANCHES ──
+  // ==========================================
   async function checkFileStatus() {
     if (!workspacePath.value || !currentFile.value) {
       fileIsUncommitted.value = false;
@@ -918,6 +971,9 @@ export const useAppStore = defineStore("app", () => {
     } catch {}
   }
 
+  // ==========================================
+  // ── INLINE COMMENTS ──
+  // ==========================================
   async function loadComments() {
     if (!currentFile.value) return;
     const docId = currentFile.value.replace(/[\\/]/g, "_");
@@ -1037,6 +1093,9 @@ export const useAppStore = defineStore("app", () => {
     return result;
   }
 
+  // ==========================================
+  // ── DEMO WORKSPACE ENVIRONMENT ──
+  // ==========================================
   async function enableDemoMode() {
     const cfg = demoConfig;
     const defaultPath = await api.workspace.getDefault();

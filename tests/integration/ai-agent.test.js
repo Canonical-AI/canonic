@@ -32,7 +32,15 @@ const mockApi = {
   }
 }
 
-vi.stubGlobal('window', { canonic: mockApi })
+const mockLocalStorage = {
+  store: {},
+  getItem(key) { return this.store[key] || null; },
+  setItem(key, val) { this.store[key] = String(val); },
+  removeItem(key) { delete this.store[key]; },
+  clear() { this.store = {}; }
+};
+vi.stubGlobal("localStorage", mockLocalStorage);
+vi.stubGlobal("window", { canonic: mockApi, localStorage: mockLocalStorage });
 
 // Simulate an AI streaming response
 function simulateStream(chunks) {

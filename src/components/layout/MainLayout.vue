@@ -300,6 +300,7 @@ import PeersPanel from "../sidebar/PeersPanel.vue";
 import SearchView from "../panels/SearchView.vue";
 import HintsPanel from "../sidebar/HintsPanel.vue";
 import { markDefaultEditorActive } from "../../composables/useHints.js";
+import { storage } from "../../utils/storage.js";
 import Editor from "../editor/Editor.vue";
 import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
@@ -345,7 +346,7 @@ function toggleSearchView() {
 
 // ── Font toggle ──────────────────────────────────────────────────────────────
 const FONT_KEY = "canonic:fontMode";
-const fontMode = ref(localStorage.getItem(FONT_KEY) || "serif");
+const fontMode = ref(storage.getItem(FONT_KEY) || "serif");
 
 function applyFont(mode) {
     if (mode === "sans") {
@@ -357,7 +358,7 @@ function applyFont(mode) {
 
 function toggleFont() {
     fontMode.value = fontMode.value === "serif" ? "sans" : "serif";
-    localStorage.setItem(FONT_KEY, fontMode.value);
+    storage.setItem(FONT_KEY, fontMode.value);
     applyFont(fontMode.value);
 }
 
@@ -365,7 +366,7 @@ function toggleFont() {
 const THEME_KEY = "canonic:theme";
 const BUILTIN_THEMES = ["hal2001", "auteur", "paper", "mocha", "macchiato", "latte", "dracula", "nord", "solarized", "gruvbox", "tokyo"];
 
-const activeTheme = ref(localStorage.getItem(THEME_KEY) || "hal2001");
+const activeTheme = ref(storage.getItem(THEME_KEY) || "hal2001");
 const themeOpen = ref(false);
 const themePickerRef = ref(null);
 const themeSearch = ref("");
@@ -394,7 +395,7 @@ function applyTheme(name) {
 
 function setTheme(name) {
     activeTheme.value = name;
-    localStorage.setItem(THEME_KEY, name);
+    storage.setItem(THEME_KEY, name);
     applyTheme(name);
     themeOpen.value = false;
 }
@@ -583,7 +584,7 @@ function handleRightTabClick(tab) {
 
 const RIGHT_PANEL_WIDTH_KEY = "canonic:rightPanelWidth";
 const rightPanelWidth = ref(
-    parseInt(localStorage.getItem(RIGHT_PANEL_WIDTH_KEY) || "280")
+    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "280")
 );
 const isResizing = ref(false);
 
@@ -602,7 +603,7 @@ function onResizeStart(e) {
         isResizing.value = false;
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
-        localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, rightPanelWidth.value);
+        storage.setItem(RIGHT_PANEL_WIDTH_KEY, String(rightPanelWidth.value));
     }
 
     document.addEventListener("mousemove", onMouseMove);

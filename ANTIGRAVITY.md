@@ -6,9 +6,10 @@ This document defines the automated instruction set and rules for **Antigravity*
 
 ## 1. Core Workflow Rules (CRITICAL)
 
-### Direct Development on `dev`
-- **DO NOT create branches or Pull Requests** unless explicitly requested by the user.
-- **Always commit and push directly to the `dev` branch** of the `origin` remote.
+### Direct Development on `dev` & Pull Requests
+- **Always develop directly on the `dev` branch.** Do not create feature branches unless explicitly requested by the user.
+- **Always commit and push directly to `dev`** of the `origin` remote for active development.
+- **Pull Requests to `main`:** When features are completed, tested, and verified on `dev`, you are fully authorized to create a Pull Request from `dev` to `main` to facilitate releases.
 - Ensure that the local `dev` branch is always up to date with `origin/dev` before starting any modifications.
 
 ### Conventional Commits

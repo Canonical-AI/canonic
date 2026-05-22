@@ -2,7 +2,7 @@
   "name": "canonic",
   "version": "0.0.16-alpha",
   "description": "Local-first markdown document editor with git versioning",
-  "author": "John Azzinaro",
+  "author": "John Azzinaro <johnjAzzinaro@gmail.com>",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite --port 5173\" \"wait-on http://localhost:5173 && electron .\"",
@@ -116,6 +116,7 @@
       ]
     },
     "linux": {
+      "maintainer": "John Azzinaro <johnjAzzinaro@gmail.com>",
       "artifactName": "${name}-${arch}.${ext}",
       "category": "Office",
       "target": [

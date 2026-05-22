@@ -85,6 +85,11 @@ const PEER_COMMENTS_DIR = path.join(
 // Suppress harmless Chrome DevTools autofill protocol errors
 app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
 
+// Enable transparent visuals for Linux window managers
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("enable-transparent-visuals");
+}
+
 const isDev = !app.isPackaged;
 const CANONIC_DIR = path.join(os.homedir(), ".config", "canonic");
 

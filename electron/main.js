@@ -620,6 +620,18 @@ function createMenu() {
           },
         },
         { type: "separator" },
+        ...(process.platform !== "darwin"
+          ? [
+              {
+                label: "Settings...",
+                accelerator: "Ctrl+,",
+                click: () => {
+                  mainWindow?.webContents.send("menu:open-settings");
+                },
+              },
+              { type: "separator" },
+            ]
+          : []),
         { role: "close" },
       ],
     },

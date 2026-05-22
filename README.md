@@ -99,7 +99,7 @@ Use the Flatpak package to run within a secure sandbox (highly recommended for p
 # one-time, if the flathub remote is missing:
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-flatpak install --user canonic-arm64.flatpak
+flatpak install --user canonic-aarch64.flatpak
 flatpak run ai.canonic.app
 ```
 

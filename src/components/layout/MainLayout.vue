@@ -29,25 +29,28 @@
                     </button>
                 </template>
 
-                <!-- Font toggle -->
-                <button
-                    class="icon-btn"
-                    :title="fontMode === 'serif' ? 'Switch to sans-serif' : 'Switch to serif'"
-                    @click="toggleFont"
-                >
-                    <Type :size="15" />
-                </button>
-
-                <!-- Theme picker -->
-                <div class="theme-picker-wrap" ref="themePickerRef">
+                <!-- Hamburger Menu Burger -->
+                <div class="burger-menu-wrap" ref="burgerMenuRef">
                     <button
                         class="icon-btn"
-                        title="Change theme"
-                        @click="themeOpen = !themeOpen"
+                        :class="{ active: burgerOpen }"
+                        title="Menu"
+                        @click="burgerOpen = !burgerOpen"
                     >
-                        <Palette :size="15" />
+                        <Menu :size="16" />
                     </button>
-                    <div v-if="themeOpen" class="theme-popover">
+                    <div v-if="burgerOpen" class="burger-popover" @click.stop>
+                        <!-- Typography section -->
+                        <div class="burger-section-title">Typography</div>
+                        <button class="burger-item" @click="toggleFont">
+                            <Type :size="14" />
+                            <span>{{ fontMode === 'serif' ? 'Switch to Sans-serif' : 'Switch to Serif' }}</span>
+                        </button>
+
+                        <div class="burger-divider"></div>
+
+                        <!-- Theme Selection -->
+                        <div class="burger-section-title">Theme</div>
                         <div class="theme-search-wrap">
                             <input
                                 v-model="themeSearch"
@@ -72,7 +75,10 @@
                             </div>
                         </div>
 
-                        <div class="theme-divider"></div>
+                        <div class="burger-divider"></div>
+
+                        <!-- Editor Preferences -->
+                        <div class="burger-section-title">Preferences</div>
                         <div class="theme-controls">
                             <label class="theme-control-item" @click.stop>
                                 <span>Line numbers</span>
@@ -89,16 +95,16 @@
                                 />
                             </label>
                         </div>
+
+                        <div class="burger-divider"></div>
+
+                        <!-- App Settings -->
+                        <button class="burger-item" @click="showSettings = true; burgerOpen = false">
+                            <Settings :size="14" />
+                            <span>Settings</span>
+                        </button>
                     </div>
                 </div>
-
-                <button
-                    class="icon-btn"
-                    title="Settings"
-                    @click="showSettings = true"
-                >
-                    <Settings :size="15" />
-                </button>
             </div>
         </div>
 
@@ -294,6 +300,7 @@ import {
     History,
     Share2,
     ArrowUpCircle,
+    Menu,
 } from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
@@ -362,13 +369,13 @@ function toggleFont() {
     applyFont(fontMode.value);
 }
 
-// ── Theme switcher ───────────────────────────────────────────────────────────
+// ── Theme & Burger Menu switcher ─────────────────────────────────────────────
 const THEME_KEY = "canonic:theme";
 const BUILTIN_THEMES = ["hal2001", "auteur", "paper", "mocha", "macchiato", "latte", "dracula", "nord", "solarized", "gruvbox", "tokyo"];
 
 const activeTheme = ref(storage.getItem(THEME_KEY) || "hal2001");
-const themeOpen = ref(false);
-const themePickerRef = ref(null);
+const burgerOpen = ref(false);
+const burgerMenuRef = ref(null);
 const themeSearch = ref("");
 
 // Config-extensible custom themes injected as <style> tags
@@ -397,7 +404,7 @@ function setTheme(name) {
     activeTheme.value = name;
     storage.setItem(THEME_KEY, name);
     applyTheme(name);
-    themeOpen.value = false;
+    burgerOpen.value = false;
 }
 
 function registerConfigThemes(themes) {
@@ -423,10 +430,10 @@ function registerConfigThemes(themes) {
     }
 }
 
-// Close theme popover on outside click
+// Close burger popover on outside click
 function onDocClick(e) {
-    if (themePickerRef.value && !themePickerRef.value.contains(e.target)) {
-        themeOpen.value = false;
+    if (burgerMenuRef.value && !burgerMenuRef.value.contains(e.target)) {
+        burgerOpen.value = false;
     }
 }
 
@@ -1006,24 +1013,62 @@ function onResizeStart(e) {
     z-index: 1;
 }
 
-/* Theme picker */
-.theme-picker-wrap {
+/* Burger Menu */
+.burger-menu-wrap {
     position: relative;
 }
 
-.theme-popover {
+.burger-popover {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
     background: var(--bg-surface);
     border: 1px solid var(--border-mid);
     border-radius: 8px;
-    padding: 6px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
     z-index: 300;
-    min-width: 140px;
+    width: 220px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.burger-section-title {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+
+.burger-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+}
+
+.burger-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.burger-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 6px 4px;
 }
 
 .theme-search-wrap {
@@ -1050,7 +1095,7 @@ function onResizeStart(e) {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    max-height: 250px;
+    max-height: 180px;
     overflow-y: auto;
 }
 
@@ -1059,12 +1104,6 @@ function onResizeStart(e) {
     color: var(--text-muted);
     padding: 4px 12px;
     font-style: italic;
-}
-
-.theme-divider {
-    height: 1px;
-    background: var(--border-light);
-    margin: 6px 4px;
 }
 
 .theme-controls {

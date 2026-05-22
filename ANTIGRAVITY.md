@@ -8,8 +8,8 @@ This document defines the automated instruction set and rules for **Antigravity*
 
 ### Direct Development on `dev` & Pull Requests
 - **Always develop directly on the `dev` branch.** Do not create feature branches unless explicitly requested by the user.
-- **Always commit and push directly to `dev`** of the `origin` remote for active development.
-- **Pull Requests to `main`:** When features are completed, tested, and verified on `dev`, you are fully authorized to create a Pull Request from `dev` to `main` to facilitate releases.
+- **Always commit and push directly to `dev`** of the `origin` remote for active development. **NEVER commit directly to the `main` branch under any circumstances.**
+- **Pull Requests to `main`:** When features are completed, tested, and verified on `dev`, you are authorized to create a Pull Request from `dev` to `main` to facilitate releases. **NEVER approve, merge, or close a Pull Request to `main` without explicit user consent.**
 - Ensure that the local `dev` branch is always up to date with `origin/dev` before starting any modifications.
 
 ### Conventional Commits

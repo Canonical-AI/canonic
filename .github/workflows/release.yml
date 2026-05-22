@@ -169,10 +169,11 @@ jobs:
           path: ~/.local/share/flatpak
           key: flatpak-runtimes-arm64-24.08
 
-      - name: Install Flatpak toolchain and runtimes (arm64)
+      - name: Install Flatpak toolchain, FPM, and runtimes (arm64)
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools
+          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools ruby ruby-dev build-essential
+          sudo gem install --no-document fpm
           if [ "${{ steps.cache-flatpak-arm64.outputs.cache-hit }}" != "true" ]; then
             flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
             flatpak install --user -y --noninteractive flathub \
@@ -192,6 +193,7 @@ jobs:
         env:
           DEBUG: "electron-builder"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_SYSTEM_FPM: "true"
 
   publish-release:
     needs: [create-draft, release-mac, release-win, release-linux-x64, release-linux-arm64]

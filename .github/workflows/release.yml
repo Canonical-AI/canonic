@@ -69,6 +69,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
 
   release-win:
     needs: create-draft
@@ -114,6 +115,25 @@ jobs:
           node-version: 24
           cache: "npm"
 
+      - name: Cache Flatpak runtimes
+        uses: actions/cache@v4
+        id: cache-flatpak-x64
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-x64-24.08
+
+      - name: Install Flatpak toolchain and runtimes (x64)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools
+          if [ "${{ steps.cache-flatpak-x64.outputs.cache-hit }}" != "true" ]; then
+            flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+            flatpak install --user -y --noninteractive flathub \
+              org.freedesktop.Platform//24.08 \
+              org.freedesktop.Sdk//24.08 \
+              org.electronjs.Electron2.BaseApp//24.08
+          fi
+
       - name: Install dependencies
         run: npm install
 
@@ -141,6 +161,25 @@ jobs:
         with:
           node-version: 24
           cache: "npm"
+
+      - name: Cache Flatpak runtimes
+        uses: actions/cache@v4
+        id: cache-flatpak-arm64
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-arm64-24.08
+
+      - name: Install Flatpak toolchain and runtimes (arm64)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools
+          if [ "${{ steps.cache-flatpak-arm64.outputs.cache-hit }}" != "true" ]; then
+            flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+            flatpak install --user -y --noninteractive flathub \
+              org.freedesktop.Platform//24.08 \
+              org.freedesktop.Sdk//24.08 \
+              org.electronjs.Electron2.BaseApp//24.08
+          fi
 
       - name: Install dependencies
         run: npm install

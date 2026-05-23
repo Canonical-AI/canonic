@@ -1,7 +1,7 @@
 <template>
     <div class="layout" :class="{ 'is-resizing': isResizing }">
         <!-- Titlebar -->
-        <div class="titlebar">
+        <div v-if="isMac" class="titlebar">
             <div class="titlebar-left">
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name"
@@ -294,6 +294,7 @@ import {
     History,
     Share2,
     ArrowUpCircle,
+    Menu,
 } from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
@@ -363,6 +364,7 @@ function toggleFont() {
 }
 
 // ── Theme switcher ───────────────────────────────────────────────────────────
+const isMac = ref(typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || ''));
 const THEME_KEY = "canonic:theme";
 const BUILTIN_THEMES = ["hal2001", "auteur", "paper", "mocha", "macchiato", "latte", "dracula", "nord", "solarized", "gruvbox", "tokyo"];
 
@@ -462,6 +464,18 @@ onMounted(async () => {
     if (window.canonic?.menu) {
         window.canonic.menu.onOpenSettings(() => {
             showSettings.value = true;
+        });
+
+        window.canonic.menu.onChangeTheme((theme) => {
+            if (theme) setTheme(theme);
+        });
+
+        window.canonic.menu.onChangeFont((font) => {
+            if (font) {
+                fontMode.value = font;
+                storage.setItem(FONT_KEY, fontMode.value);
+                applyFont(fontMode.value);
+            }
         });
 
         window.canonic.menu.onNewWorkspace(async (workspacePath) => {
@@ -1026,6 +1040,12 @@ function onResizeStart(e) {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
+.theme-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 6px 4px;
+}
+
 .theme-search-wrap {
     padding: 4px;
     margin-bottom: 4px;
@@ -1050,7 +1070,7 @@ function onResizeStart(e) {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    max-height: 250px;
+    max-height: 180px;
     overflow-y: auto;
 }
 
@@ -1059,12 +1079,6 @@ function onResizeStart(e) {
     color: var(--text-muted);
     padding: 4px 12px;
     font-style: italic;
-}
-
-.theme-divider {
-    height: 1px;
-    background: var(--border-light);
-    margin: 6px 4px;
 }
 
 .theme-controls {

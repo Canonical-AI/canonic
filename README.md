@@ -77,26 +77,36 @@ brew install --cask canonic
 
 #### Direct Download
 Download the latest version for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
-- **macOS:** `.dmg` (Apple Silicon)
+- **macOS:** `.dmg` (Apple Silicon / Intel)
 - **Windows:** `.exe`
-- **Linux:** `.AppImage` (x64)
+- **Linux (x64):** `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz`
+- **Linux (arm64):** `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz` (ideal for ARM Arch Linux, postmarketOS, PinePhone, Raspberry Pi, etc.)
 
-#### Linux (arm64 Flatpak)
+---
 
-For arm64 Linux, and for distros without glibc (e.g. Alpine-based systems
-like postmarketOS, where the glibc-linked AppImage will not run), use the
-Flatpak — its runtime ships glibc inside the sandbox.
+#### Linux Installation
 
-Build the bundle from the **Build arm64 Flatpak** workflow in the GitHub
-Actions tab, then download the `canonic-arm64-flatpak` artifact.
+##### AppImage
+Make the downloaded `.AppImage` executable and run:
+```bash
+chmod +x canonic-arm64.AppImage
+./canonic-arm64.AppImage
+```
 
-Install:
+##### Flatpak
+Use the Flatpak package to run within a secure sandbox (highly recommended for postmarketOS and other Alpine-based environments lacking standard host glibc):
 ```bash
 # one-time, if the flathub remote is missing:
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-flatpak install --user canonic-arm64.flatpak
+flatpak install --user canonic-aarch64.flatpak
 flatpak run ai.canonic.app
+```
+
+##### Pacman (Arch Linux / postmarketOS)
+Install the native package using pacman:
+```bash
+sudo pacman -U canonic-aarch64.pacman
 ```
 
 ---

@@ -234,12 +234,13 @@ contextBridge.exposeInMainWorld("canonic", {
     },
   },
 
-  // Menu events
   menu: {
     onOpenSettings: (cb) => { ipcRenderer.on("menu:open-settings", () => cb()) },
     onNewWorkspace: (cb) => { ipcRenderer.on("menu:new-workspace", (_, path) => cb(path)) },
     onOpenWorkspace: (cb) => { ipcRenderer.on("menu:open-workspace", (_, path) => cb(path)) },
     onOpenFile: (cb) => { ipcRenderer.on("menu:open-file", (_, path) => cb(path)) },
+    onChangeTheme: (cb) => { ipcRenderer.on("menu:change-theme", (_, theme) => cb(theme)) },
+    onChangeFont: (cb) => { ipcRenderer.on("menu:change-font", (_, font) => cb(font)) },
   },
 
   // Agent session bridge

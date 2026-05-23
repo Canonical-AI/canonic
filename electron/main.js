@@ -1079,6 +1079,51 @@ function setupIpcHandlers() {
     return gitService.listFiles(workspacePath);
   });
 
+  ipcMain.handle("files:tree", async (_, workspacePath, opts = {}) => {
+    if (!workspacePath) return { entries: [], truncated: false };
+    const maxDepth = Math.min(Math.max(opts.maxDepth ?? 3, 1), 5);
+    const maxEntries = Math.min(Math.max(opts.maxEntries ?? 500, 1), 2000);
+    const IGNORE = new Set([".git", "node_modules", ".canonic", ".DS_Store", "dist", "build", ".next", ".cache", ".venv", "__pycache__"]);
+
+    const entries = [];
+    let truncated = false;
+
+    function walk(absDir, relDir, depth) {
+      if (truncated) return;
+      if (depth > maxDepth) return;
+      let items;
+      try {
+        items = fs.readdirSync(absDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      items.sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      for (const item of items) {
+        if (IGNORE.has(item.name) || item.name.startsWith(".")) continue;
+        if (entries.length >= maxEntries) {
+          truncated = true;
+          return;
+        }
+        const rel = relDir ? `${relDir}/${item.name}` : item.name;
+        entries.push({ path: rel, type: item.isDirectory() ? "dir" : "file" });
+        if (item.isDirectory()) {
+          walk(path.join(absDir, item.name), rel, depth + 1);
+        }
+      }
+    }
+
+    try {
+      const abs = resolveSafePath(workspacePath, ".");
+      walk(abs, "", 1);
+    } catch (e) {
+      return { entries: [], truncated: false, error: e.message };
+    }
+    return { entries, truncated, maxDepth };
+  });
+
   ipcMain.handle("files:read", async (_, workspacePath, filePath) => {
     try {
       console.log("[main:files:read] reading:", { workspacePath, filePath });

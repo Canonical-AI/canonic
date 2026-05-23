@@ -283,8 +283,11 @@
             <aside
                 v-if="store.currentFile || store.peerFileContent"
                 class="right-panel"
-                :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
-                :style="store.rightPanelCollapsed ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined }"
+                :class="{
+                    'right-panel--collapsed': store.rightPanelCollapsed,
+                    'right-panel--floating': panelFloating,
+                }"
+                :style="store.rightPanelCollapsed ? {} : (panelFloating ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined })"
             >
                 <div v-if="!store.rightPanelCollapsed" class="resize-handle" @mousedown="onResizeStart" />
                 <div class="panel-tabs" :class="{ 'panel-tabs--collapsed': store.rightPanelCollapsed }">
@@ -326,14 +329,13 @@
                         <Share2 :size="15" />
                     </button>
                 </div>
-                <template v-if="!store.rightPanelCollapsed">
+                <div v-show="!store.rightPanelCollapsed" class="panel-content-wrap">
                     <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
-                    <KeepAlive>
-                        <AIChat v-if="store.rightPanelTab === 'ai'" />
-                    </KeepAlive>
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
-                </template>
+                </div>
+                <!-- AIChat kept always-mounted so streaming survives focus/tab toggles -->
+                <AIChat v-show="store.rightPanelTab === 'ai' && !store.rightPanelCollapsed" />
             </aside>
         </div>
 
@@ -692,6 +694,10 @@ function handleTabClick(tab) {
     }
 }
 
+const panelFloating = computed(() =>
+    store.isCompactLayout && !store.rightPanelCollapsed
+);
+
 function handleRightTabClick(tab) {
     if (store.rightPanelCollapsed) {
         store.rightPanelCollapsed = false;
@@ -703,7 +709,7 @@ function handleRightTabClick(tab) {
 
 const RIGHT_PANEL_WIDTH_KEY = "canonic:rightPanelWidth";
 const rightPanelWidth = ref(
-    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "280")
+    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "360")
 );
 const isResizing = ref(false);
 
@@ -1450,6 +1456,25 @@ function toggleDistractionFree() {
 
 .layout-compact .right-panel--collapsed {
     display: none !important;
+}
+
+/* Compact mode: right panel as centered floating modal (all tabs) */
+.layout-compact .right-panel.right-panel--floating,
+.right-panel.right-panel--floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
 }
 
 .layout-compact .resize-handle {

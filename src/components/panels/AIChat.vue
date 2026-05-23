@@ -56,7 +56,10 @@
                     <div v-if="msg.toolLogs && msg.toolLogs.length > 0" class="tool-logs">
                         <div v-for="(log, idx) in msg.toolLogs" :key="idx" class="tool-log-item">
                             <template v-if="log.type === 'read'">
-                                <FileText :size="12" /> Read {{ log.file }}
+                                <FileText :size="12" /> <span class="log-text">Read {{ log.file }}</span>
+                            </template>
+                            <template v-else-if="log.type === 'tree'">
+                                <FileText :size="12" /> <span class="log-text">Listed workspace ({{ log.count }} entries, depth {{ log.depth }})</span>
                             </template>
                             <template v-else-if="log.type === 'comment'">
                                 <MessageSquare :size="12" /> <a href="#" @click.prevent="openComment(log.id)">Commented on "{{ log.anchor }}"</a>
@@ -65,12 +68,13 @@
                     </div>
                     <div v-if="msg.think" class="message-think-wrapper">
                         <details class="think-block" :open="thinkingExpanded">
-                            <summary>Thinking Process</summary>
+                            <summary>Thoughts</summary>
                             <div class="think-content" v-html="renderMarkdown(msg.think)"></div>
                         </details>
                     </div>
                     
                     <div
+                        v-if="msg.content"
                         class="message-content"
                         v-html="renderMarkdown(msg.content)"
                     />
@@ -99,7 +103,7 @@
                         <details class="think-block" :open="thinkingExpanded">
                             <summary>
                                 <span v-if="!streamBuffer.includes('</think>')">Thinking<span class="anim-dots"></span></span>
-                                <span v-else>Thinking Process</span>
+                                <span v-else>Thoughts</span>
                             </summary>
                             <div class="think-content" v-html="renderMarkdown(parseThinkBlock(streamBuffer).think)"></div>
                         </details>
@@ -184,18 +188,22 @@
                             <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.readDocs" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
                         </label>
                         <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 2 }]">
+                            <span class="cap-label">List dir tree</span>
+                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.listTree" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                        </label>
+                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 3 }]">
                             <span class="cap-label">Web search</span>
                             <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.webSearch" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 3 }]">
+                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 4 }]">
                             <span class="cap-label">Post comments</span>
                             <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.postComments" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 4 }]">
+                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 5 }]">
                             <span class="cap-label">Suggest edits</span>
                             <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.suggestEdits" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 5 }]">
+                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 6 }]">
                             <span class="cap-label">Show thinking</span>
                             <span class="toggle-switch"><input type="checkbox" v-model="showThinking" @change="toggleShowThinking" /><span class="toggle-track"></span></span>
                         </label>
@@ -288,7 +296,7 @@ function parseThinkBlock(text) {
 }
 
 const showThinking = ref(storage.getItem("canonic:showThinking") !== "false");
-const thinkingExpanded = ref(storage.getItem("canonic:thinkingExpanded") !== "false");
+const thinkingExpanded = ref(storage.getItem("canonic:thinkingExpanded") === "true");
 const effortLevel = ref(storage.getItem("canonic:effortLevel") || "Medium");
 const showSlashMenu = ref(false);
 const slashCommandType = ref(null);
@@ -434,7 +442,7 @@ function getSlashMenuLength() {
     if (slashCommandType.value === 'root') return filteredRootCommands.value.length;
     if (slashCommandType.value === 'model') return filteredModels.value.length;
     if (slashCommandType.value === 'effort') return filteredEfforts.value.length;
-    if (slashCommandType.value === 'tools') return 6;
+    if (slashCommandType.value === 'tools') return 7;
     return 0;
 }
 
@@ -453,8 +461,8 @@ function handleDown(e) {
 function handleSpace(e) {
     if (showSlashMenu.value && slashCommandType.value === 'tools') {
         e.preventDefault();
-        const tools = ['indexWorkspace', 'readDocs', 'webSearch', 'postComments', 'suggestEdits'];
-        if (slashSelectedIndex.value === 5) {
+        const tools = ['indexWorkspace', 'readDocs', 'listTree', 'webSearch', 'postComments', 'suggestEdits'];
+        if (slashSelectedIndex.value === 6) {
             showThinking.value = !showThinking.value;
             toggleShowThinking();
             store.logEvent("ai:setting_changed", { setting: "showThinking", value: showThinking.value, source: "slash_command" });
@@ -539,7 +547,7 @@ const indexedDocCount = ref(0);
 // ── Agent capabilities ────────────────────────────────────────────────────────
 const CAPS_KEY = "canonic:agentCaps";
 const CAPS_OPEN_KEY = "canonic:agentCapsOpen";
-const DEFAULT_CAPS = { indexWorkspace: true, readDocs: true, webSearch: true, postComments: true, suggestEdits: true };
+const DEFAULT_CAPS = { indexWorkspace: true, readDocs: true, listTree: true, webSearch: true, postComments: true, suggestEdits: true };
 
 function loadAgentCaps() {
     const s = storage.getItem(CAPS_KEY);
@@ -591,6 +599,7 @@ const suggestions = [
 function buildSystemPrompt(name, extraInstructions) {
     const toolHints = [];
     if (agentCaps.readDocs) toolHints.push('Use the `read_file` tool to fetch any workspace doc from the index when you need it.');
+    if (agentCaps.listTree) toolHints.push('Use the `list_workspace` tool to discover the directory structure (dirs + files, 3 levels deep by default). Helpful before reading files when you do not know the layout.');
     if (agentCaps.postComments) toolHints.push('Use the `post_comment` tool to leave an inline comment anchored to an exact quoted passage from the current document. `anchor` must match the text verbatim. Prefer one or two precise comments over many vague ones.');
 
     let instructions = `You are ${name}, a sharp, seasoned technical mentor reviewing the user's document. Your job: brainstorm, challenge assumptions, spot gaps, ask clarifying questions. Never write the document for them.
@@ -788,6 +797,17 @@ async function performChatRequest(apiKey, baseUrl, model) {
                     } catch (e) {
                         store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: "Error: " + e.message });
                     }
+                } else if (tc.function.name === 'list_workspace') {
+                    try {
+                        const args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
+                        const result = await window.canonic.files.tree(store.workspacePath, { maxDepth: args.maxDepth || 3 });
+                        const lines = (result.entries || []).map(e => (e.type === 'dir' ? `${e.path}/` : e.path));
+                        const body = lines.join("\n") + (result.truncated ? "\n<!-- truncated: entries cap reached -->" : "");
+                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: body });
+                        currentToolLogs.value.push({ type: 'tree', count: lines.length, depth: result.maxDepth });
+                    } catch (e) {
+                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: "Error: " + e.message });
+                    }
                 } else if (tc.function.name === 'post_comment') {
                     try {
                         const args = JSON.parse(tc.function.arguments);
@@ -842,6 +862,21 @@ async function performChatRequest(apiKey, baseUrl, model) {
                 name: "read_file",
                 description: "Read a workspace file",
                 parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }
+            }
+        });
+    }
+    if (agentCaps.listTree) {
+        CANONIC_TOOLS.push({
+            type: "function",
+            function: {
+                name: "list_workspace",
+                description: "List directories and files in the workspace, up to maxDepth levels deep (default 3, max 5). Returns relative paths only — does not read file content. Use this to discover structure, then use read_file on specific files.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        maxDepth: { type: "integer", description: "1-5, default 3" }
+                    }
+                }
             }
         });
     }
@@ -1007,16 +1042,15 @@ onUnmounted(() => {
 }
 
 .think-block {
-    background: var(--bg-base);
-    border: 1px dashed var(--border);
-    border-radius: 6px;
-    padding: 8px;
+    background: none;
+    border: none;
+    padding: 0;
     font-size: 0.8rem;
     color: var(--text-muted);
 }
 
 .tool-logs {
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     margin-left: 20px;
     display: flex;
     flex-direction: column;
@@ -1029,12 +1063,26 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
-.tool-log-item a {
+.tool-log-item > * {
+    flex-shrink: 0;
+}
+
+.tool-log-item a,
+.tool-log-item .log-text {
     color: var(--accent);
     text-decoration: none;
     cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .tool-log-item a:hover {
@@ -1066,7 +1114,7 @@ onUnmounted(() => {
     padding-top: 56px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 6px;
     mask-image: linear-gradient(to bottom, transparent 0%, black 56px, black 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 56px, black 100%);
 }

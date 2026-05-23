@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("canonic", {
   files: {
     openDialog: () => ipcRenderer.invoke("files:open-dialog"),
     list: (workspacePath) => ipcRenderer.invoke("files:list", workspacePath),
+    tree: (workspacePath, opts) => ipcRenderer.invoke("files:tree", workspacePath, opts),
     read: (workspacePath, filePath) =>
       ipcRenderer.invoke("files:read", workspacePath, filePath),
     write: (workspacePath, filePath, content) =>

@@ -92,7 +92,7 @@ export const useAppStore = defineStore("app", () => {
     storage.setItem("canonic:distractionFreeMode", String(val));
   });
 
-  const isCompactLayout = computed(() => isSmallScreen.value || distractionFreeMode.value);
+  const isCompactLayout = computed(() => isSmallScreen.value);
 
   const sidebarCollapsed = ref(
     storage.getItem("canonic:sidebarCollapsed") === "true",

@@ -189,7 +189,10 @@
             <!-- Left sidebar -->
             <aside
                 class="sidebar"
-                :class="{ 'sidebar--collapsed': store.sidebarCollapsed }"
+                :class="{
+                    'sidebar--collapsed': store.sidebarCollapsed,
+                    'sidebar--floating': sidebarFloating,
+                }"
             >
                 <div class="sidebar-tabs">
                     <button
@@ -696,6 +699,10 @@ function handleTabClick(tab) {
 
 const panelFloating = computed(() =>
     store.isCompactLayout && !store.rightPanelCollapsed
+);
+
+const sidebarFloating = computed(() =>
+    store.isCompactLayout && !store.sidebarCollapsed
 );
 
 function handleRightTabClick(tab) {
@@ -1456,6 +1463,25 @@ function toggleDistractionFree() {
 
 .layout-compact .right-panel--collapsed {
     display: none !important;
+}
+
+/* Compact mode: left sidebar as centered floating modal */
+.layout-compact .sidebar.sidebar--floating,
+.sidebar.sidebar--floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
 }
 
 /* Compact mode: right panel as centered floating modal (all tabs) */

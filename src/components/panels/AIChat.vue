@@ -295,9 +295,9 @@ function parseThinkBlock(text) {
     }
 }
 
-const showThinking = ref(storage.getItem("canonic:showThinking") !== "false");
-const thinkingExpanded = ref(storage.getItem("canonic:thinkingExpanded") === "true");
-const effortLevel = ref(storage.getItem("canonic:effortLevel") || "Medium");
+const showThinking = ref(true);
+const thinkingExpanded = ref(false);
+const effortLevel = ref("Medium");
 const showSlashMenu = ref(false);
 const slashCommandType = ref(null);
 
@@ -359,10 +359,16 @@ watch(() => store.config?.providers, () => {
     fetchProviderModels();
 }, { deep: true });
 
-onMounted(() => {
+onMounted(async () => {
+    hydrateFromConfig();
+    await migrateLocalStoragePrefs();
     fetchProviderModels();
     window.addEventListener('keydown', handleGlobalKeydown);
 });
+
+watch(() => store.config?.assistant, (val) => {
+    if (val) hydrateFromConfig();
+}, { deep: false });
 
 const cancelLoop = ref(false);
 
@@ -380,7 +386,7 @@ function handleGlobalKeydown(e) {
 
 function toggleThinking() {
     thinkingExpanded.value = !thinkingExpanded.value;
-    storage.setItem("canonic:thinkingExpanded", String(thinkingExpanded.value));
+    persistAssistantPrefs();
 }
 
 const effortLevels = ['Low', 'Medium', 'High'];
@@ -414,7 +420,7 @@ const filteredEfforts = computed(() => {
 });
 
 function toggleShowThinking() {
-    storage.setItem("canonic:showThinking", String(showThinking.value));
+    persistAssistantPrefs();
 }
 
 function handleInput() {
@@ -520,7 +526,7 @@ function selectSlashCommand(value) {
         }
     } else if (slashCommandType.value === 'effort') {
         effortLevel.value = value;
-        storage.setItem("canonic:effortLevel", value);
+        persistAssistantPrefs();
     }
     showSlashMenu.value = false;
     slashCommandType.value = null;
@@ -545,32 +551,60 @@ const sessionStats = ref({ messages: 0, approxTokens: 0 });
 const indexedDocCount = ref(0);
 
 // ── Agent capabilities ────────────────────────────────────────────────────────
-const CAPS_KEY = "canonic:agentCaps";
-const CAPS_OPEN_KEY = "canonic:agentCapsOpen";
 const DEFAULT_CAPS = { indexWorkspace: true, readDocs: true, listTree: true, webSearch: true, postComments: true, suggestEdits: true };
+const agentCaps = reactive({ ...DEFAULT_CAPS });
 
-function loadAgentCaps() {
-    const s = storage.getItem(CAPS_KEY);
-    if (s) {
-        try {
-            return { ...DEFAULT_CAPS, ...JSON.parse(s) };
-        } catch {}
-    }
-    return { ...DEFAULT_CAPS };
+async function persistAssistantPrefs() {
+    if (!store.config) return;
+    const nextAssistant = {
+        ...(store.config.assistant || {}),
+        effortLevel: effortLevel.value,
+        showThinking: showThinking.value,
+        thinkingExpanded: thinkingExpanded.value,
+        caps: { ...agentCaps },
+    };
+    const nextConfig = JSON.parse(JSON.stringify({ ...store.config, assistant: nextAssistant }));
+    await store.saveConfig(nextConfig);
 }
-
-const agentCaps = reactive(loadAgentCaps());
-const agentCapsOpen = ref((() => {
-    const s = storage.getItem(CAPS_OPEN_KEY);
-    return s === "true";
-})());
 
 function saveAgentCaps() {
-    storage.setItem(CAPS_KEY, JSON.stringify({ ...agentCaps }));
+    persistAssistantPrefs();
 }
-function toggleAgentCapsOpen() {
-    agentCapsOpen.value = !agentCapsOpen.value;
-    storage.setItem(CAPS_OPEN_KEY, String(agentCapsOpen.value));
+
+function hydrateFromConfig() {
+    const a = store.config?.assistant;
+    if (!a) return;
+    if (a.effortLevel) effortLevel.value = a.effortLevel;
+    if (typeof a.showThinking === "boolean") showThinking.value = a.showThinking;
+    if (typeof a.thinkingExpanded === "boolean") thinkingExpanded.value = a.thinkingExpanded;
+    if (a.caps) Object.assign(agentCaps, a.caps);
+}
+
+async function migrateLocalStoragePrefs() {
+    if (!store.config) return;
+    const a = { ...(store.config.assistant || {}) };
+    let changed = false;
+    const oldEffort = storage.getItem("canonic:effortLevel");
+    const oldShow = storage.getItem("canonic:showThinking");
+    const oldExpand = storage.getItem("canonic:thinkingExpanded");
+    const oldCaps = storage.getItem("canonic:agentCaps");
+    if (oldEffort && !a.effortLevel) { a.effortLevel = oldEffort; changed = true; }
+    if (oldShow !== null && typeof a.showThinking !== "boolean") { a.showThinking = oldShow !== "false"; changed = true; }
+    if (oldExpand !== null && typeof a.thinkingExpanded !== "boolean") { a.thinkingExpanded = oldExpand === "true"; changed = true; }
+    if (oldCaps && !a.caps) {
+        try {
+            a.caps = { ...DEFAULT_CAPS, ...JSON.parse(oldCaps) };
+            changed = true;
+        } catch {}
+    }
+    if (changed) {
+        const nextConfig = JSON.parse(JSON.stringify({ ...store.config, assistant: a }));
+        await store.saveConfig(nextConfig);
+    }
+    storage.setItem("canonic:effortLevel", "");
+    storage.setItem("canonic:showThinking", "");
+    storage.setItem("canonic:thinkingExpanded", "");
+    storage.setItem("canonic:agentCaps", "");
 }
 // ─────────────────────────────────────────────────────────────────────────────
 

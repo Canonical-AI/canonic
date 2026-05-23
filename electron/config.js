@@ -29,6 +29,17 @@ const DEFAULTS = {
     model: "",
     name: "Spark",
     extraInstructions: "",
+    effortLevel: "Medium",
+    showThinking: true,
+    thinkingExpanded: false,
+    caps: {
+      indexWorkspace: true,
+      readDocs: true,
+      listTree: true,
+      webSearch: true,
+      postComments: true,
+      suggestEdits: true,
+    },
   },
   completion: {
     enabled: false,
@@ -147,7 +158,11 @@ function read() {
         ...(migrated.sharingDefaults || {}),
       },
       providers: migrated.providers || [],
-      assistant: { ...DEFAULTS.assistant, ...(migrated.assistant || {}) },
+      assistant: {
+        ...DEFAULTS.assistant,
+        ...(migrated.assistant || {}),
+        caps: { ...DEFAULTS.assistant.caps, ...(migrated.assistant?.caps || {}) },
+      },
       completion: { ...DEFAULTS.completion, ...(migrated.completion || {}) },
     };
   } catch (err) {
@@ -173,7 +188,11 @@ function write(config) {
       ...(config.sharingDefaults || {}),
     },
     providers: config.providers || [],
-    assistant: { ...DEFAULTS.assistant, ...(config.assistant || {}) },
+    assistant: {
+      ...DEFAULTS.assistant,
+      ...(config.assistant || {}),
+      caps: { ...DEFAULTS.assistant.caps, ...(config.assistant?.caps || {}) },
+    },
     completion: { ...DEFAULTS.completion, ...(config.completion || {}) },
   };
 

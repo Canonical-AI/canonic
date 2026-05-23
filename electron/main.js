@@ -1848,8 +1848,9 @@ function setupIpcHandlers() {
             model,
             messages: allMessages,
             stream: true,
-            max_tokens: 2048,
-            tools: tools || undefined,
+            max_tokens: 4096,
+            tools: tools && tools.length ? tools : undefined,
+            tool_choice: tools && tools.length ? "auto" : undefined,
           }),
           signal,
         });
@@ -1892,8 +1893,11 @@ function setupIpcHandlers() {
             try {
               const parsed = JSON.parse(data);
               const delta = parsed.choices?.[0]?.delta || {};
-              
-              const thinkingText = delta.reasoning_content || delta.reasoning;
+              if (isDev && (delta.tool_calls || parsed.choices?.[0]?.finish_reason)) {
+                console.log("[AI] delta:", JSON.stringify({ tc: delta.tool_calls, finish: parsed.choices?.[0]?.finish_reason }));
+              }
+
+              const thinkingText = delta.reasoning_content || delta.reasoning || delta.thinking;
               if (thinkingText) {
                   if (!isThinking) {
                       event.sender.send("ai:chunk", "<think>\n");

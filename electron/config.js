@@ -3,7 +3,8 @@ const path = require("path");
 const os = require("os");
 
 const CANONIC_DIR =
-  process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), ".config", "canonic");
+  process.env.CANONIC_CONFIG_DIR ||
+  path.join(os.homedir(), ".config", "canonic");
 const CONFIG_PATH = path.join(CANONIC_DIR, "config.json");
 
 const DEFAULTS = {
@@ -19,9 +20,9 @@ const DEFAULTS = {
     scope: "file",
     permission: "view",
   },
-  windowBlur: false,
+  windowBlur: true,
   windowTransparency: true,
-  windowTransparencyOpacity: 0.88,
+  windowTransparencyOpacity: 0.95,
   providers: [],
   assistant: {
     providerId: "",

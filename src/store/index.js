@@ -75,6 +75,25 @@ export const useAppStore = defineStore("app", () => {
   const config = ref(null);
   const sidebarTab = ref("files");
   const rightPanelTab = ref("comments");
+
+  const isSmallScreen = ref(false);
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    const checkSize = () => {
+      isSmallScreen.value = window.innerWidth < 768;
+    };
+    checkSize();
+    window.addEventListener("resize", checkSize);
+  }
+
+  const distractionFreeMode = ref(
+    storage.getItem("canonic:distractionFreeMode") === "true"
+  );
+  watch(distractionFreeMode, (val) => {
+    storage.setItem("canonic:distractionFreeMode", String(val));
+  });
+
+  const isCompactLayout = computed(() => isSmallScreen.value || distractionFreeMode.value);
+
   const sidebarCollapsed = ref(
     storage.getItem("canonic:sidebarCollapsed") === "true",
   );
@@ -227,6 +246,83 @@ export const useAppStore = defineStore("app", () => {
       console.error("[update]", err);
       updateDownloading.value = false;
     });
+  }
+
+  // ==========================================
+  // ── AI CHAT STATE & HISTORY ──
+  // ==========================================
+  const aiChatSessionId = ref(null);
+  const aiChatMessages = ref([]);
+  const aiChatsList = ref([]);
+
+  async function loadAiChats() {
+      if (!workspacePath.value) return;
+      try {
+          const content = await api.files.read(workspacePath.value, '.canonic/ai-chats.json');
+          aiChatsList.value = content ? JSON.parse(content) : [];
+      } catch (e) {
+          aiChatsList.value = [];
+      }
+      aiChatSessionId.value = crypto.randomUUID();
+      aiChatMessages.value = [];
+  }
+
+  async function saveAiChatsToDisk() {
+      if (!workspacePath.value) return;
+      try {
+          await api.files.write(workspacePath.value, '.canonic/ai-chats.json', JSON.stringify(aiChatsList.value, null, 2));
+      } catch (e) {
+          console.warn("[Store] Failed to save AI chats", e);
+      }
+  }
+
+  function saveCurrentAiChat() {
+      if (aiChatMessages.value.length === 0) return;
+      
+      const id = aiChatSessionId.value || crypto.randomUUID();
+      const existingIdx = aiChatsList.value.findIndex(c => c.id === id);
+      
+      const firstUserMsg = aiChatMessages.value.find(m => m.role === 'user')?.content || "Empty chat";
+      const title = firstUserMsg.slice(0, 40) + (firstUserMsg.length > 40 ? "..." : "");
+      
+      const chatObj = {
+          id,
+          title,
+          date: existingIdx >= 0 ? aiChatsList.value[existingIdx].date : new Date().toISOString(),
+          messages: JSON.parse(JSON.stringify(aiChatMessages.value))
+      };
+
+      if (existingIdx >= 0) {
+          aiChatsList.value[existingIdx] = chatObj;
+      } else {
+          aiChatsList.value.unshift(chatObj);
+          aiChatSessionId.value = id;
+      }
+      saveAiChatsToDisk();
+  }
+
+  function newAiChat() {
+      saveCurrentAiChat();
+      aiChatSessionId.value = crypto.randomUUID();
+      aiChatMessages.value = [];
+  }
+
+  function loadAiChatSession(id) {
+      saveCurrentAiChat();
+      const chat = aiChatsList.value.find(c => c.id === id);
+      if (chat) {
+          aiChatSessionId.value = chat.id;
+          aiChatMessages.value = JSON.parse(JSON.stringify(chat.messages));
+      }
+  }
+
+  function deleteAiChat(id) {
+      aiChatsList.value = aiChatsList.value.filter(c => c.id !== id);
+      if (aiChatSessionId.value === id) {
+          newAiChat();
+      } else {
+          saveAiChatsToDisk();
+      }
   }
 
   function downloadUpdate() {
@@ -424,6 +520,7 @@ export const useAppStore = defineStore("app", () => {
       comments.value = [];
       await refreshFiles();
       await refreshBranches();
+      await loadAiChats();
       // Restore last used branch if it exists in the workspace
       const cfg = await loadConfig();
       
@@ -1504,6 +1601,9 @@ export const useAppStore = defineStore("app", () => {
     rightPanelCollapsed,
     showLineNumbers,
     splitStacked,
+    isSmallScreen,
+    distractionFreeMode,
+    isCompactLayout,
     isDemoMode,
     demoPeers,
     demoFiles,
@@ -1607,5 +1707,13 @@ export const useAppStore = defineStore("app", () => {
     refreshDiscoveredPeers,
     sharesByFile,
     shareStatsByFile,
+    aiChatSessionId,
+    aiChatMessages,
+    aiChatsList,
+    loadAiChats,
+    saveCurrentAiChat,
+    newAiChat,
+    loadAiChatSession,
+    deleteAiChat,
   };
 });

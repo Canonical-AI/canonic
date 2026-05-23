@@ -215,15 +215,15 @@ function createWindow() {
   const isMac = process.platform === "darwin";
   const isWin = process.platform === "win32";
   const blurEnabled = isMac && cfg.windowBlur === true;
-  const transparencyEnabled = false;
-  const needsTransparent = false;
+  const transparencyEnabled = cfg.windowTransparency !== false;
+  const needsTransparent = blurEnabled || transparencyEnabled;
 
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 320,
     minHeight: 350,
-    titleBarStyle: "default",
+    titleBarStyle: isMac ? "hiddenInset" : "default",
     transparent: needsTransparent,
     vibrancy: blurEnabled ? "under-window" : undefined,
     icon: path.join(
@@ -1735,9 +1735,18 @@ function setupIpcHandlers() {
   });
 
   // --- AI Chat ---
+  let activeAiController = null;
+
+  ipcMain.handle("ai:cancel", () => {
+    if (activeAiController) {
+      activeAiController.abort();
+      activeAiController = null;
+    }
+  });
+
   ipcMain.handle(
     "ai:chat",
-    async (event, { messages, system, model, apiKey, baseUrl }) => {
+    async (event, { messages, system, model, apiKey, baseUrl, tools }) => {
       if (isDev) {
         console.log("[AI] Request starting:", {
           model,
@@ -1760,9 +1769,28 @@ function setupIpcHandlers() {
         /\/+$/,
         "",
       );
-      const allMessages = system
-        ? [{ role: "system", content: system }, ...messages]
-        : messages;
+      
+      let allMessages = messages;
+      if (system) {
+        if (model.toLowerCase().includes("deepseek")) {
+          // DeepSeek models often hang or reject system prompts via OpenRouter
+          allMessages = [...messages];
+          if (allMessages.length > 0 && allMessages[0].role === "user") {
+            allMessages[0].content = system + "\n\n" + allMessages[0].content;
+          } else {
+            allMessages.unshift({ role: "user", content: system });
+          }
+        } else {
+          allMessages = [{ role: "system", content: system }, ...messages];
+        }
+      }
+
+      if (activeAiController) {
+        activeAiController.abort();
+      }
+      activeAiController = new AbortController();
+      const signal = activeAiController.signal;
+
       try {
         if (isDev) console.log(`[AI] Fetching ${base}/chat/completions`);
         const response = await fetch(`${base}/chat/completions`, {
@@ -1776,7 +1804,9 @@ function setupIpcHandlers() {
             messages: allMessages,
             stream: true,
             max_tokens: 2048,
+            tools: tools || undefined,
           }),
+          signal,
         });
 
         if (!response.ok) {
@@ -1789,10 +1819,22 @@ function setupIpcHandlers() {
           return;
         }
 
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+            const err = await response.json().catch(() => ({}));
+            if (isDev) console.error("[AI] JSON Error Payload:", err);
+            event.sender.send(
+                "ai:error",
+                err.error?.message || "API returned a JSON error payload."
+            );
+            return;
+        }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
 
         if (isDev) console.log("[AI] Streaming response...");
+        let isThinking = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -1804,14 +1846,48 @@ function setupIpcHandlers() {
             if (!data || data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
-              const text = parsed.choices?.[0]?.delta?.content;
-              if (text) event.sender.send("ai:chunk", text);
+              const delta = parsed.choices?.[0]?.delta || {};
+              
+              const thinkingText = delta.reasoning_content || delta.reasoning;
+              if (thinkingText) {
+                  if (!isThinking) {
+                      event.sender.send("ai:chunk", "<think>\n");
+                      isThinking = true;
+                  }
+                  event.sender.send("ai:chunk", thinkingText);
+              }
+
+              if (delta.content) {
+                  if (isThinking) {
+                      event.sender.send("ai:chunk", "\n</think>\n");
+                      isThinking = false;
+                  }
+                  event.sender.send("ai:chunk", delta.content);
+              }
+
+              if (delta.tool_calls) {
+                  // Forward tool_calls delta to frontend for accumulation
+                  event.sender.send("ai:tool_call_delta", delta.tool_calls);
+              }
+
+              if (parsed.choices?.[0]?.finish_reason) {
+                  event.sender.send("ai:finish_reason", parsed.choices[0].finish_reason);
+              }
             } catch {}
           }
         }
+        if (isThinking) {
+            event.sender.send("ai:chunk", "\n</think>\n");
+        }
         if (isDev) console.log("[AI] Response complete");
+        activeAiController = null;
         event.sender.send("ai:done");
       } catch (err) {
+        if (err.name === "AbortError" || err.message === "AbortError" || (activeAiController && activeAiController.signal.aborted)) {
+            if (isDev) console.log("[AI] Request aborted");
+            event.sender.send("ai:done");
+            return;
+        }
         if (isDev) console.error("[AI] Fetch Error:", err);
         event.sender.send("ai:error", err.message);
       }

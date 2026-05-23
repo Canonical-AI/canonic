@@ -223,12 +223,17 @@ contextBridge.exposeInMainWorld("canonic", {
   // AI (proxied through main process to avoid CORS)
   ai: {
     chat: (params) => ipcRenderer.invoke("ai:chat", params),
+    cancel: () => ipcRenderer.invoke("ai:cancel"),
     complete: (params) => ipcRenderer.invoke("ai:complete", params),
     onChunk: (cb) => { ipcRenderer.on("ai:chunk", (_, text) => cb(text)) },
+    onToolCallDelta: (cb) => { ipcRenderer.on("ai:tool_call_delta", (_, deltas) => cb(deltas)) },
+    onFinishReason: (cb) => { ipcRenderer.on("ai:finish_reason", (_, reason) => cb(reason)) },
     onDone: (cb) => { ipcRenderer.on("ai:done", () => cb()) },
     onError: (cb) => { ipcRenderer.on("ai:error", (_, msg) => cb(msg)) },
     removeListeners: () => {
       ipcRenderer.removeAllListeners("ai:chunk");
+      ipcRenderer.removeAllListeners("ai:tool_call_delta");
+      ipcRenderer.removeAllListeners("ai:finish_reason");
       ipcRenderer.removeAllListeners("ai:done");
       ipcRenderer.removeAllListeners("ai:error");
     },

@@ -215,15 +215,15 @@ function createWindow() {
   const isMac = process.platform === "darwin";
   const isWin = process.platform === "win32";
   const blurEnabled = isMac && cfg.windowBlur === true;
-  const transparencyEnabled = cfg.windowTransparency !== false;
-  const needsTransparent = blurEnabled || transparencyEnabled;
+  const transparencyEnabled = false;
+  const needsTransparent = false;
 
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 900,
-    minHeight: 600,
-    titleBarStyle: isMac ? "hiddenInset" : "default",
+    minWidth: 320,
+    minHeight: 350,
+    titleBarStyle: "default",
     transparent: needsTransparent,
     vibrancy: blurEnabled ? "under-window" : undefined,
     icon: path.join(

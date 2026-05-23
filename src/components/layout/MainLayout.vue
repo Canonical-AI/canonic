@@ -1,6 +1,113 @@
 <template>
-    <div class="layout" :class="{ 'is-resizing': isResizing, 'layout-compact': store.isCompactLayout }">
-        <!-- No Custom Titlebar -->
+    <div class="layout" :class="{ 'is-resizing': isResizing, 'layout-compact': store.isCompactLayout, 'layout-mac': isMac }">
+        <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
+        <div v-if="!store.isCompactLayout" class="titlebar">
+            <div class="titlebar-left">
+                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
+                <span class="app-name">canonic<span class="accent">.ai</span></span>
+            </div>
+            <div class="titlebar-center"></div>
+            <div class="titlebar-right">
+                <!-- Update indicator -->
+                <template v-if="updateReady">
+                    <button class="icon-btn" @click="installUpdate" title="Restart and install update">
+                        <ArrowUpCircle :size="15" />
+                    </button>
+                </template>
+                <template v-else-if="updateDownloading">
+                    <div class="icon-btn" :title="'Downloading update ' + downloadProgress + '%'">
+                        <ArrowUpCircle :size="15" style="opacity: 0.5" />
+                    </div>
+                </template>
+                <template v-else-if="updateAvailable">
+                    <button class="icon-btn" @click="downloadUpdate" title="Download available update">
+                        <ArrowUpCircle :size="15" />
+                    </button>
+                </template>
+
+                <!-- Font toggle -->
+                <button
+                    class="icon-btn"
+                    :title="fontMode === 'serif' ? 'Switch to sans-serif' : 'Switch to serif'"
+                    @click="toggleFont"
+                >
+                    <Type :size="15" />
+                </button>
+
+                <!-- Theme picker -->
+                <div class="theme-picker-wrap" ref="themePickerRef">
+                    <button
+                        class="icon-btn"
+                        title="Change theme"
+                        @click="themeOpen = !themeOpen"
+                    >
+                        <Palette :size="15" />
+                    </button>
+                    <div v-if="themeOpen" class="theme-popover">
+                        <div class="theme-search-wrap">
+                            <input
+                                v-model="themeSearch"
+                                type="text"
+                                placeholder="Filter themes..."
+                                class="theme-search-input"
+                                @click.stop
+                            />
+                        </div>
+                        <div class="theme-list">
+                            <button
+                                v-for="t in filteredThemes.slice(0, 10)"
+                                :key="t.name"
+                                class="theme-chip"
+                                :class="{ active: activeTheme === t.name }"
+                                @click="setTheme(t.name)"
+                            >
+                                {{ t.name }}
+                            </button>
+                            <div v-if="filteredThemes.length > 10" class="theme-more-hint">
+                                +{{ filteredThemes.length - 10 }} more...
+                            </div>
+                        </div>
+
+                        <div class="theme-divider"></div>
+                        <div class="theme-controls">
+                            <label class="theme-control-item" @click.stop>
+                                <span>Line numbers</span>
+                                <input
+                                    type="checkbox"
+                                    v-model="store.showLineNumbers"
+                                />
+                            </label>
+                            <label class="theme-control-item" @click.stop>
+                                <span>Stack split panels</span>
+                                <input
+                                    type="checkbox"
+                                    v-model="store.splitStacked"
+                                />
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Focus mode toggle -->
+                <button
+                    class="icon-btn"
+                    :class="{ active: store.distractionFreeMode }"
+                    :title="store.distractionFreeMode ? 'Exit Focus Mode' : 'Enter Focus Mode (Distraction-free)'"
+                    @click="toggleDistractionFree"
+                >
+                    <Eye :size="15" />
+                </button>
+
+                <!-- Settings -->
+                <button
+                    class="icon-btn"
+                    title="Settings"
+                    @click="showSettings = true"
+                >
+                    <Settings :size="15" />
+                </button>
+            </div>
+        </div>
         
         <!-- Compact Thin Header -->
         <div v-if="store.isCompactLayout" class="mobile-header" :class="{ 'mobile-header--mac': isMac }">
@@ -82,7 +189,10 @@
             <!-- Left sidebar -->
             <aside
                 class="sidebar"
-                :class="{ 'sidebar--collapsed': store.sidebarCollapsed }"
+                :class="{
+                    'sidebar--collapsed': store.sidebarCollapsed,
+                    'sidebar--floating': sidebarFloating,
+                }"
             >
                 <div class="sidebar-tabs">
                     <button
@@ -137,107 +247,6 @@
                     <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
                     <HintsPanel :config="store.config" @navigate="handleHintNavigate" />
                 </template>
-
-                <div class="sidebar-actions">
-                    <!-- Update indicator -->
-                    <template v-if="updateReady">
-                        <button class="tab" @click="installUpdate" title="Restart and install update">
-                            <ArrowUpCircle :size="15" />
-                        </button>
-                    </template>
-                    <template v-else-if="updateDownloading">
-                        <div class="tab" :title="'Downloading update ' + downloadProgress + '%'">
-                            <ArrowUpCircle :size="15" style="opacity: 0.5" />
-                        </div>
-                    </template>
-                    <template v-else-if="updateAvailable">
-                        <button class="tab" @click="downloadUpdate" title="Download available update">
-                            <ArrowUpCircle :size="15" />
-                        </button>
-                    </template>
-
-                    <!-- Font toggle -->
-                    <button
-                        class="tab"
-                        :title="fontMode === 'serif' ? 'Switch to sans-serif' : 'Switch to serif'"
-                        @click="toggleFont"
-                    >
-                        <Type :size="15" />
-                    </button>
-
-                    <!-- Theme picker -->
-                    <div class="theme-picker-wrap" ref="themePickerRef">
-                        <button
-                            class="tab"
-                            title="Change theme"
-                            @click="themeOpen = !themeOpen"
-                        >
-                            <Palette :size="15" />
-                        </button>
-                        <div v-if="themeOpen" class="theme-popover sidebar-theme-popover">
-                            <div class="theme-search-wrap">
-                                <input
-                                    v-model="themeSearch"
-                                    type="text"
-                                    placeholder="Filter themes..."
-                                    class="theme-search-input"
-                                    @click.stop
-                                />
-                            </div>
-                            <div class="theme-list">
-                                <button
-                                    v-for="t in filteredThemes.slice(0, 10)"
-                                    :key="t.name"
-                                    class="theme-chip"
-                                    :class="{ active: activeTheme === t.name }"
-                                    @click="setTheme(t.name)"
-                                >
-                                    {{ t.name }}
-                                </button>
-                                <div v-if="filteredThemes.length > 10" class="theme-more-hint">
-                                    +{{ filteredThemes.length - 10 }} more...
-                                </div>
-                            </div>
-
-                            <div class="theme-divider"></div>
-                            <div class="theme-controls">
-                                <label class="theme-control-item" @click.stop>
-                                    <span>Line numbers</span>
-                                    <input
-                                        type="checkbox"
-                                        v-model="store.showLineNumbers"
-                                    />
-                                </label>
-                                <label class="theme-control-item" @click.stop>
-                                    <span>Stack split panels</span>
-                                    <input
-                                        type="checkbox"
-                                        v-model="store.splitStacked"
-                                    />
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Focus mode toggle -->
-                    <button
-                        class="tab"
-                        :class="{ active: store.distractionFreeMode }"
-                        :title="store.distractionFreeMode ? 'Exit Focus Mode' : 'Enter Focus Mode (Distraction-free)'"
-                        @click="toggleDistractionFree"
-                    >
-                        <Eye :size="15" />
-                    </button>
-
-                    <!-- Settings -->
-                    <button
-                        class="tab"
-                        title="Settings"
-                        @click="showSettings = true"
-                    >
-                        <Settings :size="15" />
-                    </button>
-                </div>
             </aside>
 
             <!-- Editor -->
@@ -277,8 +286,11 @@
             <aside
                 v-if="store.currentFile || store.peerFileContent"
                 class="right-panel"
-                :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
-                :style="store.rightPanelCollapsed ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined }"
+                :class="{
+                    'right-panel--collapsed': store.rightPanelCollapsed,
+                    'right-panel--floating': panelFloating,
+                }"
+                :style="store.rightPanelCollapsed ? {} : (panelFloating ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined })"
             >
                 <div v-if="!store.rightPanelCollapsed" class="resize-handle" @mousedown="onResizeStart" />
                 <div class="panel-tabs" :class="{ 'panel-tabs--collapsed': store.rightPanelCollapsed }">
@@ -320,12 +332,13 @@
                         <Share2 :size="15" />
                     </button>
                 </div>
-                <template v-if="!store.rightPanelCollapsed">
+                <div v-show="!store.rightPanelCollapsed" class="panel-content-wrap">
                     <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
-                    <AIChat v-else-if="store.rightPanelTab === 'ai'" />
-                    <HistoryPanel v-else-if="store.rightPanelTab === 'history'" />
-                    <SharePanel v-else-if="store.rightPanelTab === 'share'" />
-                </template>
+                    <HistoryPanel v-if="store.rightPanelTab === 'history'" />
+                    <SharePanel v-if="store.rightPanelTab === 'share'" />
+                </div>
+                <!-- AIChat kept always-mounted so streaming survives focus/tab toggles -->
+                <AIChat v-show="store.rightPanelTab === 'ai' && !store.rightPanelCollapsed" />
             </aside>
         </div>
 
@@ -684,6 +697,14 @@ function handleTabClick(tab) {
     }
 }
 
+const panelFloating = computed(() =>
+    store.isCompactLayout && !store.rightPanelCollapsed
+);
+
+const sidebarFloating = computed(() =>
+    store.isCompactLayout && !store.sidebarCollapsed
+);
+
 function handleRightTabClick(tab) {
     if (store.rightPanelCollapsed) {
         store.rightPanelCollapsed = false;
@@ -695,7 +716,7 @@ function handleRightTabClick(tab) {
 
 const RIGHT_PANEL_WIDTH_KEY = "canonic:rightPanelWidth";
 const rightPanelWidth = ref(
-    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "280")
+    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "360")
 );
 const isResizing = ref(false);
 
@@ -857,22 +878,6 @@ function toggleDistractionFree() {
 }
 
 .sidebar--collapsed .sidebar-tabs {
-    flex-direction: column;
-    padding: 4px;
-    gap: 2px;
-}
-
-.sidebar-actions {
-    margin-top: auto;
-    display: flex;
-    padding: 8px;
-    gap: 4px;
-    border-top: 1px solid var(--border);
-    flex-wrap: wrap;
-    justify-content: flex-start;
-}
-
-.sidebar--collapsed .sidebar-actions {
     flex-direction: column;
     padding: 4px;
     gap: 2px;
@@ -1458,6 +1463,44 @@ function toggleDistractionFree() {
 
 .layout-compact .right-panel--collapsed {
     display: none !important;
+}
+
+/* Compact mode: left sidebar as centered floating modal */
+.layout-compact .sidebar.sidebar--floating,
+.sidebar.sidebar--floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
+}
+
+/* Compact mode: right panel as centered floating modal (all tabs) */
+.layout-compact .right-panel.right-panel--floating,
+.right-panel.right-panel--floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
 }
 
 .layout-compact .resize-handle {

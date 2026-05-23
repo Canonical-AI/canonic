@@ -10,7 +10,7 @@
                 item.type === 'directory' && isEmpty && 'empty',
             ]"
             :style="{ paddingLeft: `${12 + depth * 16}px` }"
-            draggable="true"
+            :draggable="!store.isCompactLayout"
             @click="handleClick"
             @mouseenter="hovered = true"
             @mouseleave="hovered = false"
@@ -249,11 +249,13 @@ function handleClick() {
 }
 
 function handleDragStart(e) {
+    if (store.isCompactLayout) return;
     e.dataTransfer.setData("application/canonic-path", props.item.path);
     e.dataTransfer.effectAllowed = "move";
 }
 
 function handleDragOver(e) {
+    if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
 
     // Don't allow dropping on itself or descendants
@@ -267,10 +269,12 @@ function handleDragOver(e) {
 }
 
 function handleDragLeave() {
+    if (store.isCompactLayout) return;
     isDragOver.value = false;
 }
 
 async function handleDrop(e) {
+    if (store.isCompactLayout) return;
     isDragOver.value = false;
     if (props.item.type !== "directory") return;
 

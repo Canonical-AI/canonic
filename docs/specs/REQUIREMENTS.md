@@ -179,42 +179,227 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ## AI Assistant (AI)
 
-> The AI chat panel is a thinking partner — it helps users reason through their document, not write it for them.
+> The AI chat panel is a thinking partner — it helps users reason through their document, brainstorm, spot gaps, ask clarifying questions, and leave inline comments. It does not ghostwrite the document.
+
+### Identity and configuration
+
+* scenario: configurable assistant name
+  given: the user sets `assistant.name` in config
+  when: the chat panel renders the intro
+  then: the configured name appears as the assistant's name
+
+* scenario: provider-driven model list
+  given: providers with `baseUrl` and `apiKey` are configured
+  when: the chat panel opens or `/model` is invoked
+  then: models are fetched from `{baseUrl}/models` and shown in the selector
+
+* scenario: no providers configured
+  given: no providers exist in config
+  when: the user opens `/model`
+  then: a hint message instructs the user to add a provider in Settings, and the model list is empty
+
+* scenario: stale model auto-cleared
+  given: `assistant.model` is set to an id not present in the fetched provider models
+  when: provider models load
+  then: `assistant.model` and `assistant.providerId` are cleared and persisted
 
 * scenario: API key source
   given: an AI chat message is sent
   when: the request is made to the AI provider
-  then: the API key from \~/.config/canonic/config.json is used, not any .env file
+  then: the API key from `~/.config/canonic/config.json` is used, not any .env file
 
-* scenario: model selection
-  given: the user has selected a model in Settings
-  when: an AI chat message is sent
-  then: that model is used for the request
+* scenario: missing API key
+  given: no API key is configured for the selected provider
+  when: the user sends a chat message
+  then: a clear error message is shown directing the user to Settings → Providers
+
+### Persistence of assistant preferences
+
+* scenario: persist effort level
+  given: the user sets effort via `/effort`
+  when: the app is restarted
+  then: the previously selected effort level is restored from `~/.config/canonic/config.json`
+
+* scenario: persist tool toggles
+  given: the user toggles any agent capability via `/tools`
+  when: the app is restarted
+  then: the toggle state is restored from `assistant.caps` in config
+
+* scenario: persist thinking display preferences
+  given: the user toggles "Show thinking" or expands/collapses the thoughts block
+  when: the app is restarted
+  then: `assistant.showThinking` and `assistant.thinkingExpanded` are restored from config
+
+* scenario: custom system prompt
+  given: the user has set `assistant.extraInstructions` in config
+  when: the request is built
+  then: the extra instructions are appended after the built-in system prompt
+
+### Chat session lifecycle
 
 * scenario: streaming responses
   given: an AI chat message is sent
   when: the response arrives
-  then: text streams character-by-character rather than appearing all at once
+  then: text streams chunk-by-chunk rather than appearing all at once
 
-* scenario: document context
-  given: an AI chat message is sent
-  when: the request is constructed
-  then: the full current document content is included as context
+* scenario: cancel mid-stream
+  given: a stream is in progress
+  when: the user presses Escape
+  then: the underlying HTTP request is aborted and `streaming` returns to false
 
-* scenario: AI does not ghostwrite
-  given: the AI system prompt is in effect
-  when: the user asks the AI to write document content directly
-  then: the AI declines to generate the content and redirects to a thinking/questioning role
+* scenario: chat history persisted per workspace
+  given: the user sends and receives messages
+  when: the chat ends or the session is switched
+  then: the session is saved to `.canonic/ai-chats.json` in the workspace
 
-* scenario: missing or invalid API key
-  given: no API key is configured or the key is invalid
-  when: the user opens the AI chat panel
-  then: a clear error message is shown with a link to Settings
+* scenario: fresh session on workspace open
+  given: a workspace is opened or switched
+  when: the AI chat panel mounts
+  then: chat history is loaded into the history list and a new empty session is started
 
-* scenario: chat history not persisted
-  given: the user has an active AI chat session
-  when: the app is restarted
-  then: the previous chat messages are gone and the session starts fresh
+* scenario: history view reopen
+  given: prior sessions exist
+  when: the user clicks the history button and selects a chat
+  then: that session is loaded into the active chat
+
+* scenario: chat survives focus mode toggle
+  given: a stream is in progress
+  when: the user enters or exits focus mode, switches right-panel tabs, or collapses the right panel
+  then: the AIChat component remains mounted and the stream continues to update state
+
+### Document context and indexing
+
+* scenario: current document always in context
+  given: a chat message is sent with a document open
+  when: the request is built
+  then: the full current document content is included as `<current_document>` with its path
+
+* scenario: workspace index = path list only
+  given: `caps.indexWorkspace` is enabled and the workspace contains .md files
+  when: the request is built
+  then: a `<workspace_index>` block listing relative paths (not content) is included
+
+* scenario: read_file tool
+  given: `caps.readDocs` is enabled
+  when: the model calls `read_file` with a path
+  then: the file content is returned to the model and a tool log of type `read` is rendered
+
+* scenario: list_workspace tool
+  given: `caps.listTree` is enabled
+  when: the model calls `list_workspace`
+  then: a directory tree up to maxDepth (default 3, max 5, capped at 500 entries) is returned and a tool log of type `tree` is rendered
+
+* scenario: list_workspace ignores noise
+  given: the workspace contains `.git/`, `node_modules/`, `.canonic/`, `dist/`, dotfiles
+  when: `list_workspace` walks the tree
+  then: those entries are excluded from the returned listing
+
+### Tools — comments and actions
+
+* scenario: post_comment when asked
+  given: `caps.postComments` is enabled and the current document is open
+  when: the user asks the assistant to comment, annotate, flag, or critique a passage
+  then: the assistant calls the `post_comment` tool and an inline comment is added to the document with the assistant's name as author and `isAgent: true`
+
+* scenario: comment anchor must be verbatim
+  given: a `post_comment` tool call is received
+  when: the comment is stored
+  then: `anchor.quotedText` matches an exact substring of the current document
+
+* scenario: tool log appears in chat
+  given: any tool is executed during a turn
+  when: the assistant message renders
+  then: a `tool-logs` row appears showing the action, truncated to a single line
+
+* scenario: comment tool log is clickable
+  given: a `post_comment` tool log is present
+  when: the user clicks it
+  then: the right panel switches to Comments and scrolls to the matching comment
+
+### Slash commands
+
+* scenario: slash menu opens on `/`
+  given: the chat input has focus
+  when: the user types `/`
+  then: the root slash menu appears with `model`, `effort`, `tools`
+
+* scenario: filter root commands
+  given: the slash menu is open at root
+  when: the user types `/mo`
+  then: the menu filters to commands matching the typed prefix and the first match is highlighted
+
+* scenario: arrow key navigation
+  given: any slash submenu is open
+  when: the user presses ArrowUp or ArrowDown
+  then: the highlighted item moves and wraps at the ends
+
+* scenario: enter selects a menu item
+  given: the slash menu is open with an item highlighted
+  when: the user presses Enter
+  then: the highlighted item is selected; for `tools` Enter closes the menu
+
+* scenario: space toggles a tool
+  given: the `/tools` submenu is open with an item highlighted
+  when: the user presses Space
+  then: that capability toggles and the change is persisted to config
+
+### Thinking display
+
+* scenario: thinking surfaced from reasoning_content
+  given: the provider streams a `reasoning_content` delta
+  when: the chunk is forwarded
+  then: it is wrapped between `<think>` and `</think>` tokens and shown in a collapsible "Thoughts" block
+
+* scenario: thinking parsed from inline tags
+  given: a model emits literal `<think>...</think>` in its content stream
+  when: the chunk is parsed
+  then: the inside is shown in the Thoughts block and removed from the rendered final response
+
+* scenario: thinking collapsed by default
+  given: no prior preference is set
+  when: an assistant message with thoughts renders
+  then: the Thoughts block is collapsed; the user can expand it manually or with Cmd/Ctrl-O
+
+* scenario: thinking style is minimal
+  given: a Thoughts block renders in either streaming or final state
+  when: it appears in the chat
+  then: it has no background fill, no border box, and no padded card — only a left-indented muted text treatment
+
+* scenario: empty assistant content not rendered
+  given: a turn produces only tool calls and no textual content
+  when: the assistant message renders
+  then: no empty content bubble is drawn
+
+### Markdown rendering
+
+* scenario: assistant content is markdown
+  given: the assistant returns markdown
+  when: the message renders
+  then: it is parsed by a real markdown library (paragraphs, lists, code blocks, blockquotes, headings, links, hr)
+
+* scenario: render styles are tight
+  given: markdown is rendered inside an assistant bubble
+  when: it displays
+  then: paragraph margins are compact and lists/code/headings use scoped styles tuned for the bubble width
+
+### DeepSeek thinking-mode follow-up
+
+* scenario: reasoning_content sent back
+  given: a previous assistant turn included thoughts (from `reasoning_content` or `<think>` tags) and made a tool call
+  when: the next request is built for a DeepSeek thinking-mode model
+  then: `reasoning_content` is included on that assistant message so the API does not reject the turn
+
+### Compact mode
+
+* scenario: AI chat as floating modal on small screens
+  given: the window is below the small-screen threshold and the right panel is open on the AI tab
+  when: the panel renders
+  then: it is positioned as a centered modal (both axes) rather than docked to the right edge
+
+* scenario: floating modal preserves stream
+  given: a stream is in progress
+  when: the window crosses the compact threshold or panels toggle
+  then: the AIChat instance is not unmounted and the stream continues
 
 ***
 

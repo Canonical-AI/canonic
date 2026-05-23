@@ -221,8 +221,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 900,
-    minHeight: 600,
+    minWidth: 320,
+    minHeight: 350,
     titleBarStyle: isMac ? "hiddenInset" : "default",
     transparent: needsTransparent,
     vibrancy: blurEnabled ? "under-window" : undefined,
@@ -1079,6 +1079,51 @@ function setupIpcHandlers() {
     return gitService.listFiles(workspacePath);
   });
 
+  ipcMain.handle("files:tree", async (_, workspacePath, opts = {}) => {
+    if (!workspacePath) return { entries: [], truncated: false };
+    const maxDepth = Math.min(Math.max(opts.maxDepth ?? 3, 1), 5);
+    const maxEntries = Math.min(Math.max(opts.maxEntries ?? 500, 1), 2000);
+    const IGNORE = new Set([".git", "node_modules", ".canonic", ".DS_Store", "dist", "build", ".next", ".cache", ".venv", "__pycache__"]);
+
+    const entries = [];
+    let truncated = false;
+
+    function walk(absDir, relDir, depth) {
+      if (truncated) return;
+      if (depth > maxDepth) return;
+      let items;
+      try {
+        items = fs.readdirSync(absDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      items.sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      for (const item of items) {
+        if (IGNORE.has(item.name) || item.name.startsWith(".")) continue;
+        if (entries.length >= maxEntries) {
+          truncated = true;
+          return;
+        }
+        const rel = relDir ? `${relDir}/${item.name}` : item.name;
+        entries.push({ path: rel, type: item.isDirectory() ? "dir" : "file" });
+        if (item.isDirectory()) {
+          walk(path.join(absDir, item.name), rel, depth + 1);
+        }
+      }
+    }
+
+    try {
+      const abs = resolveSafePath(workspacePath, ".");
+      walk(abs, "", 1);
+    } catch (e) {
+      return { entries: [], truncated: false, error: e.message };
+    }
+    return { entries, truncated, maxDepth };
+  });
+
   ipcMain.handle("files:read", async (_, workspacePath, filePath) => {
     try {
       console.log("[main:files:read] reading:", { workspacePath, filePath });
@@ -1735,9 +1780,18 @@ function setupIpcHandlers() {
   });
 
   // --- AI Chat ---
+  let activeAiController = null;
+
+  ipcMain.handle("ai:cancel", () => {
+    if (activeAiController) {
+      activeAiController.abort();
+      activeAiController = null;
+    }
+  });
+
   ipcMain.handle(
     "ai:chat",
-    async (event, { messages, system, model, apiKey, baseUrl }) => {
+    async (event, { messages, system, model, apiKey, baseUrl, tools }) => {
       if (isDev) {
         console.log("[AI] Request starting:", {
           model,
@@ -1760,9 +1814,28 @@ function setupIpcHandlers() {
         /\/+$/,
         "",
       );
-      const allMessages = system
-        ? [{ role: "system", content: system }, ...messages]
-        : messages;
+      
+      let allMessages = messages;
+      if (system) {
+        if (model.toLowerCase().includes("deepseek")) {
+          // DeepSeek models often hang or reject system prompts via OpenRouter
+          allMessages = [...messages];
+          if (allMessages.length > 0 && allMessages[0].role === "user") {
+            allMessages[0].content = system + "\n\n" + allMessages[0].content;
+          } else {
+            allMessages.unshift({ role: "user", content: system });
+          }
+        } else {
+          allMessages = [{ role: "system", content: system }, ...messages];
+        }
+      }
+
+      if (activeAiController) {
+        activeAiController.abort();
+      }
+      activeAiController = new AbortController();
+      const signal = activeAiController.signal;
+
       try {
         if (isDev) console.log(`[AI] Fetching ${base}/chat/completions`);
         const response = await fetch(`${base}/chat/completions`, {
@@ -1775,8 +1848,11 @@ function setupIpcHandlers() {
             model,
             messages: allMessages,
             stream: true,
-            max_tokens: 2048,
+            max_tokens: 4096,
+            tools: tools && tools.length ? tools : undefined,
+            tool_choice: tools && tools.length ? "auto" : undefined,
           }),
+          signal,
         });
 
         if (!response.ok) {
@@ -1789,10 +1865,22 @@ function setupIpcHandlers() {
           return;
         }
 
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+            const err = await response.json().catch(() => ({}));
+            if (isDev) console.error("[AI] JSON Error Payload:", err);
+            event.sender.send(
+                "ai:error",
+                err.error?.message || "API returned a JSON error payload."
+            );
+            return;
+        }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
 
         if (isDev) console.log("[AI] Streaming response...");
+        let isThinking = false;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -1804,14 +1892,51 @@ function setupIpcHandlers() {
             if (!data || data === "[DONE]") continue;
             try {
               const parsed = JSON.parse(data);
-              const text = parsed.choices?.[0]?.delta?.content;
-              if (text) event.sender.send("ai:chunk", text);
+              const delta = parsed.choices?.[0]?.delta || {};
+              if (isDev && (delta.tool_calls || parsed.choices?.[0]?.finish_reason)) {
+                console.log("[AI] delta:", JSON.stringify({ tc: delta.tool_calls, finish: parsed.choices?.[0]?.finish_reason }));
+              }
+
+              const thinkingText = delta.reasoning_content || delta.reasoning || delta.thinking;
+              if (thinkingText) {
+                  if (!isThinking) {
+                      event.sender.send("ai:chunk", "<think>\n");
+                      isThinking = true;
+                  }
+                  event.sender.send("ai:chunk", thinkingText);
+              }
+
+              if (delta.content) {
+                  if (isThinking) {
+                      event.sender.send("ai:chunk", "\n</think>\n");
+                      isThinking = false;
+                  }
+                  event.sender.send("ai:chunk", delta.content);
+              }
+
+              if (delta.tool_calls) {
+                  // Forward tool_calls delta to frontend for accumulation
+                  event.sender.send("ai:tool_call_delta", delta.tool_calls);
+              }
+
+              if (parsed.choices?.[0]?.finish_reason) {
+                  event.sender.send("ai:finish_reason", parsed.choices[0].finish_reason);
+              }
             } catch {}
           }
         }
+        if (isThinking) {
+            event.sender.send("ai:chunk", "\n</think>\n");
+        }
         if (isDev) console.log("[AI] Response complete");
+        activeAiController = null;
         event.sender.send("ai:done");
       } catch (err) {
+        if (err.name === "AbortError" || err.message === "AbortError" || (activeAiController && activeAiController.signal.aborted)) {
+            if (isDev) console.log("[AI] Request aborted");
+            event.sender.send("ai:done");
+            return;
+        }
         if (isDev) console.error("[AI] Fetch Error:", err);
         event.sender.send("ai:error", err.message);
       }

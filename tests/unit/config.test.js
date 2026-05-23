@@ -93,4 +93,79 @@ describe("config", () => {
     config.write({ displayName: "Test", updateChannel: "experimental" });
     expect(config.read().updateChannel).toBe("experimental");
   });
+
+  // ── assistant preference persistence ─────────────────────────────────────
+  it("defaults: assistant.caps contains all six capability flags", () => {
+    config.write({ displayName: "Test" });
+    const cfg = config.read();
+    expect(cfg.assistant.caps).toMatchObject({
+      indexWorkspace: true,
+      readDocs: true,
+      listTree: true,
+      webSearch: true,
+      postComments: true,
+      suggestEdits: true,
+    });
+  });
+
+  it("defaults: assistant.effortLevel, showThinking, thinkingExpanded present", () => {
+    config.write({ displayName: "Test" });
+    const cfg = config.read();
+    expect(cfg.assistant.effortLevel).toBe("Medium");
+    expect(cfg.assistant.showThinking).toBe(true);
+    expect(cfg.assistant.thinkingExpanded).toBe(false);
+  });
+
+  it("write() persists assistant.effortLevel and read() returns it", () => {
+    config.write({ displayName: "Test", assistant: { effortLevel: "High" } });
+    expect(config.read().assistant.effortLevel).toBe("High");
+  });
+
+  it("write() persists partial assistant.caps and merges with defaults on read", () => {
+    config.write({
+      displayName: "Test",
+      assistant: { caps: { listTree: false, webSearch: false } },
+    });
+    const cfg = config.read();
+    expect(cfg.assistant.caps.listTree).toBe(false);
+    expect(cfg.assistant.caps.webSearch).toBe(false);
+    // Unspecified flags keep their defaults
+    expect(cfg.assistant.caps.indexWorkspace).toBe(true);
+    expect(cfg.assistant.caps.readDocs).toBe(true);
+    expect(cfg.assistant.caps.postComments).toBe(true);
+  });
+
+  it("read() of legacy config without assistant.caps fills in defaults", () => {
+    // Write raw file that omits caps entirely (legacy users)
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ displayName: "Legacy", providers: [], assistant: { name: "Spark" } }),
+      "utf-8",
+    );
+    const cfg = config.read();
+    expect(cfg.assistant.caps).toBeDefined();
+    expect(cfg.assistant.caps.indexWorkspace).toBe(true);
+    expect(cfg.assistant.caps.listTree).toBe(true);
+  });
+
+  it("write() round-trips thinkingExpanded=true", () => {
+    config.write({ displayName: "Test", assistant: { thinkingExpanded: true } });
+    expect(config.read().assistant.thinkingExpanded).toBe(true);
+  });
+
+  it("write() preserves other assistant fields when only caps changes", () => {
+    config.write({
+      displayName: "Test",
+      assistant: { providerId: "openrouter", model: "claude-sonnet-4-6", name: "Spark" },
+    });
+    config.write({
+      ...config.read(),
+      assistant: { ...config.read().assistant, caps: { postComments: false } },
+    });
+    const cfg = config.read();
+    expect(cfg.assistant.providerId).toBe("openrouter");
+    expect(cfg.assistant.model).toBe("claude-sonnet-4-6");
+    expect(cfg.assistant.name).toBe("Spark");
+    expect(cfg.assistant.caps.postComments).toBe(false);
+  });
 });

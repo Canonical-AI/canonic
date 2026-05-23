@@ -104,6 +104,7 @@ watch(creatingFolder, async (val) => {
 });
 
 function handleDragOver(e) {
+    if (store.isCompactLayout) return;
     if (e.dataTransfer.types.includes("application/canonic-path")) {
         isDragOver.value = true;
         e.dataTransfer.dropEffect = "move";
@@ -111,6 +112,7 @@ function handleDragOver(e) {
 }
 
 async function handleDrop(e) {
+    if (store.isCompactLayout) return;
     isDragOver.value = false;
     const draggedPath = e.dataTransfer.getData("application/canonic-path");
     if (!draggedPath) return;

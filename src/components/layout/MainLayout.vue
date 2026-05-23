@@ -1,31 +1,27 @@
 <template>
-    <div class="layout" :class="{ 'is-resizing': isResizing }">
-        <!-- Titlebar -->
-        <div v-if="isMac" class="titlebar">
+    <div class="layout" :class="{ 'is-resizing': isResizing, 'layout-compact': store.isCompactLayout, 'layout-mac': isMac }">
+        <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
+        <div v-if="!store.isCompactLayout" class="titlebar">
             <div class="titlebar-left">
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
-                <span class="app-name"
-                    >canonic<span class="accent">.ai</span></span
-                >
+                <span class="app-name">canonic<span class="accent">.ai</span></span>
             </div>
+            <div class="titlebar-center"></div>
             <div class="titlebar-right">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
-                    <button class="update-ready-btn" @click="installUpdate" title="Restart and install update">
-                        <ArrowUpCircle :size="14" />
-                        <span>{{ updateInfo?.version }} ready — Restart</span>
+                    <button class="icon-btn" @click="installUpdate" title="Restart and install update">
+                        <ArrowUpCircle :size="15" />
                     </button>
                 </template>
                 <template v-else-if="updateDownloading">
-                    <span class="update-progress-pill">
-                        <span class="update-progress-bar" :style="{ width: downloadProgress + '%' }" />
-                        <span class="update-progress-label">Downloading… {{ downloadProgress }}%</span>
-                    </span>
+                    <div class="icon-btn" :title="'Downloading update ' + downloadProgress + '%'">
+                        <ArrowUpCircle :size="15" style="opacity: 0.5" />
+                    </div>
                 </template>
                 <template v-else-if="updateAvailable">
-                    <button class="update-available-btn" @click="downloadUpdate" title="Download available update">
-                        <ArrowUpCircle :size="14" />
-                        <span>Update</span>
+                    <button class="icon-btn" @click="downloadUpdate" title="Download available update">
+                        <ArrowUpCircle :size="15" />
                     </button>
                 </template>
 
@@ -92,6 +88,17 @@
                     </div>
                 </div>
 
+                <!-- Focus mode toggle -->
+                <button
+                    class="icon-btn"
+                    :class="{ active: store.distractionFreeMode }"
+                    :title="store.distractionFreeMode ? 'Exit Focus Mode' : 'Enter Focus Mode (Distraction-free)'"
+                    @click="toggleDistractionFree"
+                >
+                    <Eye :size="15" />
+                </button>
+
+                <!-- Settings -->
                 <button
                     class="icon-btn"
                     title="Settings"
@@ -99,6 +106,78 @@
                 >
                     <Settings :size="15" />
                 </button>
+            </div>
+        </div>
+        
+        <!-- Compact Thin Header -->
+        <div v-if="store.isCompactLayout" class="mobile-header" :class="{ 'mobile-header--mac': isMac }">
+            <div class="mobile-header-left">
+                <button class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen" ref="menuBtnRef" title="Menu">
+                    <Menu :size="16" />
+                </button>
+                <img src="/canonical-logo.svg" alt="" class="mobile-logo" />
+                <span class="app-name">canonic<span class="accent">.ai</span></span>
+            </div>
+            <div class="mobile-header-right">
+                <!-- Focus mode toggle button in header to exit Focus Mode if manually entered -->
+                <button 
+                    v-if="store.distractionFreeMode"
+                    class="mobile-icon-btn active-focus" 
+                    title="Exit Focus Mode"
+                    @click="store.distractionFreeMode = false"
+                >
+                    <EyeOff :size="14" />
+                </button>
+                <button class="mobile-icon-btn" @click="showSettings = true" title="Settings">
+                    <Settings :size="14" />
+                </button>
+            </div>
+
+            <!-- Compact Navigation Menu Popover -->
+            <div v-if="mobileMenuOpen" class="mobile-menu-dropdown" ref="mobileMenuDropdownRef">
+                <div class="dropdown-section">
+                    <div class="dropdown-section-title">Navigation</div>
+                    <button class="dropdown-item" @click="openMobileTab('left', 'files')">
+                        <Files :size="14" />
+                        <span>Files</span>
+                    </button>
+                    <button class="dropdown-item" @click="openMobileSearch">
+                        <Search :size="14" />
+                        <span>Find & Replace</span>
+                    </button>
+                    <button class="dropdown-item" @click="openMobileTab('left', 'peers')">
+                        <Users :size="14" />
+                        <span>Shared with me</span>
+                    </button>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section">
+                    <div class="dropdown-section-title">Tools & Panels</div>
+                    <button class="dropdown-item" @click="openMobileTab('right', 'comments')">
+                        <MessageSquare :size="14" />
+                        <span>Comments</span>
+                    </button>
+                    <button class="dropdown-item" @click="openMobileTab('right', 'ai')">
+                        <Sparkles :size="14" />
+                        <span>AI Assistant</span>
+                    </button>
+                    <button class="dropdown-item" @click="openMobileTab('right', 'history')">
+                        <History :size="14" />
+                        <span>History</span>
+                    </button>
+                    <button class="dropdown-item" @click="openMobileTab('right', 'share')">
+                        <Share2 :size="14" />
+                        <span>Share</span>
+                    </button>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section">
+                    <button class="dropdown-item" @click="toggleDistractionFree">
+                        <Eye :size="14" v-if="!store.distractionFreeMode" />
+                        <EyeOff :size="14" v-else />
+                        <span>{{ store.distractionFreeMode ? 'Exit Focus Mode' : 'Focus Mode' }}</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -110,7 +189,10 @@
             <!-- Left sidebar -->
             <aside
                 class="sidebar"
-                :class="{ 'sidebar--collapsed': store.sidebarCollapsed }"
+                :class="{
+                    'sidebar--collapsed': store.sidebarCollapsed,
+                    'sidebar--floating': sidebarFloating,
+                }"
             >
                 <div class="sidebar-tabs">
                     <button
@@ -204,8 +286,11 @@
             <aside
                 v-if="store.currentFile || store.peerFileContent"
                 class="right-panel"
-                :class="{ 'right-panel--collapsed': store.rightPanelCollapsed }"
-                :style="store.rightPanelCollapsed ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined }"
+                :class="{
+                    'right-panel--collapsed': store.rightPanelCollapsed,
+                    'right-panel--floating': panelFloating,
+                }"
+                :style="store.rightPanelCollapsed ? {} : (panelFloating ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined })"
             >
                 <div v-if="!store.rightPanelCollapsed" class="resize-handle" @mousedown="onResizeStart" />
                 <div class="panel-tabs" :class="{ 'panel-tabs--collapsed': store.rightPanelCollapsed }">
@@ -247,12 +332,13 @@
                         <Share2 :size="15" />
                     </button>
                 </div>
-                <template v-if="!store.rightPanelCollapsed">
+                <div v-show="!store.rightPanelCollapsed" class="panel-content-wrap">
                     <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
-                    <AIChat v-else-if="store.rightPanelTab === 'ai'" />
-                    <HistoryPanel v-else-if="store.rightPanelTab === 'history'" />
-                    <SharePanel v-else-if="store.rightPanelTab === 'share'" />
-                </template>
+                    <HistoryPanel v-if="store.rightPanelTab === 'history'" />
+                    <SharePanel v-if="store.rightPanelTab === 'share'" />
+                </div>
+                <!-- AIChat kept always-mounted so streaming survives focus/tab toggles -->
+                <AIChat v-show="store.rightPanelTab === 'ai' && !store.rightPanelCollapsed" />
             </aside>
         </div>
 
@@ -265,6 +351,18 @@
                 <button class="update-prompt-btn" @click="showUpdatePrompt = false">Later</button>
             </div>
         </Transition>
+
+        <!-- Backdrop overlays for compact modals -->
+        <div 
+            v-if="store.isCompactLayout && !store.sidebarCollapsed" 
+            class="mobile-backdrop" 
+            @click="store.sidebarCollapsed = true" 
+        />
+        <div 
+            v-if="store.isCompactLayout && !store.rightPanelCollapsed" 
+            class="mobile-backdrop" 
+            @click="store.rightPanelCollapsed = true" 
+        />
 
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
@@ -295,6 +393,8 @@ import {
     Share2,
     ArrowUpCircle,
     Menu,
+    Eye,
+    EyeOff,
 } from "lucide-vue-next";
 import FileTree from "../sidebar/FileTree.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
@@ -323,6 +423,7 @@ const searchViewRef = ref(null);
 // Capture phase so we intercept before the ProseMirror editor's own drop handler.
 const activeDragOver = ref(false);
 function onActiveDragOver(e) {
+    if (store.isCompactLayout) return;
     if (!e.dataTransfer.types.includes("application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
@@ -330,6 +431,7 @@ function onActiveDragOver(e) {
     e.dataTransfer.dropEffect = "move";
 }
 function onActiveDrop(e) {
+    if (store.isCompactLayout) return;
     if (!e.dataTransfer.types.includes("application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
@@ -429,6 +531,14 @@ function registerConfigThemes(themes) {
 function onDocClick(e) {
     if (themePickerRef.value && !themePickerRef.value.contains(e.target)) {
         themeOpen.value = false;
+    }
+    if (
+        mobileMenuDropdownRef.value &&
+        !mobileMenuDropdownRef.value.contains(e.target) &&
+        menuBtnRef.value &&
+        !menuBtnRef.value.contains(e.target)
+    ) {
+        mobileMenuOpen.value = false;
     }
 }
 
@@ -587,6 +697,14 @@ function handleTabClick(tab) {
     }
 }
 
+const panelFloating = computed(() =>
+    store.isCompactLayout && !store.rightPanelCollapsed
+);
+
+const sidebarFloating = computed(() =>
+    store.isCompactLayout && !store.sidebarCollapsed
+);
+
 function handleRightTabClick(tab) {
     if (store.rightPanelCollapsed) {
         store.rightPanelCollapsed = false;
@@ -598,7 +716,7 @@ function handleRightTabClick(tab) {
 
 const RIGHT_PANEL_WIDTH_KEY = "canonic:rightPanelWidth";
 const rightPanelWidth = ref(
-    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "280")
+    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "360")
 );
 const isResizing = ref(false);
 
@@ -622,6 +740,38 @@ function onResizeStart(e) {
 
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
+}
+const mobileMenuOpen = ref(false);
+const menuBtnRef = ref(null);
+const mobileMenuDropdownRef = ref(null);
+
+function openMobileTab(side, tab) {
+    mobileMenuOpen.value = false;
+    if (side === 'left') {
+        store.sidebarTab = tab;
+        store.sidebarCollapsed = false;
+        store.rightPanelCollapsed = true;
+    } else {
+        store.rightPanelTab = tab;
+        store.rightPanelCollapsed = false;
+        store.sidebarCollapsed = true;
+    }
+}
+
+function openMobileSearch() {
+    mobileMenuOpen.value = false;
+    store.sidebarCollapsed = true;
+    store.rightPanelCollapsed = true;
+    toggleSearchView();
+}
+
+function toggleDistractionFree() {
+    mobileMenuOpen.value = false;
+    store.distractionFreeMode = !store.distractionFreeMode;
+    if (store.distractionFreeMode) {
+        store.sidebarCollapsed = true;
+        store.rightPanelCollapsed = true;
+    }
 }
 </script>
 
@@ -1046,6 +1196,15 @@ function onResizeStart(e) {
     margin: 6px 4px;
 }
 
+.theme-popover.sidebar-theme-popover {
+    top: auto;
+    right: auto;
+    bottom: 0;
+    left: 100%;
+    margin-left: 8px;
+    margin-bottom: 8px;
+}
+
 .theme-search-wrap {
     padding: 4px;
     margin-bottom: 4px;
@@ -1124,5 +1283,238 @@ function onResizeStart(e) {
     background: var(--accent-muted);
     color: var(--accent-light);
     font-weight: 600;
+}
+
+/* ── Compact & Focus Mode Styles ── */
+.layout-compact .titlebar {
+    display: none !important;
+}
+
+.mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    height: 36px;
+    background: var(--bg-titlebar);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 100;
+    position: relative;
+    -webkit-app-region: drag;
+}
+
+.mobile-header--mac {
+    padding-left: 80px;
+}
+
+.mobile-menu-btn,
+.mobile-icon-btn,
+.mobile-menu-dropdown {
+    -webkit-app-region: no-drag;
+}
+
+.mobile-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.mobile-menu-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.mobile-logo {
+    width: 20px;
+    height: 10px;
+    object-fit: contain;
+}
+
+.mobile-header-right {
+    display: flex;
+    gap: 4px;
+}
+
+.mobile-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.mobile-icon-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.mobile-icon-btn.active-focus {
+    color: var(--accent);
+    background: var(--accent-muted);
+}
+
+/* Menu dropdown */
+.mobile-menu-dropdown {
+    position: absolute;
+    top: 36px;
+    left: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-mid);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    z-index: 1001;
+    min-width: 185px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.dropdown-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dropdown-section-title {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    font-weight: 600;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s, color 0.12s;
+    width: 100%;
+}
+
+.dropdown-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 6px 4px;
+}
+
+/* Overrides for sidebar and right panel in compact mode */
+.layout-compact .sidebar {
+    position: fixed !important;
+    top: 36px !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    z-index: 1000 !important;
+    width: 260px !important;
+    height: calc(100vh - 36px) !important;
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.25) !important;
+    border-right: 1px solid var(--border) !important;
+    background: var(--bg-sidebar) !important;
+}
+
+.layout-compact .sidebar--collapsed {
+    display: none !important;
+}
+
+.layout-compact .right-panel {
+    position: fixed !important;
+    top: 36px !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 1000 !important;
+    width: 300px !important;
+    height: calc(100vh - 36px) !important;
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.25) !important;
+    border-left: 1px solid var(--border) !important;
+    background: var(--bg-sidebar) !important;
+}
+
+.layout-compact .right-panel--collapsed {
+    display: none !important;
+}
+
+/* Compact mode: left sidebar as centered floating modal */
+.layout-compact .sidebar.sidebar--floating,
+.sidebar.sidebar--floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
+}
+
+/* Compact mode: right panel as centered floating modal (all tabs) */
+.layout-compact .right-panel.right-panel--floating,
+.right-panel.right-panel--floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
+}
+
+.layout-compact .resize-handle {
+    display: none !important;
+}
+
+/* Backdrop */
+.mobile-backdrop {
+    position: fixed;
+    top: 36px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 999;
 }
 </style>

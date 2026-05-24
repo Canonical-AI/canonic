@@ -816,6 +816,19 @@ onMounted(async () => {
                 }
             }
         });
+
+        if (window.canonic.menu.onReloadConfig) {
+            window.canonic.menu.onReloadConfig(async () => {
+                try {
+                    await store.loadConfig();
+                    if (store.config?.themes) {
+                        registerConfigThemes(store.config.themes);
+                    }
+                } catch (err) {
+                    console.error("Failed to reload config from menu:", err);
+                }
+            });
+        }
     }
 
     if (!store.workspacePath && !store.currentFile) {

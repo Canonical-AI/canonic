@@ -247,6 +247,7 @@ contextBridge.exposeInMainWorld("canonic", {
     onOpenFile: (cb) => { ipcRenderer.on("menu:open-file", (_, path) => cb(path)) },
     onChangeTheme: (cb) => { ipcRenderer.on("menu:change-theme", (_, theme) => cb(theme)) },
     onChangeFont: (cb) => { ipcRenderer.on("menu:change-font", (_, font) => cb(font)) },
+    onReloadConfig: (cb) => { ipcRenderer.on("menu:reload-config", () => cb()) },
   },
 
   // Agent session bridge

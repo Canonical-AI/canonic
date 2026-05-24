@@ -59,15 +59,21 @@ export const useAppStore = defineStore("app", () => {
   // ── PEER-TO-PEER SHARING ──
   // ==========================================
   // Per-file share state — persists across doc switches
-  const sharesByFile = reactive({});    // filePath -> shareInfo object
+  const sharesByFile = reactive({}); // filePath -> shareInfo object
   const shareStatsByFile = reactive({}); // filePath -> { reads, connected }
   const shareInfo = computed(() => sharesByFile[currentFile.value] || null);
-  const shareStats = computed(() => shareStatsByFile[currentFile.value] || { reads: 0, connected: 0 });
+  const shareStats = computed(
+    () => shareStatsByFile[currentFile.value] || { reads: 0, connected: 0 },
+  );
 
   // Workspace-level share (separate from per-doc)
-  const WORKSPACE_KEY = '__workspace__';
-  const workspaceShareInfo = computed(() => sharesByFile[WORKSPACE_KEY] || null);
-  const workspaceShareStats = computed(() => shareStatsByFile[WORKSPACE_KEY] || { reads: 0, connected: 0 });
+  const WORKSPACE_KEY = "__workspace__";
+  const workspaceShareInfo = computed(
+    () => sharesByFile[WORKSPACE_KEY] || null,
+  );
+  const workspaceShareStats = computed(
+    () => shareStatsByFile[WORKSPACE_KEY] || { reads: 0, connected: 0 },
+  );
 
   // ==========================================
   // ── SYSTEM CONFIG & PREFERENCES ──
@@ -77,7 +83,10 @@ export const useAppStore = defineStore("app", () => {
   const rightPanelTab = ref("comments");
 
   const isSmallScreen = ref(false);
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.addEventListener === "function"
+  ) {
     const checkSize = () => {
       isSmallScreen.value = window.innerWidth < 768;
     };
@@ -86,7 +95,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   const distractionFreeMode = ref(
-    storage.getItem("canonic:distractionFreeMode") === "true"
+    storage.getItem("canonic:distractionFreeMode") === "true",
   );
   watch(distractionFreeMode, (val) => {
     storage.setItem("canonic:distractionFreeMode", String(val));
@@ -121,9 +130,7 @@ export const useAppStore = defineStore("app", () => {
     }
   });
   // Split panels: true = stacked top/bottom (default), false = side by side
-  const splitStacked = ref(
-    storage.getItem("canonic:splitStacked") !== "false",
-  );
+  const splitStacked = ref(storage.getItem("canonic:splitStacked") !== "false");
   watch(splitStacked, (val) => {
     storage.setItem("canonic:splitStacked", String(val));
   });
@@ -151,23 +158,23 @@ export const useAppStore = defineStore("app", () => {
 
   // Workspace find & replace state
   const wsSearch = reactive({
-    query: '',
-    replace: '',
-    include: '',
-    exclude: '',
+    query: "",
+    replace: "",
+    include: "",
+    exclude: "",
     opts: { case: false, word: false, regex: false },
     allBranches: false,
     results: { branch: [], other: [] },
     searching: false,
-    lastError: '',
+    lastError: "",
     pendingFocus: null, // { filePath, line } — UI consumes to scroll editor
   });
 
   const FIND_HOTKEY_DEFAULTS = {
-    findInDoc: 'Mod-f',
-    findInWorkspace: 'Mod-Shift-f',
-    findNext: 'Mod-g',
-    findPrev: 'Mod-Shift-g',
+    findInDoc: "Mod-f",
+    findInWorkspace: "Mod-Shift-f",
+    findNext: "Mod-g",
+    findPrev: "Mod-Shift-g",
   };
 
   const findHotkeys = computed(() => {
@@ -179,8 +186,8 @@ export const useAppStore = defineStore("app", () => {
     return merged;
   });
 
-  const agentSession = ref(null);   // null | { sessionId, agentName, file, startedAt }
-  const agentActivity = ref(null);  // null | { activityType, label }
+  const agentSession = ref(null); // null | { sessionId, agentName, file, startedAt }
+  const agentActivity = ref(null); // null | { activityType, label }
   const actionPickerOpen = ref(false);
 
   // Peer discovery state
@@ -213,7 +220,7 @@ export const useAppStore = defineStore("app", () => {
   }
   const peerFileContent = ref(null); // { peer, relPath, content } | null
   const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
-  const peerFileComments = ref([]);  // comments visible in sidebar when viewing a peer file
+  const peerFileComments = ref([]); // comments visible in sidebar when viewing a peer file
   const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
   const fileIndex = ref({});
@@ -256,73 +263,86 @@ export const useAppStore = defineStore("app", () => {
   const aiChatsList = ref([]);
 
   async function loadAiChats() {
-      if (!workspacePath.value) return;
-      try {
-          const content = await api.files.read(workspacePath.value, '.canonic/ai-chats.json');
-          aiChatsList.value = content ? JSON.parse(content) : [];
-      } catch (e) {
-          aiChatsList.value = [];
-      }
-      aiChatSessionId.value = crypto.randomUUID();
-      aiChatMessages.value = [];
+    if (!workspacePath.value) return;
+    try {
+      const content = await api.files.read(
+        workspacePath.value,
+        ".canonic/ai-chats.json",
+      );
+      aiChatsList.value = content ? JSON.parse(content) : [];
+    } catch (e) {
+      aiChatsList.value = [];
+    }
+    aiChatSessionId.value = crypto.randomUUID();
+    aiChatMessages.value = [];
   }
 
   async function saveAiChatsToDisk() {
-      if (!workspacePath.value) return;
-      try {
-          await api.files.write(workspacePath.value, '.canonic/ai-chats.json', JSON.stringify(aiChatsList.value, null, 2));
-      } catch (e) {
-          console.warn("[Store] Failed to save AI chats", e);
-      }
+    if (!workspacePath.value) return;
+    try {
+      await api.files.write(
+        workspacePath.value,
+        ".canonic/ai-chats.json",
+        JSON.stringify(aiChatsList.value, null, 2),
+      );
+    } catch (e) {
+      console.warn("[Store] Failed to save AI chats", e);
+    }
   }
 
   function saveCurrentAiChat() {
-      if (aiChatMessages.value.length === 0) return;
-      
-      const id = aiChatSessionId.value || crypto.randomUUID();
-      const existingIdx = aiChatsList.value.findIndex(c => c.id === id);
-      
-      const firstUserMsg = aiChatMessages.value.find(m => m.role === 'user')?.content || "Empty chat";
-      const title = firstUserMsg.slice(0, 40) + (firstUserMsg.length > 40 ? "..." : "");
-      
-      const chatObj = {
-          id,
-          title,
-          date: existingIdx >= 0 ? aiChatsList.value[existingIdx].date : new Date().toISOString(),
-          messages: JSON.parse(JSON.stringify(aiChatMessages.value))
-      };
+    if (aiChatMessages.value.length === 0) return;
 
-      if (existingIdx >= 0) {
-          aiChatsList.value[existingIdx] = chatObj;
-      } else {
-          aiChatsList.value.unshift(chatObj);
-          aiChatSessionId.value = id;
-      }
-      saveAiChatsToDisk();
+    const id = aiChatSessionId.value || crypto.randomUUID();
+    const existingIdx = aiChatsList.value.findIndex((c) => c.id === id);
+
+    const firstUserMsg =
+      aiChatMessages.value.find((m) => m.role === "user")?.content ||
+      "Empty chat";
+    const title =
+      firstUserMsg.slice(0, 40) + (firstUserMsg.length > 40 ? "..." : "");
+
+    const chatObj = {
+      id,
+      title,
+      date:
+        existingIdx >= 0
+          ? aiChatsList.value[existingIdx].date
+          : new Date().toISOString(),
+      messages: JSON.parse(JSON.stringify(aiChatMessages.value)),
+    };
+
+    if (existingIdx >= 0) {
+      aiChatsList.value[existingIdx] = chatObj;
+    } else {
+      aiChatsList.value.unshift(chatObj);
+      aiChatSessionId.value = id;
+    }
+    saveAiChatsToDisk();
   }
 
   function newAiChat() {
-      saveCurrentAiChat();
-      aiChatSessionId.value = crypto.randomUUID();
-      aiChatMessages.value = [];
+    saveCurrentAiChat();
+    aiChatSessionId.value = crypto.randomUUID();
+    aiChatMessages.value = [];
   }
 
   function loadAiChatSession(id) {
-      saveCurrentAiChat();
-      const chat = aiChatsList.value.find(c => c.id === id);
-      if (chat) {
-          aiChatSessionId.value = chat.id;
-          aiChatMessages.value = JSON.parse(JSON.stringify(chat.messages));
-      }
+    saveCurrentAiChat();
+    const chat = aiChatsList.value.find((c) => c.id === id);
+    if (chat) {
+      aiChatSessionId.value = chat.id;
+      aiChatMessages.value = JSON.parse(JSON.stringify(chat.messages));
+    }
   }
 
   function deleteAiChat(id) {
-      aiChatsList.value = aiChatsList.value.filter(c => c.id !== id);
-      if (aiChatSessionId.value === id) {
-          newAiChat();
-      } else {
-          saveAiChatsToDisk();
-      }
+    aiChatsList.value = aiChatsList.value.filter((c) => c.id !== id);
+    if (aiChatSessionId.value === id) {
+      newAiChat();
+    } else {
+      saveAiChatsToDisk();
+    }
   }
 
   function downloadUpdate() {
@@ -346,21 +366,38 @@ export const useAppStore = defineStore("app", () => {
 
   // Register agent session IPC listeners once
   if (api.agentSession) {
-    api.agentSession.onSessionStart((data) => startAgentSession(data))
+    api.agentSession.onSessionStart((data) => startAgentSession(data));
     api.agentSession.onComment((data) => {
-      agentActivity.value = { activityType: 'writing_comment', label: 'Writing comment…' }
-      addAgentComment(data)
-    })
+      agentActivity.value = {
+        activityType: "writing_comment",
+        label: "Writing comment…",
+      };
+      addAgentComment(data);
+    });
     api.agentSession.onActivity?.((data) => {
-      agentActivity.value = { activityType: data.activityType, label: data.label }
-    })
-    api.agentSession.onSessionDone(() => { agentSession.value = null; agentActivity.value = null; actionPickerOpen.value = false })
-    api.agentSession.onSessionCancel(() => { agentSession.value = null; agentActivity.value = null; actionPickerOpen.value = false })
+      agentActivity.value = {
+        activityType: data.activityType,
+        label: data.label,
+      };
+    });
+    api.agentSession.onSessionDone(() => {
+      agentSession.value = null;
+      agentActivity.value = null;
+      actionPickerOpen.value = false;
+    });
+    api.agentSession.onSessionCancel(() => {
+      agentSession.value = null;
+      agentActivity.value = null;
+      actionPickerOpen.value = false;
+    });
   }
 
   // Wire share stats listener once — updates whichever file is being shared
   api.share.onStats((stats) => {
-    shareStatsByFile[stats.filePath] = { reads: stats.reads, connected: stats.connected };
+    shareStatsByFile[stats.filePath] = {
+      reads: stats.reads,
+      connected: stats.connected,
+    };
   });
 
   // Wire peer discovery IPC listeners
@@ -377,11 +414,15 @@ export const useAppStore = defineStore("app", () => {
   }
 
   if (api.share.onNetworkChanged) {
-    api.share.onNetworkChanged(() => { networkChanged.value = true });
+    api.share.onNetworkChanged(() => {
+      networkChanged.value = true;
+    });
   }
 
   if (api.files.onIndexUpdate) {
-    api.files.onIndexUpdate((idx) => { fileIndex.value = idx });
+    api.files.onIndexUpdate((idx) => {
+      fileIndex.value = idx;
+    });
   }
 
   if (api.git.onBranchUpdate) {
@@ -408,7 +449,7 @@ export const useAppStore = defineStore("app", () => {
       isExternalRepo.value = false;
       currentBranch.value = "main";
       files.value = [];
-      
+
       await openFile(path);
       return true;
     } catch (err) {
@@ -418,7 +459,6 @@ export const useAppStore = defineStore("app", () => {
       isLoading.value = false;
     }
   }
-
 
   // Active branch for the current document (defaults to 'main' if not in map)
   const currentDocBranch = computed(() => {
@@ -446,19 +486,44 @@ export const useAppStore = defineStore("app", () => {
   // ==========================================
   // ── PREFERENCES & APP CONFIGURATION ──
   // ==========================================
-  function applyWindowTransparencyClass(enabled, opacity) {
-    const on = enabled !== false;
-    document.documentElement.classList.toggle('window-transparency', on);
-    storage.setItem('canonic:window-transparency', String(on));
-    const op = opacity ?? 0.88;
-    document.documentElement.style.setProperty('--blur-opacity', String(op));
-    storage.setItem('canonic:transparency-opacity', String(op));
+  function applyAppearanceSettings(cfg) {
+    const transparencyOn = cfg?.windowTransparency !== false;
+    document.documentElement.classList.toggle(
+      "window-transparency",
+      transparencyOn,
+    );
+    storage.setItem("canonic:window-transparency", String(transparencyOn));
+
+    const transparencyOpacity = cfg?.windowTransparencyOpacity ?? 0.88;
+    document.documentElement.style.setProperty(
+      "--blur-opacity",
+      String(transparencyOpacity),
+    );
+    storage.setItem(
+      "canonic:transparency-opacity",
+      String(transparencyOpacity),
+    );
+
+    const grainOn = !!cfg?.grainEnabled;
+    document.documentElement.classList.toggle("grain-enabled", grainOn);
+
+    const grainOpacity = cfg?.grainOpacity ?? 0.02;
+    document.documentElement.style.setProperty(
+      "--grain-opacity",
+      String(grainOpacity),
+    );
+
+    const paragraphSpacing = cfg?.editorParagraphSpacing === true;
+    document.documentElement.classList.toggle(
+      "editor-paragraph-spacing",
+      paragraphSpacing,
+    );
   }
 
   async function loadConfig() {
     if (import.meta.env.DEV) console.log("[Store] Loading config...");
     config.value = await api.config.read();
-    applyWindowTransparencyClass(config.value?.windowTransparency, config.value?.windowTransparencyOpacity);
+    applyAppearanceSettings(config.value);
     if (import.meta.env.DEV) {
       if (config.value) {
         console.log("[Store] Config loaded:", {
@@ -481,7 +546,7 @@ export const useAppStore = defineStore("app", () => {
     const result = await api.config.write(newConfig);
     if (result.success) {
       config.value = result.config;
-      applyWindowTransparencyClass(result.config.windowTransparency, result.config.windowTransparencyOpacity);
+      applyAppearanceSettings(result.config);
       if (import.meta.env.DEV) console.log("[Store] Config saved successfully");
     } else {
       if (import.meta.env.DEV)
@@ -523,8 +588,8 @@ export const useAppStore = defineStore("app", () => {
       await loadAiChats();
       // Restore last used branch if it exists in the workspace
       const cfg = await loadConfig();
-      
-      if (cfg?.autoShareAllWorkspaces && !sharesByFile['__all_workspaces__']) {
+
+      if (cfg?.autoShareAllWorkspaces && !sharesByFile["__all_workspaces__"]) {
         await startAllWorkspacesShare();
       }
 
@@ -834,11 +899,13 @@ export const useAppStore = defineStore("app", () => {
   }
 
   function normalizeMarkdown(md) {
-    return md
-      .replace(/\r\n/g, '\n')      // consistent line endings
-      .replace(/[ \t]+$/gm, '')    // strip trailing whitespace per line
-      .replace(/\n{3,}/g, '\n\n')  // max one blank line between blocks
-      .trimEnd() + '\n'            // single trailing newline
+    return (
+      md
+        .replace(/\r\n/g, "\n") // consistent line endings
+        .replace(/[ \t]+$/gm, "") // strip trailing whitespace per line
+        .replace(/\n{3,}/g, "\n\n") // max one blank line between blocks
+        .trimEnd() + "\n"
+    ); // single trailing newline
   }
 
   async function saveFile(content) {
@@ -855,22 +922,30 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function maybeDeleteAsset(assetUrl) {
-    if (!workspacePath.value || isDemoMode.value) return
-    const match = assetUrl.match(/^canonic-asset:\/\/(.+)$/)
-    if (!match) return
-    const relativePath = match[1] // e.g. 'assets/image-1234.png'
-    const tracked = await api.git.isFileTracked(workspacePath.value, relativePath)
+    if (!workspacePath.value || isDemoMode.value) return;
+    const match = assetUrl.match(/^canonic-asset:\/\/(.+)$/);
+    if (!match) return;
+    const relativePath = match[1]; // e.g. 'assets/image-1234.png'
+    const tracked = await api.git.isFileTracked(
+      workspacePath.value,
+      relativePath,
+    );
     if (!tracked) {
-      await api.files.delete(workspacePath.value, relativePath)
+      await api.files.delete(workspacePath.value, relativePath);
     }
   }
 
   async function saveAsset(uint8array, ext) {
-    if (!workspacePath.value || isDemoMode.value) return null
-    const safeExt = (ext || 'png').replace('jpeg', 'jpg').replace(/[^a-z0-9]/g, '') || 'png'
-    const filename = `assets/image-${Date.now()}.${safeExt}`
-    const result = await api.files.writeBinary(workspacePath.value, filename, uint8array)
-    return result ? `canonic-asset://${filename}` : null
+    if (!workspacePath.value || isDemoMode.value) return null;
+    const safeExt =
+      (ext || "png").replace("jpeg", "jpg").replace(/[^a-z0-9]/g, "") || "png";
+    const filename = `assets/image-${Date.now()}.${safeExt}`;
+    const result = await api.files.writeBinary(
+      workspacePath.value,
+      filename,
+      uint8array,
+    );
+    return result ? `canonic-asset://${filename}` : null;
   }
 
   // ==========================================
@@ -975,7 +1050,7 @@ export const useAppStore = defineStore("app", () => {
     if (modified.length > 0 || isDirty.value) {
       const confirmed = await api.dialog.confirm(
         "Uncommitted changes",
-        "You have uncommitted changes. Switching branches may lose these changes or cause conflicts. Continue?"
+        "You have uncommitted changes. Switching branches may lose these changes or cause conflicts. Continue?",
       );
       if (!confirmed) return { success: false, cancelled: true };
     }
@@ -989,7 +1064,10 @@ export const useAppStore = defineStore("app", () => {
 
       await refreshFiles();
       if (currentFile.value) {
-        const content = await api.files.read(workspacePath.value, currentFile.value);
+        const content = await api.files.read(
+          workspacePath.value,
+          currentFile.value,
+        );
         currentContent.value = content || "";
         isDirty.value = false;
         await loadCommitLog();
@@ -1235,7 +1313,10 @@ export const useAppStore = defineStore("app", () => {
     );
     if (result.success) {
       sharesByFile[currentFile.value] = result;
-      shareStatsByFile[currentFile.value] = { reads: result.reads ?? 0, connected: 0 };
+      shareStatsByFile[currentFile.value] = {
+        reads: result.reads ?? 0,
+        connected: 0,
+      };
       await logEvent("share:start", { scope: options.scope });
     }
     return result;
@@ -1250,27 +1331,37 @@ export const useAppStore = defineStore("app", () => {
 
   async function startWorkspaceShare() {
     if (!workspacePath.value) return;
-    const cfg = config.value || await loadConfig();
+    const cfg = config.value || (await loadConfig());
     const options = {
-      permission: cfg?.sharingDefaults?.accessLevel || 'view',
-      excludedPaths: JSON.parse(JSON.stringify(cfg?.sharingExcludedPaths || []))
+      permission: cfg?.sharingDefaults?.permission || "view",
+      excludedPaths: JSON.parse(
+        JSON.stringify(cfg?.sharingExcludedPaths || []),
+      ),
     };
     const result = await api.share.startWorkspace(workspacePath.value, options);
     if (result.success) {
       sharesByFile[WORKSPACE_KEY] = result;
-      shareStatsByFile[WORKSPACE_KEY] = { reads: result.reads ?? 0, connected: 0 };
+      shareStatsByFile[WORKSPACE_KEY] = {
+        reads: result.reads ?? 0,
+        connected: 0,
+      };
     }
     return result;
   }
 
   async function startAllWorkspacesShare() {
-    const cfg = config.value || await loadConfig();
-    const workspaces = recentWorkspaces.value.map(w => ({ path: w.path, name: w.name }));
+    const cfg = config.value || (await loadConfig());
+    const workspaces = recentWorkspaces.value.map((w) => ({
+      path: w.path,
+      name: w.name,
+    }));
     const options = {
-      permission: cfg?.sharingDefaults?.accessLevel || 'view',
-      excludedPaths: JSON.parse(JSON.stringify(cfg?.sharingExcludedPaths || []))
+      permission: cfg?.sharingDefaults?.permission || "view",
+      excludedPaths: JSON.parse(
+        JSON.stringify(cfg?.sharingExcludedPaths || []),
+      ),
     };
-    const ALL_WS_KEY = '__all_workspaces__';
+    const ALL_WS_KEY = "__all_workspaces__";
     const result = await api.share.startAllWorkspaces(workspaces, options);
     if (result.success) {
       sharesByFile[ALL_WS_KEY] = result;
@@ -1280,7 +1371,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function stopAllWorkspacesShare() {
-    const ALL_WS_KEY = '__all_workspaces__';
+    const ALL_WS_KEY = "__all_workspaces__";
     await api.share.stopWorkspace(ALL_WS_KEY);
     delete sharesByFile[ALL_WS_KEY];
     delete shareStatsByFile[ALL_WS_KEY];
@@ -1303,10 +1394,10 @@ export const useAppStore = defineStore("app", () => {
   function _buildSearchRegex(query, opts) {
     if (!query) return null;
     try {
-      const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       let pattern = opts.regex ? query : escape(query);
       if (opts.word) pattern = `\\b(?:${pattern})\\b`;
-      const flags = 'g' + (opts.case ? '' : 'i');
+      const flags = "g" + (opts.case ? "" : "i");
       return new RegExp(pattern, flags);
     } catch {
       return null;
@@ -1316,12 +1407,17 @@ export const useAppStore = defineStore("app", () => {
   function _findInTextByLines(text, re) {
     if (!re) return [];
     const out = [];
-    const lines = text.split('\n');
+    const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       for (const m of line.matchAll(re)) {
         if (m[0].length === 0) continue;
-        out.push({ line: i + 1, col: m.index, text: line, length: m[0].length });
+        out.push({
+          line: i + 1,
+          col: m.index,
+          text: line,
+          length: m[0].length,
+        });
       }
     }
     return out;
@@ -1331,29 +1427,29 @@ export const useAppStore = defineStore("app", () => {
     const re = _buildSearchRegex(wsSearch.query, wsSearch.opts);
     if (!re) {
       wsSearch.results = { branch: [], other: [] };
-      wsSearch.lastError = 'Invalid regex';
+      wsSearch.lastError = "Invalid regex";
       return;
     }
-    wsSearch.lastError = '';
+    wsSearch.lastError = "";
     const branchResults = [];
     for (const [filePath, content] of Object.entries(demoFiles.value || {})) {
       const matches = _findInTextByLines(content, re);
       if (matches.length) {
-        branchResults.push({ filePath, branch: 'current', matches });
+        branchResults.push({ filePath, branch: "current", matches });
       }
     }
     wsSearch.results = { branch: branchResults, other: [] };
   }
 
   async function runWorkspaceSearch() {
-    const q = (wsSearch.query || '').trim();
+    const q = (wsSearch.query || "").trim();
     if (!q) {
       wsSearch.results = { branch: [], other: [] };
-      wsSearch.lastError = '';
+      wsSearch.lastError = "";
       return;
     }
     wsSearch.searching = true;
-    wsSearch.lastError = '';
+    wsSearch.lastError = "";
     try {
       if (isDemoMode.value) {
         _demoWorkspaceSearch();
@@ -1382,7 +1478,7 @@ export const useAppStore = defineStore("app", () => {
 
   async function replaceAllInWorkspace() {
     if (isDemoMode.value) {
-      wsSearch.lastError = 'Demo mode is read-only.';
+      wsSearch.lastError = "Demo mode is read-only.";
       return { replaced: 0, skipped: 0 };
     }
     if (!wsSearch.query) return { replaced: 0, skipped: 0 };
@@ -1404,7 +1500,7 @@ export const useAppStore = defineStore("app", () => {
         }
       }
       const next = _applyReplacementToText(
-        original || '',
+        original || "",
         wsSearch.query,
         wsSearch.replace,
         wsSearch.opts,
@@ -1424,7 +1520,7 @@ export const useAppStore = defineStore("app", () => {
 
   async function replaceNextInWorkspace() {
     if (isDemoMode.value) {
-      wsSearch.lastError = 'Demo mode is read-only.';
+      wsSearch.lastError = "Demo mode is read-only.";
       return { replaced: 0, skipped: 0 };
     }
     const targets = wsSearch.results.branch || [];
@@ -1441,14 +1537,15 @@ export const useAppStore = defineStore("app", () => {
     }
     const re = _buildSearchRegex(wsSearch.query, wsSearch.opts);
     if (!re) return { replaced: 0, skipped: 0 };
-    const next = (original || '').replace(re, (match, ...rest) => {
+    const next = (original || "").replace(re, (match, ...rest) => {
       re.lastIndex = 0;
       return wsSearch.replace;
     });
     // Above replaces all on the line — for true "next only" semantics use a one-shot regex.
-    const oneShot = new RegExp(re.source, re.flags.replace('g', ''));
-    const single = (original || '').replace(oneShot, wsSearch.replace);
-    if (single === original) return { replaced: 0, skipped: (wsSearch.results.other || []).length };
+    const oneShot = new RegExp(re.source, re.flags.replace("g", ""));
+    const single = (original || "").replace(oneShot, wsSearch.replace);
+    if (single === original)
+      return { replaced: 0, skipped: (wsSearch.results.other || []).length };
     if (currentFile.value === filePath) {
       currentContent.value = single;
       isDirty.value = true;
@@ -1460,7 +1557,10 @@ export const useAppStore = defineStore("app", () => {
   }
 
   function openWorkspaceSearchResult(result) {
-    wsSearch.pendingFocus = { filePath: result.filePath, line: result.line || 1 };
+    wsSearch.pendingFocus = {
+      filePath: result.filePath,
+      line: result.line || 1,
+    };
     searchViewOpen.value = false;
     if (result.filePath !== currentFile.value) {
       openFile(result.filePath);
@@ -1474,39 +1574,48 @@ export const useAppStore = defineStore("app", () => {
     }
   }
 
-  async function startAgentSession({ sessionId, file, agentName, workspacePath: wsParam }) {
-    agentActivity.value = null
-    agentSession.value = { sessionId, agentName, file, startedAt: Date.now() }
-    const ws = wsParam || workspacePath.value
+  async function startAgentSession({
+    sessionId,
+    file,
+    agentName,
+    workspacePath: wsParam,
+  }) {
+    agentActivity.value = null;
+    agentSession.value = { sessionId, agentName, file, startedAt: Date.now() };
+    const ws = wsParam || workspacePath.value;
     if (ws && ws !== workspacePath.value) {
-      await openWorkspace(ws)
+      await openWorkspace(ws);
     }
     if (file && ws) {
-      await openFile(file)
+      await openFile(file);
     }
   }
 
   async function cancelAgentSession() {
-    if (!agentSession.value) return
-    const { sessionId } = agentSession.value
-    agentSession.value = null
-    actionPickerOpen.value = false
-    await api.agentSession.cancel(sessionId)
+    if (!agentSession.value) return;
+    const { sessionId } = agentSession.value;
+    agentSession.value = null;
+    actionPickerOpen.value = false;
+    await api.agentSession.cancel(sessionId);
   }
 
   async function submitAgentAction(prompt) {
-    if (!agentSession.value) return
-    const { sessionId } = agentSession.value
+    if (!agentSession.value) return;
+    const { sessionId } = agentSession.value;
     try {
-      await api.agentSession.submit({ sessionId, prompt, content: currentContent.value })
+      await api.agentSession.submit({
+        sessionId,
+        prompt,
+        content: currentContent.value,
+      });
     } finally {
-      agentSession.value = null
-      actionPickerOpen.value = false
+      agentSession.value = null;
+      actionPickerOpen.value = false;
     }
   }
 
   async function addAgentComment({ commentId, file, anchor, text, agentName }) {
-    if (file !== currentFile.value) return
+    if (file !== currentFile.value) return;
     const comment = {
       id: commentId,
       isAgent: true,
@@ -1516,13 +1625,17 @@ export const useAppStore = defineStore("app", () => {
       text,
       resolved: false,
       createdAt: new Date().toISOString(),
-    }
-    comments.value.push(comment)
-    await persistComments()
+    };
+    comments.value.push(comment);
+    await persistComments();
   }
 
-  function openActionPicker() { actionPickerOpen.value = true }
-  function closeActionPicker() { actionPickerOpen.value = false }
+  function openActionPicker() {
+    actionPickerOpen.value = true;
+  }
+  function closeActionPicker() {
+    actionPickerOpen.value = false;
+  }
 
   async function favoritePeer(id) {
     await api.peers.favorite(id);
@@ -1559,8 +1672,12 @@ export const useAppStore = defineStore("app", () => {
   }
 
   function updatePeerComment(id, patch) {
-    const idx = peerFileComments.value.findIndex(c => c.id === id);
-    if (idx >= 0) peerFileComments.value[idx] = { ...peerFileComments.value[idx], ...patch };
+    const idx = peerFileComments.value.findIndex((c) => c.id === id);
+    if (idx >= 0)
+      peerFileComments.value[idx] = {
+        ...peerFileComments.value[idx],
+        ...patch,
+      };
   }
 
   async function copyPeerFileToWorkspace({ relPath, content }) {

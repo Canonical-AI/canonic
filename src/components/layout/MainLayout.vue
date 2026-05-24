@@ -1,26 +1,46 @@
 <template>
-    <div class="layout" :class="{ 'is-resizing': isResizing, 'layout-compact': store.isCompactLayout, 'layout-mac': isMac }">
+    <div
+        class="layout"
+        :class="{
+            'is-resizing': isResizing,
+            'layout-compact': store.isCompactLayout,
+            'layout-mac': isMac,
+        }"
+    >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
         <div v-if="!store.isCompactLayout" class="titlebar">
             <div class="titlebar-left">
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
-                <span class="app-name">canonic<span class="accent">.ai</span></span>
+                <span class="app-name"
+                    >canonic<span class="accent">.ai</span></span
+                >
             </div>
             <div class="titlebar-center"></div>
             <div class="titlebar-right">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
-                    <button class="icon-btn" @click="installUpdate" title="Restart and install update">
+                    <button
+                        class="icon-btn"
+                        @click="installUpdate"
+                        title="Restart and install update"
+                    >
                         <ArrowUpCircle :size="15" />
                     </button>
                 </template>
                 <template v-else-if="updateDownloading">
-                    <div class="icon-btn" :title="'Downloading update ' + downloadProgress + '%'">
+                    <div
+                        class="icon-btn"
+                        :title="'Downloading update ' + downloadProgress + '%'"
+                    >
                         <ArrowUpCircle :size="15" style="opacity: 0.5" />
                     </div>
                 </template>
                 <template v-else-if="updateAvailable">
-                    <button class="icon-btn" @click="downloadUpdate" title="Download available update">
+                    <button
+                        class="icon-btn"
+                        @click="downloadUpdate"
+                        title="Download available update"
+                    >
                         <ArrowUpCircle :size="15" />
                     </button>
                 </template>
@@ -28,7 +48,11 @@
                 <!-- Font toggle -->
                 <button
                     class="icon-btn"
-                    :title="fontMode === 'serif' ? 'Switch to sans-serif' : 'Switch to serif'"
+                    :title="
+                        fontMode === 'serif'
+                            ? 'Switch to sans-serif'
+                            : 'Switch to serif'
+                    "
                     @click="toggleFont"
                 >
                     <Type :size="15" />
@@ -63,7 +87,10 @@
                             >
                                 {{ t.name }}
                             </button>
-                            <div v-if="filteredThemes.length > 10" class="theme-more-hint">
+                            <div
+                                v-if="filteredThemes.length > 10"
+                                class="theme-more-hint"
+                            >
                                 +{{ filteredThemes.length - 10 }} more...
                             </div>
                         </div>
@@ -92,7 +119,11 @@
                 <button
                     class="icon-btn"
                     :class="{ active: store.distractionFreeMode }"
-                    :title="store.distractionFreeMode ? 'Exit Focus Mode' : 'Enter Focus Mode (Distraction-free)'"
+                    :title="
+                        store.distractionFreeMode
+                            ? 'Exit Focus Mode'
+                            : 'Enter Focus Mode (Distraction-free)'
+                    "
                     @click="toggleDistractionFree"
                 >
                     <Eye :size="15" />
@@ -108,36 +139,58 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Compact Thin Header -->
-        <div v-if="store.isCompactLayout" class="mobile-header" :class="{ 'mobile-header--mac': isMac }">
+        <div
+            v-if="store.isCompactLayout"
+            class="mobile-header"
+            :class="{ 'mobile-header--mac': isMac }"
+        >
             <div class="mobile-header-left">
-                <button class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen" ref="menuBtnRef" title="Menu">
+                <button
+                    class="mobile-menu-btn"
+                    @click="mobileMenuOpen = !mobileMenuOpen"
+                    ref="menuBtnRef"
+                    title="Menu"
+                >
                     <Menu :size="16" />
                 </button>
                 <img src="/canonical-logo.svg" alt="" class="mobile-logo" />
-                <span class="app-name">canonic<span class="accent">.ai</span></span>
+                <span class="app-name"
+                    >canonic<span class="accent">.ai</span></span
+                >
             </div>
             <div class="mobile-header-right">
                 <!-- Focus mode toggle button in header to exit Focus Mode if manually entered -->
-                <button 
+                <button
                     v-if="store.distractionFreeMode"
-                    class="mobile-icon-btn active-focus" 
+                    class="mobile-icon-btn active-focus"
                     title="Exit Focus Mode"
                     @click="store.distractionFreeMode = false"
                 >
                     <EyeOff :size="14" />
                 </button>
-                <button class="mobile-icon-btn" @click="showSettings = true" title="Settings">
+                <button
+                    class="mobile-icon-btn"
+                    @click="showSettings = true"
+                    title="Settings"
+                >
                     <Settings :size="14" />
                 </button>
             </div>
 
             <!-- Compact Navigation Menu Popover -->
-            <div v-if="mobileMenuOpen" class="mobile-menu-dropdown" ref="mobileMenuDropdownRef">
+            <div
+                v-if="mobileMenuOpen"
+                class="mobile-menu-dropdown"
+                ref="mobileMenuDropdownRef"
+            >
                 <div class="dropdown-section">
                     <div class="dropdown-section-title">Navigation</div>
-                    <button class="dropdown-item" @click="openMobileTab('left', 'files')">
+                    <button
+                        class="dropdown-item"
+                        @click="openMobileTab('left', 'files')"
+                    >
                         <Files :size="14" />
                         <span>Files</span>
                     </button>
@@ -145,7 +198,10 @@
                         <Search :size="14" />
                         <span>Find & Replace</span>
                     </button>
-                    <button class="dropdown-item" @click="openMobileTab('left', 'peers')">
+                    <button
+                        class="dropdown-item"
+                        @click="openMobileTab('left', 'peers')"
+                    >
                         <Users :size="14" />
                         <span>Shared with me</span>
                     </button>
@@ -153,29 +209,48 @@
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-section">
                     <div class="dropdown-section-title">Tools & Panels</div>
-                    <button class="dropdown-item" @click="openMobileTab('right', 'comments')">
+                    <button
+                        class="dropdown-item"
+                        @click="openMobileTab('right', 'comments')"
+                    >
                         <MessageSquare :size="14" />
                         <span>Comments</span>
                     </button>
-                    <button class="dropdown-item" @click="openMobileTab('right', 'ai')">
+                    <button
+                        class="dropdown-item"
+                        @click="openMobileTab('right', 'ai')"
+                    >
                         <Sparkles :size="14" />
                         <span>AI Assistant</span>
                     </button>
-                    <button class="dropdown-item" @click="openMobileTab('right', 'history')">
+                    <button
+                        class="dropdown-item"
+                        @click="openMobileTab('right', 'history')"
+                    >
                         <History :size="14" />
                         <span>History</span>
                     </button>
-                    <button class="dropdown-item" @click="openMobileTab('right', 'share')">
+                    <button
+                        class="dropdown-item"
+                        @click="openMobileTab('right', 'share')"
+                    >
                         <Share2 :size="14" />
                         <span>Share</span>
                     </button>
                 </div>
                 <div class="dropdown-divider"></div>
                 <div class="dropdown-section">
-                    <button class="dropdown-item" @click="toggleDistractionFree">
+                    <button
+                        class="dropdown-item"
+                        @click="toggleDistractionFree"
+                    >
                         <Eye :size="14" v-if="!store.distractionFreeMode" />
                         <EyeOff :size="14" v-else />
-                        <span>{{ store.distractionFreeMode ? 'Exit Focus Mode' : 'Focus Mode' }}</span>
+                        <span>{{
+                            store.distractionFreeMode
+                                ? "Exit Focus Mode"
+                                : "Focus Mode"
+                        }}</span>
                     </button>
                 </div>
             </div>
@@ -202,7 +277,9 @@
                                 ? 'Expand sidebar'
                                 : 'Collapse sidebar'
                         "
-                        @click="store.sidebarCollapsed = !store.sidebarCollapsed"
+                        @click="
+                            store.sidebarCollapsed = !store.sidebarCollapsed
+                        "
                     >
                         <PanelLeftClose
                             v-if="!store.sidebarCollapsed"
@@ -221,10 +298,7 @@
                         <Files :size="15" />
                     </button>
                     <button
-                        :class="[
-                            'tab',
-                            store.searchViewOpen && 'active',
-                        ]"
+                        :class="['tab', store.searchViewOpen && 'active']"
                         @click="toggleSearchView"
                         title="Find & Replace"
                     >
@@ -245,7 +319,10 @@
                 <template v-if="!store.sidebarCollapsed">
                     <FileTree v-if="store.sidebarTab === 'files'" />
                     <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
-                    <HintsPanel :config="store.config" @navigate="handleHintNavigate" />
+                    <HintsPanel
+                        :config="store.config"
+                        @navigate="handleHintNavigate"
+                    />
                 </template>
             </aside>
 
@@ -290,55 +367,103 @@
                     'right-panel--collapsed': store.rightPanelCollapsed,
                     'right-panel--floating': panelFloating,
                 }"
-                :style="store.rightPanelCollapsed ? {} : (panelFloating ? {} : { width: rightPanelWidth + 'px', transition: isResizing ? 'none' : undefined })"
+                :style="
+                    store.rightPanelCollapsed
+                        ? {}
+                        : panelFloating
+                          ? {}
+                          : {
+                                width: rightPanelWidth + 'px',
+                                transition: isResizing ? 'none' : undefined,
+                            }
+                "
             >
-                <div v-if="!store.rightPanelCollapsed" class="resize-handle" @mousedown="onResizeStart" />
-                <div class="panel-tabs" :class="{ 'panel-tabs--collapsed': store.rightPanelCollapsed }">
+                <div
+                    v-if="!store.rightPanelCollapsed"
+                    class="resize-handle"
+                    @mousedown="onResizeStart"
+                />
+                <div
+                    class="panel-tabs"
+                    :class="{
+                        'panel-tabs--collapsed': store.rightPanelCollapsed,
+                    }"
+                >
                     <!-- Collapse toggle (leftmost when collapsed, topmost when open) -->
                     <button
                         class="tab panel-toggle"
-                        :title="store.rightPanelCollapsed ? 'Expand panel' : 'Collapse panel'"
-                        @click="store.rightPanelCollapsed = !store.rightPanelCollapsed"
+                        :title="
+                            store.rightPanelCollapsed
+                                ? 'Expand panel'
+                                : 'Collapse panel'
+                        "
+                        @click="
+                            store.rightPanelCollapsed =
+                                !store.rightPanelCollapsed
+                        "
                     >
-                        <PanelRightClose v-if="!store.rightPanelCollapsed" :size="15" />
+                        <PanelRightClose
+                            v-if="!store.rightPanelCollapsed"
+                            :size="15"
+                        />
                         <PanelRightOpen v-else :size="15" />
                     </button>
                     <button
-                        :class="['tab', store.rightPanelTab === 'comments' && 'active']"
+                        :class="[
+                            'tab',
+                            store.rightPanelTab === 'comments' && 'active',
+                        ]"
                         @click="handleRightTabClick('comments')"
                         title="Comments"
                     >
                         <MessageSquare :size="15" />
                     </button>
                     <button
-                        :class="['tab', store.rightPanelTab === 'ai' && 'active']"
+                        :class="[
+                            'tab',
+                            store.rightPanelTab === 'ai' && 'active',
+                        ]"
                         @click="handleRightTabClick('ai')"
                         title="AI"
                     >
                         <Sparkles :size="15" />
                     </button>
                     <button
-                        :class="['tab', store.rightPanelTab === 'history' && 'active']"
+                        :class="[
+                            'tab',
+                            store.rightPanelTab === 'history' && 'active',
+                        ]"
                         @click="handleRightTabClick('history')"
                         title="History"
                     >
                         <History :size="15" />
                     </button>
                     <button
-                        :class="['tab', store.rightPanelTab === 'share' && 'active']"
+                        :class="[
+                            'tab',
+                            store.rightPanelTab === 'share' && 'active',
+                        ]"
                         @click="handleRightTabClick('share')"
                         title="Share"
                     >
                         <Share2 :size="15" />
                     </button>
                 </div>
-                <div v-show="!store.rightPanelCollapsed" class="panel-content-wrap">
+                <div
+                    v-show="!store.rightPanelCollapsed"
+                    class="panel-content-wrap"
+                >
                     <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
                 </div>
                 <!-- AIChat kept always-mounted so streaming survives focus/tab toggles -->
-                <AIChat v-show="store.rightPanelTab === 'ai' && !store.rightPanelCollapsed" />
+                <AIChat
+                    v-show="
+                        store.rightPanelTab === 'ai' &&
+                        !store.rightPanelCollapsed
+                    "
+                />
             </aside>
         </div>
 
@@ -346,34 +471,75 @@
         <Transition name="update-prompt">
             <div v-if="showUpdatePrompt" class="update-prompt">
                 <ArrowUpCircle :size="15" class="update-prompt-icon" />
-                <span class="update-prompt-text">v{{ updateInfo?.version }} available</span>
-                <button class="update-prompt-btn update-prompt-btn--primary" @click="handlePromptDownload">Download now</button>
-                <button class="update-prompt-btn" @click="showUpdatePrompt = false">Later</button>
+                <span class="update-prompt-text"
+                    >v{{ updateInfo?.version }} available</span
+                >
+                <button
+                    class="update-prompt-btn update-prompt-btn--primary"
+                    @click="handlePromptDownload"
+                >
+                    Download now
+                </button>
+                <button
+                    class="update-prompt-btn"
+                    @click="showUpdatePrompt = false"
+                >
+                    Later
+                </button>
             </div>
         </Transition>
 
         <!-- Backdrop overlays for compact modals -->
-        <div 
-            v-if="store.isCompactLayout && !store.sidebarCollapsed" 
-            class="mobile-backdrop" 
-            @click="store.sidebarCollapsed = true" 
+        <div
+            v-if="store.isCompactLayout && !store.sidebarCollapsed"
+            class="mobile-backdrop"
+            @click="store.sidebarCollapsed = true"
         />
-        <div 
-            v-if="store.isCompactLayout && !store.rightPanelCollapsed" 
-            class="mobile-backdrop" 
-            @click="store.rightPanelCollapsed = true" 
+        <div
+            v-if="store.isCompactLayout && !store.rightPanelCollapsed"
+            class="mobile-backdrop"
+            @click="store.rightPanelCollapsed = true"
         />
 
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
-        <SettingsModal v-if="showSettings" :initial-tab="settingsInitialTab" @close="showSettings = false; settingsInitialTab = 'profile'" />
+        <SettingsModal
+            v-if="showSettings"
+            :initial-tab="settingsInitialTab"
+            @close="
+                showSettings = false;
+                settingsInitialTab = 'profile';
+            "
+        />
 
         <AgentSessionPill />
+
+        <!-- Organic Grain Overlay -->
+        <div class="grain-overlay" />
+        <svg style="display: none">
+            <filter id="grainy-noise">
+                <feTurbulence
+                    type="fractalNoise"
+                    baseFrequency="0.65"
+                    numOctaves="3"
+                    stitchTiles="stitch"
+                />
+                <feColorMatrix type="saturate" values="0" />
+            </filter>
+        </svg>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, provide, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
+import {
+    ref,
+    computed,
+    provide,
+    watch,
+    onMounted,
+    onBeforeUnmount,
+    nextTick,
+} from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
 import {
@@ -466,9 +632,24 @@ function toggleFont() {
 }
 
 // ── Theme switcher ───────────────────────────────────────────────────────────
-const isMac = ref(typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || ''));
+const isMac = ref(
+    typeof navigator !== "undefined" &&
+        /Mac|iPhone|iPad/.test(navigator.platform || ""),
+);
 const THEME_KEY = "canonic:theme";
-const BUILTIN_THEMES = ["hal2001", "auteur", "paper", "mocha", "macchiato", "latte", "dracula", "nord", "solarized", "gruvbox", "tokyo"];
+const BUILTIN_THEMES = [
+    "hal2001",
+    "auteur",
+    "paper",
+    "mocha",
+    "macchiato",
+    "latte",
+    "dracula",
+    "nord",
+    "solarized",
+    "gruvbox",
+    "tokyo",
+];
 
 const activeTheme = ref(storage.getItem(THEME_KEY) || "hal2001");
 const themeOpen = ref(false);
@@ -486,7 +667,7 @@ const allThemes = computed(() => {
 const filteredThemes = computed(() => {
     if (!themeSearch.value) return allThemes.value;
     const s = themeSearch.value.toLowerCase();
-    return allThemes.value.filter(t => t.name.toLowerCase().includes(s));
+    return allThemes.value.filter((t) => t.name.toLowerCase().includes(s));
 });
 
 function applyTheme(name) {
@@ -643,41 +824,51 @@ function onGlobalKeydown(e) {
         nextTick(() => searchViewRef.value?.focusInput?.());
         return;
     }
-    if (store.searchViewOpen && e.key === 'Escape') {
+    if (store.searchViewOpen && e.key === "Escape") {
         store.searchViewOpen = false;
     }
 }
 
 onMounted(() => {
-    document.addEventListener('keydown', onGlobalKeydown);
+    document.addEventListener("keydown", onGlobalKeydown);
 });
 
 onBeforeUnmount(() => {
     document.removeEventListener("click", onDocClick, true);
-    document.removeEventListener('keydown', onGlobalKeydown);
+    document.removeEventListener("keydown", onGlobalKeydown);
 });
 
 const showNewDoc = ref(false);
 const showSettings = ref(false);
-const settingsInitialTab = ref('profile');
+const settingsInitialTab = ref("profile");
 
 function handleHintNavigate(target) {
-    if (target.startsWith('settings:')) {
-        settingsInitialTab.value = target.slice('settings:'.length)
+    if (target.startsWith("settings:")) {
+        settingsInitialTab.value = target.slice("settings:".length);
     }
-    showSettings.value = true
+    showSettings.value = true;
 }
-const { updateReady, updateAvailable, updateDownloading, updateInfo, downloadProgress, downloadUpdate, installUpdate } = store;
+const {
+    updateReady,
+    updateAvailable,
+    updateDownloading,
+    updateInfo,
+    downloadProgress,
+    downloadUpdate,
+    installUpdate,
+} = store;
 
-const showUpdatePrompt = ref(false)
+const showUpdatePrompt = ref(false);
 watch(updateAvailable, (val) => {
     if (val && !updateDownloading.value && !updateReady.value) {
-        setTimeout(() => { showUpdatePrompt.value = true }, 2000)
+        setTimeout(() => {
+            showUpdatePrompt.value = true;
+        }, 2000);
     }
-})
+});
 function handlePromptDownload() {
-    showUpdatePrompt.value = false
-    downloadUpdate()
+    showUpdatePrompt.value = false;
+    downloadUpdate();
 }
 
 provide("showNewDoc", () => {
@@ -697,12 +888,12 @@ function handleTabClick(tab) {
     }
 }
 
-const panelFloating = computed(() =>
-    store.isCompactLayout && !store.rightPanelCollapsed
+const panelFloating = computed(
+    () => store.isCompactLayout && !store.rightPanelCollapsed,
 );
 
-const sidebarFloating = computed(() =>
-    store.isCompactLayout && !store.sidebarCollapsed
+const sidebarFloating = computed(
+    () => store.isCompactLayout && !store.sidebarCollapsed,
 );
 
 function handleRightTabClick(tab) {
@@ -716,7 +907,7 @@ function handleRightTabClick(tab) {
 
 const RIGHT_PANEL_WIDTH_KEY = "canonic:rightPanelWidth";
 const rightPanelWidth = ref(
-    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "360")
+    parseInt(storage.getItem(RIGHT_PANEL_WIDTH_KEY) || "360"),
 );
 const isResizing = ref(false);
 
@@ -728,7 +919,10 @@ function onResizeStart(e) {
 
     function onMouseMove(e) {
         const delta = startX - e.clientX;
-        rightPanelWidth.value = Math.max(200, Math.min(600, startWidth + delta));
+        rightPanelWidth.value = Math.max(
+            200,
+            Math.min(600, startWidth + delta),
+        );
     }
 
     function onMouseUp() {
@@ -747,7 +941,7 @@ const mobileMenuDropdownRef = ref(null);
 
 function openMobileTab(side, tab) {
     mobileMenuOpen.value = false;
-    if (side === 'left') {
+    if (side === "left") {
         store.sidebarTab = tab;
         store.sidebarCollapsed = false;
         store.rightPanelCollapsed = true;
@@ -1064,13 +1258,19 @@ function toggleDistractionFree() {
     border-radius: 10px;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     z-index: 9999;
     font-size: 0.8125rem;
     color: var(--text);
 }
-.update-prompt-icon { color: var(--accent); flex-shrink: 0; }
-.update-prompt-text { font-weight: 500; white-space: nowrap; }
+.update-prompt-icon {
+    color: var(--accent);
+    flex-shrink: 0;
+}
+.update-prompt-text {
+    font-weight: 500;
+    white-space: nowrap;
+}
 .update-prompt-btn {
     padding: 4px 10px;
     border-radius: 6px;
@@ -1082,15 +1282,29 @@ function toggleDistractionFree() {
     transition: background 0.15s;
     white-space: nowrap;
 }
-.update-prompt-btn:hover { background: var(--bg-hover); }
+.update-prompt-btn:hover {
+    background: var(--bg-hover);
+}
 .update-prompt-btn--primary {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
 }
-.update-prompt-btn--primary:hover { opacity: 0.88; background: var(--accent); }
-.update-prompt-enter-active, .update-prompt-leave-active { transition: opacity 0.2s, transform 0.2s; }
-.update-prompt-enter-from, .update-prompt-leave-to { opacity: 0; transform: translateY(8px); }
+.update-prompt-btn--primary:hover {
+    opacity: 0.88;
+    background: var(--accent);
+}
+.update-prompt-enter-active,
+.update-prompt-leave-active {
+    transition:
+        opacity 0.2s,
+        transform 0.2s;
+}
+.update-prompt-enter-from,
+.update-prompt-leave-to {
+    opacity: 0;
+    transform: translateY(8px);
+}
 
 .update-ready-btn {
     display: flex;
@@ -1114,8 +1328,13 @@ function toggleDistractionFree() {
 }
 
 @keyframes update-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(74, 122, 155, 0.5); }
-    50%       { box-shadow: 0 0 0 5px rgba(74, 122, 155, 0); }
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(74, 122, 155, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(74, 122, 155, 0);
+    }
 }
 
 .update-available-btn {
@@ -1270,7 +1489,9 @@ function toggleDistractionFree() {
     font-size: 0.8125rem;
     cursor: pointer;
     text-align: left;
-    transition: background 0.12s, color 0.12s;
+    transition:
+        background 0.12s,
+        color 0.12s;
     white-space: nowrap;
 }
 
@@ -1415,7 +1636,9 @@ function toggleDistractionFree() {
     font-size: 0.8125rem;
     cursor: pointer;
     text-align: left;
-    transition: background 0.12s, color 0.12s;
+    transition:
+        background 0.12s,
+        color 0.12s;
     width: 100%;
 }
 

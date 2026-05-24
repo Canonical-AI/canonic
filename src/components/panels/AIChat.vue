@@ -1010,7 +1010,7 @@ function buildSystemPrompt(name, extraInstructions) {
         );
     if (agentCaps.postComments)
         toolHints.push(
-            "Use the `post_comment` tool to leave an inline comment anchored to an exact quoted passage from the current document. `anchor` must match the text verbatim. Prefer one or two precise comments over many vague ones.",
+            "Use the `post_comment` tool to leave an inline comment anchored to an exact quoted passage from the current document. `anchor` must match the visible plain text verbatim (do not include markdown symbols like # or **). Choose a unique, specific passage.",
         );
 
     let instructions = `You are ${name}, a sharp, seasoned technical mentor reviewing the user's document. Your job: brainstorm, challenge assumptions, spot gaps, ask clarifying questions. Never write the document for them.
@@ -1023,7 +1023,7 @@ The full current document is provided in <current_document>. A workspace file in
 
 ${toolHints.length ? "Tools available:\n" + toolHints.map((t) => "- " + t).join("\n") : ""}
 
-CRITICAL: When the user asks you to comment, leave a comment, annotate, mark up, flag, or critique passages, you MUST call the post_comment tool — do not just describe the comment in chat. Quote the exact anchor text verbatim from the current document. You may post multiple comments in one turn by calling the tool multiple times.
+CRITICAL: When the user asks you to comment, leave a comment, annotate, mark up, flag, or critique passages, you MUST call the post_comment tool — do not just describe the comment in chat. Quote the exact anchor text verbatim from the current document's visible text (plain text, no markdown syntax). You may post multiple comments in one turn by calling the tool multiple times.
 
 Effort level: ${effortLevel.value}. Low = one or two sentences. Medium = a tight paragraph. High = thorough but still terse, no padding.`;
 
@@ -1138,7 +1138,7 @@ async function sendMessage() {
     }
 
     const docContext = store.currentContent
-        ? `\n\n<current_document path="${store.currentFile || "untitled"}">\n${store.currentContent}\n</current_document>`
+        ? `\n\n<current_document path="${store.currentFile || "untitled"}" format="markdown">\n${store.currentContent}\n</current_document>\n\n<current_document_plaintext>\n${store.currentContent.replace(/[#*`_~]/g, "")}\n</current_document_plaintext>`
         : "";
     cachedSystemContent =
         buildSystemPrompt(name, extraInstructions) +

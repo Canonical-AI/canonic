@@ -685,6 +685,67 @@
                             </div>
                         </div>
 
+                        <div
+                            v-show="shouldShow('editorTabs', 'appearance')"
+                            id="setting-editorTabs"
+                            class="field"
+                        >
+                            <div
+                                class="settings-card"
+                                :class="{ active: form.tabsEnabled }"
+                                @click="form.tabsEnabled = !form.tabsEnabled"
+                            >
+                                <div class="card-header">
+                                    <span class="card-label"
+                                        >Editor tabs</span
+                                    >
+                                    <div
+                                        class="toggle"
+                                        :class="{ on: form.tabsEnabled }"
+                                    >
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                </div>
+                                <p class="card-desc">
+                                    Show a strip of tabs for files opened this
+                                    session.
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            v-show="shouldShow('editorTabsPosition', 'appearance')"
+                            v-if="form.tabsEnabled"
+                            id="setting-editorTabsPosition"
+                            class="field"
+                        >
+                            <label class="field-label">Tab position</label>
+                            <div class="scope-options">
+                                <label
+                                    v-for="opt in tabsPositionOptions"
+                                    :key="opt.value"
+                                    :class="[
+                                        'scope-option',
+                                        form.tabsPosition === opt.value &&
+                                            'selected',
+                                    ]"
+                                >
+                                    <input
+                                        type="radio"
+                                        v-model="form.tabsPosition"
+                                        :value="opt.value"
+                                    />
+                                    <div class="scope-content">
+                                        <span class="scope-name">{{
+                                            opt.label
+                                        }}</span>
+                                        <span class="scope-desc">{{
+                                            opt.desc
+                                        }}</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
                         <p v-show="activeTab !== 'all'" class="section-heading">
                             Theming
                         </p>
@@ -1294,6 +1355,8 @@ const form = reactive({
     editorParagraphSpacing: false,
     grainEnabled: false,
     grainOpacity: 0.02,
+    tabsEnabled: true,
+    tabsPosition: "bottom",
     autoShareWorkspace: false,
     autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
@@ -1382,6 +1445,19 @@ const updateStatus = ref("");
 const wsShareLoading = ref(false);
 const wsShareError = ref("");
 const wsShareCopied = ref(false);
+
+const tabsPositionOptions = [
+    {
+        value: "bottom",
+        label: "Bottom",
+        desc: "Tabs sit below the editor and any split panes.",
+    },
+    {
+        value: "top",
+        label: "Top",
+        desc: "Tabs sit above the editor and any split panes.",
+    },
+];
 
 const scopeOptions = [
     { value: "none", label: "Nothing", desc: "Sharing disabled by default" },
@@ -1480,6 +1556,18 @@ const allSettingsMetadata = [
         id: "paragraphSpacing",
         label: "Paragraph spacing",
         desc: "Add margin between paragraphs for better readability.",
+        tab: "appearance",
+    },
+    {
+        id: "editorTabs",
+        label: "Editor tabs",
+        desc: "Show a strip of tabs for files opened this session.",
+        tab: "appearance",
+    },
+    {
+        id: "editorTabsPosition",
+        label: "Tab position",
+        desc: "Show editor tabs on the top or bottom of the editor.",
         tab: "appearance",
     },
     {
@@ -1593,6 +1681,9 @@ onMounted(async () => {
             editorParagraphSpacing: cfg.editorParagraphSpacing === true,
             grainEnabled: !!cfg.grainEnabled,
             grainOpacity: cfg.grainOpacity ?? 0.02,
+            tabsEnabled: cfg.tabsEnabled !== false,
+            tabsPosition:
+                cfg.tabsPosition === "top" ? "top" : "bottom",
         };
         Object.assign(form, loaded);
         initialState = JSON.parse(JSON.stringify(loaded));

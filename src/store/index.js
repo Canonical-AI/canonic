@@ -135,6 +135,41 @@ export const useAppStore = defineStore("app", () => {
     storage.setItem("canonic:splitStacked", String(val));
   });
 
+  // Editor tabs: ordered list of open file paths (session-only, oldest-first)
+  const openTabs = ref([]);
+  // Tabs prefs cached in localStorage so first paint matches config; config wins on load
+  const tabsEnabled = ref(storage.getItem("canonic:tabsEnabled") !== "false");
+  const tabsPosition = ref(storage.getItem("canonic:tabsPosition") || "bottom");
+  watch(tabsEnabled, (val) => {
+    storage.setItem("canonic:tabsEnabled", String(val));
+  });
+  watch(tabsPosition, (val) => {
+    storage.setItem("canonic:tabsPosition", val);
+  });
+
+  function addTab(filePath) {
+    if (!filePath) return;
+    if (!openTabs.value.includes(filePath)) {
+      openTabs.value.push(filePath);
+    }
+  }
+
+  function closeTab(filePath) {
+    const idx = openTabs.value.indexOf(filePath);
+    if (idx === -1) return;
+    openTabs.value.splice(idx, 1);
+    if (currentFile.value === filePath) {
+      const next = openTabs.value[idx] || openTabs.value[idx - 1] || null;
+      if (next) {
+        openFile(next);
+      } else {
+        currentFile.value = null;
+        currentContent.value = "";
+        isDirty.value = false;
+      }
+    }
+  }
+
   // ==========================================
   // ── VERSION SNAPSHOTS & TRASH ──
   // ==========================================
@@ -547,10 +582,21 @@ export const useAppStore = defineStore("app", () => {
     );
   }
 
+  function applyTabsSettings(cfg) {
+    if (!cfg) return;
+    if (typeof cfg.tabsEnabled === "boolean") {
+      tabsEnabled.value = cfg.tabsEnabled;
+    }
+    if (cfg.tabsPosition === "top" || cfg.tabsPosition === "bottom") {
+      tabsPosition.value = cfg.tabsPosition;
+    }
+  }
+
   async function loadConfig() {
     if (import.meta.env.DEV) console.log("[Store] Loading config...");
     config.value = await api.config.read();
     applyAppearanceSettings(config.value);
+    applyTabsSettings(config.value);
     if (import.meta.env.DEV) {
       if (config.value) {
         console.log("[Store] Config loaded:", {
@@ -574,6 +620,7 @@ export const useAppStore = defineStore("app", () => {
     if (result.success) {
       config.value = result.config;
       applyAppearanceSettings(result.config);
+      applyTabsSettings(result.config);
       if (import.meta.env.DEV) console.log("[Store] Config saved successfully");
     } else {
       if (import.meta.env.DEV)
@@ -607,6 +654,7 @@ export const useAppStore = defineStore("app", () => {
         JSON.stringify(recentWorkspaces.value),
       );
       refPanes.value = [];
+      openTabs.value = [];
       currentFile.value = null;
       currentContent.value = "";
       comments.value = [];
@@ -657,6 +705,8 @@ export const useAppStore = defineStore("app", () => {
     await api.comments.move(oldDocId, newDocId);
     const renamedRefIdx = refPanes.value.indexOf(oldPath);
     if (renamedRefIdx !== -1) refPanes.value[renamedRefIdx] = newPath;
+    const renamedTabIdx = openTabs.value.indexOf(oldPath);
+    if (renamedTabIdx !== -1) openTabs.value[renamedTabIdx] = newPath;
     if (currentFile.value === oldPath) {
       currentFile.value = newPath;
       if (docBranchMap.value[oldPath]) {
@@ -674,6 +724,8 @@ export const useAppStore = defineStore("app", () => {
     await api.files.trash.delete(workspacePath.value, filePath, false);
     const deletedRefIdx = refPanes.value.indexOf(filePath);
     if (deletedRefIdx !== -1) refPanes.value.splice(deletedRefIdx, 1);
+    const deletedTabIdx = openTabs.value.indexOf(filePath);
+    if (deletedTabIdx !== -1) openTabs.value.splice(deletedTabIdx, 1);
     if (currentFile.value === filePath) {
       currentFile.value = null;
       currentContent.value = "";
@@ -697,6 +749,7 @@ export const useAppStore = defineStore("app", () => {
     if (!workspacePath.value) return;
     const prefix = dirPath + "/";
     refPanes.value = refPanes.value.filter((p) => !p.startsWith(prefix));
+    openTabs.value = openTabs.value.filter((p) => !p.startsWith(prefix));
     if (currentFile.value?.startsWith(prefix)) {
       currentFile.value = null;
       currentContent.value = "";
@@ -742,6 +795,13 @@ export const useAppStore = defineStore("app", () => {
 
     // Update reference panes if a shown doc (or its parent) was moved
     refPanes.value = refPanes.value.map((p) => {
+      if (p === filePath) return newPath;
+      if (p.startsWith(filePath + "/")) return p.replace(filePath, newPath);
+      return p;
+    });
+
+    // Same rewrite for editor tabs
+    openTabs.value = openTabs.value.map((p) => {
       if (p === filePath) return newPath;
       if (p.startsWith(filePath + "/")) return p.replace(filePath, newPath);
       return p;
@@ -904,6 +964,7 @@ export const useAppStore = defineStore("app", () => {
     const diskContent = await api.files.read(workspacePath.value, filePath);
     console.log("[Store] File content read, setting currentFile to:", filePath);
     currentFile.value = filePath;
+    addTab(filePath);
 
     // Prefer buffered unsaved content over disk content
     if (unsavedBuffer[filePath] !== undefined) {
@@ -1783,6 +1844,10 @@ export const useAppStore = defineStore("app", () => {
     removeRefPane,
     setRefPaneFile,
     activateRefPane,
+    openTabs,
+    tabsEnabled,
+    tabsPosition,
+    closeTab,
     saveFile,
     saveAsset,
     maybeDeleteAsset,

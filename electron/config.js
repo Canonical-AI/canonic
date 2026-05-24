@@ -26,6 +26,8 @@ const DEFAULTS = {
   editorParagraphSpacing: false,
   grainEnabled: false,
   grainOpacity: 0.02,
+  tabsEnabled: true,
+  tabsPosition: "bottom",
   providers: [],
   assistant: {
     providerId: "",

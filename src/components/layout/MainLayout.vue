@@ -330,27 +330,40 @@
             <main class="editor-area">
                 <SearchView v-if="store.searchViewOpen" ref="searchViewRef" />
                 <PeerFileViewer v-else-if="store.peerFileContent" />
-                <div
-                    v-else-if="store.currentFile"
-                    class="split-row"
-                    :class="{ 'split-row--stacked': store.splitStacked }"
-                >
-                    <div
-                        class="split-pane split-pane--active"
-                        :class="{ 'split-pane--dragover': activeDragOver }"
-                        @dragover.capture="onActiveDragOver"
-                        @dragleave="activeDragOver = false"
-                        @drop.capture="onActiveDrop"
-                    >
-                        <Editor />
-                    </div>
-                    <RefDocPane
-                        v-for="(p, i) in store.refPanes"
-                        :key="p + ':' + i"
-                        :file-path="p"
-                        :index="i"
+                <template v-else-if="store.currentFile">
+                    <EditorTabs
+                        v-if="
+                            store.tabsEnabled && store.tabsPosition === 'top'
+                        "
                     />
-                </div>
+                    <div
+                        class="split-row"
+                        :class="{ 'split-row--stacked': store.splitStacked }"
+                    >
+                        <div
+                            class="split-pane split-pane--active"
+                            :class="{
+                                'split-pane--dragover': activeDragOver,
+                            }"
+                            @dragover.capture="onActiveDragOver"
+                            @dragleave="activeDragOver = false"
+                            @drop.capture="onActiveDrop"
+                        >
+                            <Editor />
+                        </div>
+                        <RefDocPane
+                            v-for="(p, i) in store.refPanes"
+                            :key="p + ':' + i"
+                            :file-path="p"
+                            :index="i"
+                        />
+                    </div>
+                    <EditorTabs
+                        v-if="
+                            store.tabsEnabled && store.tabsPosition !== 'top'
+                        "
+                    />
+                </template>
                 <div v-else class="empty-state">
                     <p>Open a document or create a new one</p>
                     <button class="btn-primary" @click="newDoc">
@@ -570,6 +583,7 @@ import HintsPanel from "../sidebar/HintsPanel.vue";
 import { markDefaultEditorActive } from "../../composables/useHints.js";
 import { storage } from "../../utils/storage.js";
 import Editor from "../editor/Editor.vue";
+import EditorTabs from "../editor/EditorTabs.vue";
 import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";

@@ -994,7 +994,7 @@ onMounted(() => {
 }
 
 .milkdown .ProseMirror h1 {
-    font-size: 1.75rem;
+    font-size: 1.85em;
     font-weight: 700;
     color: var(--text-primary);
     margin: 1.5em 0 0.5em;
@@ -1005,7 +1005,7 @@ onMounted(() => {
 }
 
 .milkdown .ProseMirror h2 {
-    font-size: 1.35rem;
+    font-size: 1.45em;
     font-weight: 600;
     color: var(--text-primary);
     margin: 1.4em 0 0.4em;
@@ -1014,7 +1014,7 @@ onMounted(() => {
 }
 
 .milkdown .ProseMirror h3 {
-    font-size: 1.1rem;
+    font-size: 1.2em;
     font-weight: 600;
     color: var(--text-primary);
     margin: 1.2em 0 0.3em;
@@ -1023,7 +1023,7 @@ onMounted(() => {
 .milkdown .ProseMirror h4,
 .milkdown .ProseMirror h5,
 .milkdown .ProseMirror h6 {
-    font-size: 1rem;
+    font-size: 1.05em;
     font-weight: 600;
     color: var(--text-secondary);
     margin: 1em 0 0.25em;
@@ -1075,7 +1075,7 @@ onMounted(() => {
     background: none;
     border: none;
     padding: 0;
-    font-size: 0.875rem;
+    font-size: 0.9em;
     color: var(--text-primary);
 }
 
@@ -1128,7 +1128,7 @@ onMounted(() => {
     border-collapse: collapse;
     width: 100%;
     margin: 16px 0;
-    font-size: 0.875rem;
+    font-size: 0.9em;
 }
 
 .milkdown .ProseMirror th,

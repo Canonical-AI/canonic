@@ -116,6 +116,32 @@ describe('comments store', () => {
     expect(mockApi.comments.save).not.toHaveBeenCalled()
   })
 
+  it('confirm() opens dialog state and resolves true when confirmed', async () => {
+    const promise = store.confirm({ title: 'T', message: 'M', danger: true })
+    expect(store.confirmDialog).not.toBeNull()
+    expect(store.confirmDialog.title).toBe('T')
+    expect(store.confirmDialog.danger).toBe(true)
+    store.resolveConfirm(true)
+    await expect(promise).resolves.toBe(true)
+    expect(store.confirmDialog).toBeNull()
+  })
+
+  it('confirm() resolves false when cancelled', async () => {
+    const promise = store.confirm({ title: 'T' })
+    store.resolveConfirm(false)
+    await expect(promise).resolves.toBe(false)
+    expect(store.confirmDialog).toBeNull()
+  })
+
+  it('confirm() reopened while pending cancels prior request', async () => {
+    const first = store.confirm({ title: 'A' })
+    const second = store.confirm({ title: 'B' })
+    expect(store.confirmDialog.title).toBe('B')
+    await expect(first).resolves.toBe(false)
+    store.resolveConfirm(true)
+    await expect(second).resolves.toBe(true)
+  })
+
   it('loadComments() reads from IPC and populates store', async () => {
     const existing = [{ id: 'c3', text: 'existing', resolved: false, author: 'C', createdAt: '', anchor: {} }]
     mockApi.comments.get.mockResolvedValueOnce(existing)

@@ -109,8 +109,15 @@ const agentCommentCount = computed(() =>
 
 async function clearAgentComments() {
   if (agentCommentCount.value === 0) return
-  const msg = `Delete all ${agentCommentCount.value} AI-suggested comment${agentCommentCount.value !== 1 ? 's' : ''}? This cannot be undone.`
-  if (!window.confirm(msg)) return
+  const count = agentCommentCount.value
+  const ok = await store.confirm({
+    title: `Delete ${count} AI comment${count !== 1 ? 's' : ''}?`,
+    message: 'This will remove every AI-suggested comment on this document. Human comments stay. This cannot be undone.',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    danger: true,
+  })
+  if (!ok) return
   await store.deleteAgentComments()
 }
 

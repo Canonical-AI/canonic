@@ -226,6 +226,33 @@ export const useAppStore = defineStore("app", () => {
   const fileIndex = ref({});
   const appVersion = ref(__APP_VERSION__ || "");
 
+  // Global in-app confirm dialog. `confirmDialog` holds the active request
+  // ({ title, message, confirmText, cancelText, danger }) or null. ConfirmModal
+  // is mounted once at the layout root and renders whenever this is non-null.
+  const confirmDialog = ref(null);
+  let confirmResolver = null;
+
+  function confirm(opts) {
+    if (confirmResolver) confirmResolver(false);
+    confirmDialog.value = {
+      title: opts?.title || "Are you sure?",
+      message: opts?.message || "",
+      confirmText: opts?.confirmText,
+      cancelText: opts?.cancelText,
+      danger: !!opts?.danger,
+    };
+    return new Promise((resolve) => {
+      confirmResolver = resolve;
+    });
+  }
+
+  function resolveConfirm(value) {
+    const r = confirmResolver;
+    confirmResolver = null;
+    confirmDialog.value = null;
+    if (r) r(!!value);
+  }
+
   const api = window.canonic;
 
   const updateAvailable = ref(false);
@@ -1782,6 +1809,9 @@ export const useAppStore = defineStore("app", () => {
     resolveComment,
     deleteComment,
     deleteAgentComments,
+    confirmDialog,
+    confirm,
+    resolveConfirm,
     loadDocVersions,
     saveDocVersion,
     deleteDocVersion,

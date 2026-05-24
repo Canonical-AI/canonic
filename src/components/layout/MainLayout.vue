@@ -511,6 +511,7 @@
                 settingsInitialTab = 'profile';
             "
         />
+        <ConfirmModal />
 
         <AgentSessionPill />
 
@@ -577,6 +578,7 @@ import HistoryPanel from "../panels/HistoryPanel.vue";
 import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
+import ConfirmModal from "../modals/ConfirmModal.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";

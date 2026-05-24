@@ -2,10 +2,20 @@
   <div class="comments-panel">
     <div class="panel-header">
       <span>{{ visibleComments.length }} comment{{ visibleComments.length !== 1 ? 's' : '' }}</span>
-      <label v-if="!isPeerMode" class="toggle-label">
-        <input type="checkbox" v-model="showResolved" />
-        Show resolved
-      </label>
+      <div v-if="!isPeerMode" class="header-actions">
+        <button
+          v-if="agentCommentCount > 0"
+          class="clear-agents"
+          :title="`Delete all ${agentCommentCount} AI comment${agentCommentCount !== 1 ? 's' : ''}`"
+          @click="clearAgentComments"
+        >
+          Clear AI ({{ agentCommentCount }})
+        </button>
+        <label class="toggle-label">
+          <input type="checkbox" v-model="showResolved" />
+          Show resolved
+        </label>
+      </div>
       <span v-else class="peer-mode-label">{{ store.peerFileContent.peer.name }}'s doc</span>
     </div>
 
@@ -93,6 +103,17 @@ const visibleComments = computed(() => {
   return showResolved.value ? store.comments : active
 })
 
+const agentCommentCount = computed(() =>
+  store.comments.filter(c => c.isAgent).length
+)
+
+async function clearAgentComments() {
+  if (agentCommentCount.value === 0) return
+  const msg = `Delete all ${agentCommentCount.value} AI-suggested comment${agentCommentCount.value !== 1 ? 's' : ''}? This cannot be undone.`
+  if (!window.confirm(msg)) return
+  await store.deleteAgentComments()
+}
+
 function formatTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -134,6 +155,28 @@ function truncate(text, len) {
   gap: 6px;
   cursor: pointer;
   font-size: 0.75rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clear-agents {
+  font-size: 0.7rem;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.clear-agents:hover {
+  color: var(--error);
+  border-color: var(--error);
 }
 
 .peer-mode-label {

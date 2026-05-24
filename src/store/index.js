@@ -1186,6 +1186,14 @@ export const useAppStore = defineStore("app", () => {
     await persistComments();
   }
 
+  async function deleteAgentComments() {
+    const before = comments.value.length;
+    comments.value = comments.value.filter((c) => !c.isAgent);
+    const removed = before - comments.value.length;
+    if (removed > 0) await persistComments();
+    return removed;
+  }
+
   async function persistComments() {
     if (!currentFile.value) return;
     const docId = currentFile.value.replace(/[\\/]/g, "_");
@@ -1773,6 +1781,7 @@ export const useAppStore = defineStore("app", () => {
     addComment,
     resolveComment,
     deleteComment,
+    deleteAgentComments,
     loadDocVersions,
     saveDocVersion,
     deleteDocVersion,

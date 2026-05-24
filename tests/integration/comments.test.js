@@ -88,6 +88,34 @@ describe('comments store', () => {
     expect(mockApi.comments.save).toHaveBeenCalledOnce()
   })
 
+  it('deleteAgentComments() removes only agent comments and persists', async () => {
+    store.comments = [
+      { id: 'h1', text: 'human', resolved: false, author: 'Alice', createdAt: '', anchor: {} },
+      { id: 'a1', text: 'agent 1', isAgent: true, agentName: 'Claude Code', author: 'Claude Code', resolved: false, createdAt: '', anchor: {} },
+      { id: 'a2', text: 'agent 2', isAgent: true, agentName: 'Claude Code', author: 'Claude Code', resolved: true, createdAt: '', anchor: {} },
+      { id: 'h2', text: 'human 2', resolved: false, author: 'Bob', createdAt: '', anchor: {} }
+    ]
+
+    const removed = await store.deleteAgentComments()
+
+    expect(removed).toBe(2)
+    expect(store.comments).toHaveLength(2)
+    expect(store.comments.map(c => c.id)).toEqual(['h1', 'h2'])
+    expect(mockApi.comments.save).toHaveBeenCalledOnce()
+  })
+
+  it('deleteAgentComments() returns 0 and skips persist when no agent comments', async () => {
+    store.comments = [
+      { id: 'h1', text: 'human', resolved: false, author: 'Alice', createdAt: '', anchor: {} }
+    ]
+
+    const removed = await store.deleteAgentComments()
+
+    expect(removed).toBe(0)
+    expect(store.comments).toHaveLength(1)
+    expect(mockApi.comments.save).not.toHaveBeenCalled()
+  })
+
   it('loadComments() reads from IPC and populates store', async () => {
     const existing = [{ id: 'c3', text: 'existing', resolved: false, author: 'C', createdAt: '', anchor: {} }]
     mockApi.comments.get.mockResolvedValueOnce(existing)

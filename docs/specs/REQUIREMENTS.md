@@ -508,6 +508,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the comment is saved
   then: the author field matches the display name from Settings
 
+* scenario: mass delete AI-suggested comments
+  given: a document has one or more comments created by an AI agent (isAgent: true)
+  when: the user clicks the "Clear AI" button in the comments panel header and confirms
+  then: all agent-created comments are removed and persisted, while human comments remain untouched
+
+* scenario: clear AI button hidden when no agent comments
+  given: a document has only human-authored comments
+  when: the comments panel is open
+  then: the "Clear AI" button is not shown
+
 ***
 
 ## Floating Toolbar (TBR)

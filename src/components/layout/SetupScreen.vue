@@ -175,10 +175,10 @@
                             >Default access level for shared documents</label
                         >
                         <select
-                            v-model="form.sharingDefaults.accessLevel"
+                            v-model="form.sharingDefaults.permission"
                             class="field-select"
                         >
-                            <option value="read">
+                            <option value="view">
                                 Read only — can view but not comment
                             </option>
                             <option value="comment">
@@ -232,7 +232,8 @@
 
                     <p class="field-hint" style="margin-top: 20px">
                         You can change this preference anytime in Settings. Logs
-                        are stored locally in <code>~/.config/canonic/usage.log</code>.
+                        are stored locally in
+                        <code>~/.config/canonic/usage.log</code>.
                     </p>
 
                     <div class="step-actions">
@@ -249,13 +250,18 @@
                 <div v-if="step === 4" class="step">
                     <h2 class="step-title">Inline completions</h2>
                     <p class="step-subtitle">
-                        As you type, Canonic can suggest completions as faint ghost text.
-                        Press <kbd class="kbd">Tab</kbd> to accept, <kbd class="kbd">Esc</kbd> to dismiss.
+                        As you type, Canonic can suggest completions as faint
+                        ghost text. Press <kbd class="kbd">Tab</kbd> to accept,
+                        <kbd class="kbd">Esc</kbd> to dismiss.
                     </p>
 
                     <div class="completion-preview">
-                        <span class="preview-text">The goal of this initiative is to</span>
-                        <span class="preview-ghost"> streamline cross-team collaboration by…</span>
+                        <span class="preview-text"
+                            >The goal of this initiative is to</span
+                        >
+                        <span class="preview-ghost">
+                            streamline cross-team collaboration by…</span
+                        >
                     </div>
 
                     <div class="field">
@@ -279,9 +285,10 @@
                             </button>
                         </div>
                         <p class="field-hint">
-                            Codestral is Mistral's free completion model — get a key at
-                            <strong>mistral.ai/codestral</strong>.
-                            You can also set this up later in Settings → Completions.
+                            Codestral is Mistral's free completion model — get a
+                            key at
+                            <strong>mistral.ai/codestral</strong>. You can also
+                            set this up later in Settings → Completions.
                         </p>
                     </div>
 
@@ -335,7 +342,7 @@ const form = reactive({
     telemetryEnabled: false,
     sharingDefaults: {
         scope: "file",
-        accessLevel: "read",
+        permission: "view",
     },
     completionKey: "",
 });

@@ -22,7 +22,12 @@ const DEFAULTS = {
   },
   windowBlur: true,
   windowTransparency: true,
-  windowTransparencyOpacity: 0.95,
+  windowTransparencyOpacity: 0.88,
+  editorParagraphSpacing: false,
+  grainEnabled: false,
+  grainOpacity: 0.02,
+  tabsEnabled: true,
+  tabsPosition: "bottom",
   providers: [],
   assistant: {
     providerId: "",
@@ -161,7 +166,10 @@ function read() {
       assistant: {
         ...DEFAULTS.assistant,
         ...(migrated.assistant || {}),
-        caps: { ...DEFAULTS.assistant.caps, ...(migrated.assistant?.caps || {}) },
+        caps: {
+          ...DEFAULTS.assistant.caps,
+          ...(migrated.assistant?.caps || {}),
+        },
       },
       completion: { ...DEFAULTS.completion, ...(migrated.completion || {}) },
     };

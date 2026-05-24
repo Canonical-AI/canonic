@@ -632,6 +632,22 @@ function createMenu() {
               { type: "separator" },
             ]
           : []),
+        {
+          label: "Open Config File",
+          click: async () => {
+            const err = await shell.openPath(configService.CONFIG_PATH);
+            if (err) {
+              dialog.showErrorBox("Open Config Failed", err);
+            }
+          },
+        },
+        {
+          label: "Reload Config",
+          click: () => {
+            mainWindow?.webContents.send("menu:reload-config");
+          },
+        },
+        { type: "separator" },
         { role: "close" },
       ],
     },
@@ -1337,6 +1353,13 @@ function setupIpcHandlers() {
   ipcMain.handle("git:diff", async (_, workspacePath, filePath, oid) => {
     return gitService.diff(workspacePath, filePath, oid);
   });
+
+  ipcMain.handle(
+    "git:commit-diff",
+    async (_, workspacePath, filePath, oid) => {
+      return gitService.commitDiff(workspacePath, filePath, oid);
+    },
+  );
 
   ipcMain.handle("git:read-commit", async (_, workspacePath, filePath, oid) => {
     return gitService.readCommit(workspacePath, filePath, oid);

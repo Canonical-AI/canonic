@@ -88,6 +88,8 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("git:merge", workspacePath, from, message),
     diff: (workspacePath, filePath, oid) =>
       ipcRenderer.invoke("git:diff", workspacePath, filePath, oid),
+    commitDiff: (workspacePath, filePath, oid) =>
+      ipcRenderer.invoke("git:commit-diff", workspacePath, filePath, oid),
     readCommit: (workspacePath, filePath, oid) =>
       ipcRenderer.invoke("git:read-commit", workspacePath, filePath, oid),
     status: (workspacePath) => ipcRenderer.invoke("git:status", workspacePath),
@@ -247,6 +249,7 @@ contextBridge.exposeInMainWorld("canonic", {
     onOpenFile: (cb) => { ipcRenderer.on("menu:open-file", (_, path) => cb(path)) },
     onChangeTheme: (cb) => { ipcRenderer.on("menu:change-theme", (_, theme) => cb(theme)) },
     onChangeFont: (cb) => { ipcRenderer.on("menu:change-font", (_, font) => cb(font)) },
+    onReloadConfig: (cb) => { ipcRenderer.on("menu:reload-config", () => cb()) },
   },
 
   // Agent session bridge

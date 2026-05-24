@@ -89,10 +89,18 @@ const mockApi = {
 
 const mockLocalStorage = {
   store: {},
-  getItem(key) { return this.store[key] || null; },
-  setItem(key, val) { this.store[key] = String(val); },
-  removeItem(key) { delete this.store[key]; },
-  clear() { this.store = {}; }
+  getItem(key) {
+    return this.store[key] || null;
+  },
+  setItem(key, val) {
+    this.store[key] = String(val);
+  },
+  removeItem(key) {
+    delete this.store[key];
+  },
+  clear() {
+    this.store = {};
+  },
 };
 vi.stubGlobal("localStorage", mockLocalStorage);
 vi.stubGlobal("window", { canonic: mockApi, localStorage: mockLocalStorage });
@@ -133,7 +141,7 @@ describe("setup flow", () => {
     mockApi.config.write.mockResolvedValueOnce({ success: true, config: {} });
     await store.saveConfig({
       displayName: "X",
-      sharingDefaults: { scope: "file", accessLevel: "read" },
+      sharingDefaults: { scope: "file", permission: "view" },
     });
     const [payload] = mockApi.config.write.mock.calls[0];
     expect(() => JSON.stringify(payload)).not.toThrow();

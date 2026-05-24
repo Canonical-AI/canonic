@@ -508,6 +508,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the comment is saved
   then: the author field matches the display name from Settings
 
+* scenario: mass delete AI-suggested comments
+  given: a document has one or more comments created by an AI agent (isAgent: true)
+  when: the user clicks the "Clear AI" button in the comments panel header and confirms
+  then: all agent-created comments are removed and persisted, while human comments remain untouched
+
+* scenario: clear AI button hidden when no agent comments
+  given: a document has only human-authored comments
+  when: the comments panel is open
+  then: the "Clear AI" button is not shown
+
 ***
 
 ## Floating Toolbar (TBR)
@@ -995,4 +1005,86 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user unchecks "Stack split panels" in the theme menu
   then: the panes are arranged side by side, and the choice persists across restarts
 
-*Last updated: 2026-05-19*
+## Editor Tabs (TAB)
+
+* scenario: tab appears when a file is opened
+  given: editor tabs are enabled
+  when: the user opens a document
+  then: a tab for that document appears in the tab strip
+
+* scenario: tabs ordered by open time
+  given: editor tabs are enabled
+  when: the user opens document A, then B, then C
+  then: the tab strip shows A, B, C in that left-to-right order
+
+* scenario: re-opening a file does not duplicate its tab
+  given: a tab for document A already exists
+  when: the user opens document A again
+  then: no new tab is added and the existing tab becomes active
+
+* scenario: active tab is highlighted
+  given: multiple tabs are open
+  when: the user views the tab strip
+  then: the tab matching the currently open document is visually highlighted
+
+* scenario: switching documents via a tab
+  given: multiple tabs are open
+  when: the user clicks a non-active tab
+  then: that document becomes the active document and the highlight moves to its tab
+
+* scenario: closing a tab preserves unsaved edits
+  given: document A has unsaved edits and its tab is open
+  when: the user closes the tab for A
+  then: the tab is removed but the unsaved edits remain buffered for A and persist if A is reopened in the same session
+
+* scenario: edits clear only on app close before save
+  given: document A has unsaved edits that were never written to disk
+  when: the user closes the app before saving
+  then: the unsaved edits are discarded; saved edits are preserved
+
+* scenario: closing the active tab activates a neighbor
+  given: tabs A, B, C are open and B is active
+  when: the user closes tab B
+  then: another open tab becomes active (the next tab to the right, or the previous if none follows)
+
+* scenario: closing the last tab shows the empty state
+  given: only one tab is open
+  when: the user closes that tab
+  then: no document is active and the empty editor state is shown
+
+* scenario: tabs sit at the bottom by default
+  given: the user has not changed the tabs position setting
+  when: a document is open
+  then: the tab strip is rendered at the bottom of the editor area
+
+* scenario: tabs span the editor area when split
+  given: a vertical split with one reference pane and editor tabs enabled
+  when: the user views the editor area
+  then: the tab strip spans the full width of the editor area and sits below the split row (or above, when position is "top")
+
+* scenario: move tabs to the top
+  given: editor tabs are enabled
+  when: the user selects "Top" in Settings → Appearance → Tab position
+  then: the tab strip moves to the top of the editor area and the choice persists across restarts
+
+* scenario: disable tabs entirely
+  given: at least one tab is open
+  when: the user turns off "Editor tabs" in Settings → Appearance
+  then: the tab strip is hidden but the open-tab list is preserved if tabs are re-enabled in the same session
+
+* scenario: renamed file updates its tab
+  given: a tab for document A is open
+  when: the user renames A to B
+  then: the same tab now shows the name B in the same position
+
+* scenario: deleted file is removed from tabs
+  given: a tab for document A is open
+  when: the user deletes A
+  then: the tab for A is removed from the tab strip
+
+* scenario: switching workspaces clears the tab strip
+  given: tabs are open in workspace W1
+  when: the user opens workspace W2
+  then: the tab strip is empty in W2
+
+*Last updated: 2026-05-23*

@@ -192,7 +192,10 @@
                     />
                     <div class="comment-input-actions">
                         <span class="comment-input-hint">⌘↩ to submit</span>
-                        <button class="comment-cancel-btn" @click="cancelComment">
+                        <button
+                            class="comment-cancel-btn"
+                            @click="cancelComment"
+                        >
                             Cancel
                         </button>
                         <button
@@ -240,9 +243,7 @@ function nextSplitDoc() {
         (d) => d.path !== store.currentFile && !store.refPanes.includes(d.path),
     );
 }
-const canSplit = computed(
-    () => store.refPanes.length < 2 && !!nextSplitDoc(),
-);
+const canSplit = computed(() => store.refPanes.length < 2 && !!nextSplitDoc());
 function splitPane() {
     const doc = nextSplitDoc();
     if (doc) store.addRefPane(doc.path);
@@ -252,9 +253,9 @@ provide("openCommentFromToolbar", (selectedText, fixedCoords) => {
     const wrapperRect = editorContentEl.value?.getBoundingClientRect() ?? {
         left: 0,
         top: 0,
-        width: 800
+        width: 800,
     };
-    
+
     let x = fixedCoords.left - wrapperRect.left;
     let y = fixedCoords.top - wrapperRect.top;
 
@@ -290,7 +291,10 @@ const findTotal = ref(0);
 const findCurrent = ref(-1);
 
 function refreshFindState() {
-    const s = milkdownEditor.value?.findReplaceReadState?.() || { total: 0, current: -1 };
+    const s = milkdownEditor.value?.findReplaceReadState?.() || {
+        total: 0,
+        current: -1,
+    };
     findTotal.value = s.total;
     findCurrent.value = s.current;
 }
@@ -401,11 +405,14 @@ function onContentUpdate(markdown) {
     }
 
     if (markdown !== store.currentContent) {
-        // Only mark dirty if the editor has focus (user typing) or if the change 
+        // Only mark dirty if the editor has focus (user typing) or if the change
         // is significant (more than just whitespace/normalization).
         if (store.isDirty) {
             store.currentContent = markdown;
-        } else if (editorHasFocus() || markdown.trim() !== store.currentContent.trim()) {
+        } else if (
+            editorHasFocus() ||
+            markdown.trim() !== store.currentContent.trim()
+        ) {
             store.currentContent = markdown;
             store.isDirty = true;
         } else {
@@ -519,7 +526,8 @@ function editorHasFocus() {
 
 function openCommentInput() {
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.toString().trim()) return;
+    if (!selection || selection.isCollapsed || !selection.toString().trim())
+        return;
 
     const selectedText = selection.toString().trim();
     const range = selection.getRangeAt(0);
@@ -531,7 +539,7 @@ function openCommentInput() {
     let y = rect.top - wrapperRect.top;
 
     // Shift up to clear the selection, but don't go above the top padding
-    y = Math.max(8, y - 54); 
+    y = Math.max(8, y - 54);
 
     // Keep within horizontal bounds
     const boxWidth = 280;
@@ -576,7 +584,11 @@ onMounted(() => {
         }
 
         // Comment hotkey: Cmd+Alt+M or Ctrl+Alt+M
-        if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === "m") {
+        if (
+            (e.metaKey || e.ctrlKey) &&
+            e.altKey &&
+            e.key.toLowerCase() === "m"
+        ) {
             e.preventDefault();
             openCommentInput();
         }
@@ -982,7 +994,7 @@ onMounted(() => {
 }
 
 .milkdown .ProseMirror h1 {
-    font-size: 1.75rem;
+    font-size: 1.85em;
     font-weight: 700;
     color: var(--text-primary);
     margin: 1.5em 0 0.5em;
@@ -993,7 +1005,7 @@ onMounted(() => {
 }
 
 .milkdown .ProseMirror h2 {
-    font-size: 1.35rem;
+    font-size: 1.45em;
     font-weight: 600;
     color: var(--text-primary);
     margin: 1.4em 0 0.4em;
@@ -1002,7 +1014,7 @@ onMounted(() => {
 }
 
 .milkdown .ProseMirror h3 {
-    font-size: 1.1rem;
+    font-size: 1.2em;
     font-weight: 600;
     color: var(--text-primary);
     margin: 1.2em 0 0.3em;
@@ -1011,15 +1023,19 @@ onMounted(() => {
 .milkdown .ProseMirror h4,
 .milkdown .ProseMirror h5,
 .milkdown .ProseMirror h6 {
-    font-size: 1rem;
+    font-size: 1.05em;
     font-weight: 600;
     color: var(--text-secondary);
     margin: 1em 0 0.25em;
 }
 
 .milkdown .ProseMirror p {
-    margin: 0 0 1em;
+    margin: 0;
     color: var(--text-primary);
+}
+
+.editor-paragraph-spacing .milkdown .ProseMirror p {
+    margin: 0 0 1em;
 }
 
 .milkdown .ProseMirror strong {
@@ -1048,6 +1064,10 @@ onMounted(() => {
     border-radius: 8px;
     padding: 16px;
     overflow-x: auto;
+    margin: 0;
+}
+
+.editor-paragraph-spacing .milkdown .ProseMirror pre {
     margin: 1em 0;
 }
 
@@ -1055,13 +1075,18 @@ onMounted(() => {
     background: none;
     border: none;
     padding: 0;
-    font-size: 0.875rem;
+    font-size: 0.9em;
     color: var(--text-primary);
 }
 
 .milkdown .ProseMirror ul,
 .milkdown .ProseMirror ol {
     padding-left: 1.75em;
+    margin: 0;
+}
+
+.editor-paragraph-spacing .milkdown .ProseMirror ul,
+.editor-paragraph-spacing .milkdown .ProseMirror ol {
     margin: 0.5em 0 1em;
 }
 
@@ -1077,9 +1102,13 @@ onMounted(() => {
 .milkdown .ProseMirror blockquote {
     border-left: 3px solid var(--accent-muted);
     padding-left: 1em;
-    margin: 1em 0;
+    margin: 0;
     color: var(--text-secondary);
     font-style: italic;
+}
+
+.editor-paragraph-spacing .milkdown .ProseMirror blockquote {
+    margin: 1em 0;
 }
 
 .milkdown .ProseMirror hr {
@@ -1099,7 +1128,7 @@ onMounted(() => {
     border-collapse: collapse;
     width: 100%;
     margin: 16px 0;
-    font-size: 0.875rem;
+    font-size: 0.9em;
 }
 
 .milkdown .ProseMirror th,

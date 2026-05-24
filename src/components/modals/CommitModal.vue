@@ -6,6 +6,27 @@
         Commit the current state of <strong>{{ store.currentFile }}</strong> to history.
       </p>
 
+      <!-- Change summary + diff preview -->
+      <div class="diff-section">
+        <div class="diff-header">
+          <span class="diff-header-label">Changes since last checkpoint</span>
+          <span v-if="diffLoading" class="diff-loading">loading…</span>
+          <span v-else-if="stats" class="diff-stats">
+            <span class="stat-add">+{{ stats.added }}</span>
+            <span class="stat-del">-{{ stats.removed }}</span>
+          </span>
+        </div>
+        <div v-if="!diffLoading && diffText" class="diff-preview">
+          <div
+            v-for="(line, li) in diffText.split('\n')"
+            :key="li"
+            class="diff-line"
+            :class="line.startsWith('+ ') ? 'diff-add' : line.startsWith('- ') ? 'diff-del' : line === '  ···' ? 'diff-sep' : ''"
+          >{{ line }}</div>
+        </div>
+        <p v-else-if="!diffLoading" class="diff-empty">No textual changes detected.</p>
+      </div>
+
       <div class="field">
         <label class="field-label">Commit message</label>
         <input
@@ -32,8 +53,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAppStore } from '../../store'
+import { generateDiff, countDiff } from '../../utils/diff.js'
 
 const emit = defineEmits(['close'])
 const store = useAppStore()
@@ -42,6 +64,36 @@ const loading = ref(false)
 const error = ref('')
 const success = ref(false)
 const commitOid = ref('')
+
+const diffLoading = ref(true)
+const diffText = ref('')
+const stats = ref(null)
+
+onMounted(async () => {
+  try {
+    const headOid = store.commitLog?.[0]?.oid
+    const workingContent = store.isDirty
+      ? store.currentContent
+      : await window.canonic.files.read(store.workspacePath, store.currentFile)
+    let headContent = ''
+    if (headOid) {
+      const result = await window.canonic.git.diff(
+        store.workspacePath,
+        store.currentFile,
+        headOid,
+      )
+      // diff() returns { before: commit content, after: working file on disk }
+      headContent = result?.before ?? ''
+    }
+    stats.value = countDiff(headContent, workingContent ?? '')
+    const preview = generateDiff(headContent, workingContent ?? '')
+    diffText.value = preview === '(no changes)' ? '' : preview
+  } catch (err) {
+    console.error('CommitModal diff load failed:', err)
+  } finally {
+    diffLoading.value = false
+  }
+})
 
 async function commit() {
   if (!message.value.trim() || loading.value) return
@@ -84,8 +136,8 @@ async function commit() {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 28px;
-  width: 440px;
-  max-width: 90vw;
+  width: 520px;
+  max-width: 92vw;
 }
 
 .modal-title {
@@ -98,8 +150,73 @@ async function commit() {
 .modal-subtitle {
   font-size: 0.8375rem;
   color: var(--text-muted);
-  margin: 0 0 20px;
+  margin: 0 0 16px;
 }
+
+.diff-section {
+  margin-bottom: 18px;
+}
+
+.diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.diff-header-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.diff-stats {
+  display: inline-flex;
+  gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}
+
+.stat-add { color: #34d399; }
+.stat-del { color: #f87171; }
+
+.diff-loading {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.diff-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.diff-empty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.diff-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  line-height: 1.6;
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-muted);
+}
+
+.diff-add { background: rgba(52, 211, 153, 0.08); color: #34d399; }
+.diff-del { background: rgba(248, 113, 113, 0.08); color: #f87171; }
+.diff-sep { color: var(--text-muted); opacity: 0.5; text-align: center; letter-spacing: 0.1em; }
 
 .field { margin-bottom: 20px; }
 

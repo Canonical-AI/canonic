@@ -556,6 +556,7 @@ import {
 } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
+import { storeToRefs } from "pinia";
 import {
     Settings,
     Files,
@@ -883,9 +884,8 @@ const {
     updateDownloading,
     updateInfo,
     downloadProgress,
-    downloadUpdate,
-    installUpdate,
-} = store;
+} = storeToRefs(store);
+const { downloadUpdate, installUpdate } = store;
 
 const showUpdatePrompt = ref(false);
 watch(updateAvailable, (val) => {

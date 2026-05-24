@@ -62,7 +62,6 @@ function close(path) {
     overflow-y: hidden;
     flex-shrink: 0;
     min-height: 30px;
-    scrollbar-width: thin;
 }
 
 .editor-tabs--top {

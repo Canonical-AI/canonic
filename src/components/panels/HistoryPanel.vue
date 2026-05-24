@@ -133,6 +133,14 @@
                   class="commit-version-badge"
                   :title="versionsByOid[commit.oid].message"
                 >{{ versionsByOid[commit.oid].name }}</span>
+                <span
+                  v-if="statsByOid[commit.oid]"
+                  class="commit-stats"
+                  :title="`${statsByOid[commit.oid].added} added, ${statsByOid[commit.oid].removed} removed`"
+                >
+                  <span class="stat-add">+{{ statsByOid[commit.oid].added }}</span>
+                  <span class="stat-del">-{{ statsByOid[commit.oid].removed }}</span>
+                </span>
                 <span v-if="loadingOid === commit.oid" class="diff-loading">loading…</span>
               </div>
             </div>
@@ -175,10 +183,12 @@
 import { ref, computed, watch } from 'vue'
 import { useAppStore } from '../../store'
 import { Tag, GitCommitHorizontal, GitBranch, GitMerge } from 'lucide-vue-next'
+import { generateDiff, countDiff } from '../../utils/diff.js'
 
 const store = useAppStore()
 const viewingOid = ref(null)
 const diffsByOid = ref({})
+const statsByOid = ref({})
 const loadingOid = ref(null)
 const restoreConfirm = ref(null)
 
@@ -210,6 +220,7 @@ async function commit() {
 watch(() => store.currentFile, () => {
   viewingOid.value = null
   diffsByOid.value = {}
+  statsByOid.value = {}
   loadingOid.value = null
   restoreConfirm.value = null
   commitMsg.value = ''
@@ -239,50 +250,29 @@ async function viewCommit(commit) {
   viewingOid.value = commit.oid
   if (diffsByOid.value[commit.oid]) return // already loaded
   loadingOid.value = commit.oid
-  const result = await window.canonic.git.diff(store.workspacePath, store.currentFile, commit.oid)
-  loadingOid.value = null
-  if (result) diffsByOid.value[commit.oid] = generateDiff(result.before, result.after)
-}
-
-function generateDiff(before, after) {
-  const a = before.split('\n')
-  const b = after.split('\n')
-
-  // Myers LCS via DP to get edit ops
-  const m = a.length, n = b.length
-  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
-  for (let i = m - 1; i >= 0; i--)
-    for (let j = n - 1; j >= 0; j--)
-      dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1])
-
-  // Build ops: 'eq' | 'del' | 'ins'
-  const ops = []
-  let i = 0, j = 0
-  while (i < m || j < n) {
-    if (i < m && j < n && a[i] === b[j]) { ops.push({ type: 'eq', line: a[i] }); i++; j++ }
-    else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) { ops.push({ type: 'ins', line: b[j] }); j++ }
-    else { ops.push({ type: 'del', line: a[i] }); i++ }
+  try {
+    const gitApi = window.canonic.git
+    if (!gitApi.commitDiff) {
+      diffsByOid.value[commit.oid] = '(diff bridge missing — fully quit and re-run `npm run dev`)'
+      return
+    }
+    const result = await gitApi.commitDiff(
+      store.workspacePath,
+      store.currentFile,
+      commit.oid,
+    )
+    if (result) {
+      diffsByOid.value[commit.oid] = generateDiff(result.before, result.after)
+      statsByOid.value[commit.oid] = countDiff(result.before, result.after)
+    } else {
+      diffsByOid.value[commit.oid] = '(no changes)'
+    }
+  } catch (err) {
+    console.error('viewCommit failed:', err)
+    diffsByOid.value[commit.oid] = `(diff error: ${err.message})`
+  } finally {
+    loadingOid.value = null
   }
-
-  // Collect only changed ranges + 3 lines of context
-  const CTX = 3
-  const changed = new Set(ops.map((op, idx) => op.type !== 'eq' ? idx : -1).filter(x => x >= 0))
-  if (!changed.size) return '(no changes)'
-
-  const visible = new Set()
-  for (const idx of changed)
-    for (let k = Math.max(0, idx - CTX); k <= Math.min(ops.length - 1, idx + CTX); k++)
-      visible.add(k)
-
-  const lines = []
-  let lastIdx = -1
-  for (const idx of [...visible].sort((a, b) => a - b)) {
-    if (lastIdx !== -1 && idx > lastIdx + 1) lines.push('  ···')
-    const op = ops[idx]
-    lines.push((op.type === 'ins' ? '+ ' : op.type === 'del' ? '- ' : '  ') + op.line)
-    lastIdx = idx
-  }
-  return lines.join('\n')
 }
 
 function restore(version) {
@@ -605,6 +595,16 @@ async function deleteVersion(name) {
   padding: 1px 6px;
   border-radius: 10px;
 }
+
+.commit-stats {
+  display: inline-flex;
+  gap: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+}
+
+.stat-add { color: #34d399; }
+.stat-del { color: #f87171; }
 
 /* Merge commits */
 .merge-item {

@@ -88,6 +88,8 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("git:merge", workspacePath, from, message),
     diff: (workspacePath, filePath, oid) =>
       ipcRenderer.invoke("git:diff", workspacePath, filePath, oid),
+    commitDiff: (workspacePath, filePath, oid) =>
+      ipcRenderer.invoke("git:commit-diff", workspacePath, filePath, oid),
     readCommit: (workspacePath, filePath, oid) =>
       ipcRenderer.invoke("git:read-commit", workspacePath, filePath, oid),
     status: (workspacePath) => ipcRenderer.invoke("git:status", workspacePath),

@@ -572,6 +572,22 @@ async function diff(workspacePath, filePath, oid) {
   }
 }
 
+// Diff what a specific commit introduced: parent's blob vs this commit's blob.
+// For the first commit (no parent), before is empty.
+async function commitDiff(workspacePath, filePath, oid) {
+  try {
+    const after = await readCommit(workspacePath, filePath, oid)
+    const { commit } = await git.readCommit({ fs, dir: workspacePath, oid })
+    const parentOid = commit.parent?.[0]
+    const before = parentOid
+      ? await readCommit(workspacePath, filePath, parentOid)
+      : ''
+    return { before, after }
+  } catch (err) {
+    return { before: '', after: '' }
+  }
+}
+
 async function readCommit(workspacePath, filePath, oid) {
   try {
     const { blob } = await git.readBlob({
@@ -937,6 +953,7 @@ module.exports = {
   checkout,
   merge,
   diff,
+  commitDiff,
   readCommit,
   status,
   deleteBranch

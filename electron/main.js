@@ -1354,6 +1354,13 @@ function setupIpcHandlers() {
     return gitService.diff(workspacePath, filePath, oid);
   });
 
+  ipcMain.handle(
+    "git:commit-diff",
+    async (_, workspacePath, filePath, oid) => {
+      return gitService.commitDiff(workspacePath, filePath, oid);
+    },
+  );
+
   ipcMain.handle("git:read-commit", async (_, workspacePath, filePath, oid) => {
     return gitService.readCommit(workspacePath, filePath, oid);
   });

@@ -1,7 +1,12 @@
 <template>
     <div class="ai-chat">
         <div class="ai-chat-actions">
-            <button class="icon-btn" title="History" :class="{ active: showingHistory }" @click="toggleHistory">
+            <button
+                class="icon-btn"
+                title="History"
+                :class="{ active: showingHistory }"
+                @click="toggleHistory"
+            >
                 <History :size="16" />
             </button>
             <button class="icon-btn" title="New Chat" @click="startNewChat">
@@ -11,15 +16,29 @@
 
         <div v-if="showingHistory" class="chat-history-view">
             <div class="history-list">
-                <div v-if="store.aiChatsList.length === 0" class="history-empty">
+                <div
+                    v-if="store.aiChatsList.length === 0"
+                    class="history-empty"
+                >
                     No chat history in this workspace.
                 </div>
-                <div v-for="chat in store.aiChatsList" :key="chat.id" class="history-item">
+                <div
+                    v-for="chat in store.aiChatsList"
+                    :key="chat.id"
+                    class="history-item"
+                >
                     <button class="history-item-btn" @click="loadChat(chat.id)">
                         <div class="history-title">{{ chat.title }}</div>
-                        <div class="history-date">{{ new Date(chat.date).toLocaleString() }}</div>
+                        <div class="history-date">
+                            {{ new Date(chat.date).toLocaleString() }}
+                        </div>
                     </button>
-                    <button class="history-del-btn" @click.stop="store.deleteAiChat(chat.id)">×</button>
+                    <button
+                        class="history-del-btn"
+                        @click.stop="store.deleteAiChat(chat.id)"
+                    >
+                        ×
+                    </button>
                 </div>
             </div>
         </div>
@@ -29,8 +48,8 @@
                 <div class="ai-avatar"><Sparkles :size="20" /></div>
                 <p class="ai-name">{{ assistantName }}</p>
                 <p>
-                    Here to help you think through your document — not write
-                    it for you.
+                    Here to help you think through your document — not write it
+                    for you.
                 </p>
                 <p class="hint">
                     Challenge assumptions, spot gaps, ask clarifying questions.
@@ -53,26 +72,46 @@
                 :class="['message', msg.role]"
             >
                 <template v-if="msg.role === 'assistant'">
-                    <div v-if="msg.toolLogs && msg.toolLogs.length > 0" class="tool-logs">
-                        <div v-for="(log, idx) in msg.toolLogs" :key="idx" class="tool-log-item">
+                    <div
+                        v-if="msg.toolLogs && msg.toolLogs.length > 0"
+                        class="tool-logs"
+                    >
+                        <div
+                            v-for="(log, idx) in msg.toolLogs"
+                            :key="idx"
+                            class="tool-log-item"
+                        >
                             <template v-if="log.type === 'read'">
-                                <FileText :size="12" /> <span class="log-text">Read {{ log.file }}</span>
+                                <FileText :size="12" />
+                                <span class="log-text"
+                                    >Read {{ log.file }}</span
+                                >
                             </template>
                             <template v-else-if="log.type === 'tree'">
-                                <FileText :size="12" /> <span class="log-text">Listed workspace ({{ log.count }} entries, depth {{ log.depth }})</span>
+                                <FileText :size="12" />
+                                <span class="log-text"
+                                    >Listed workspace ({{ log.count }} entries,
+                                    depth {{ log.depth }})</span
+                                >
                             </template>
                             <template v-else-if="log.type === 'comment'">
-                                <MessageSquare :size="12" /> <a href="#" @click.prevent="openComment(log.id)">Commented on "{{ log.anchor }}"</a>
+                                <MessageSquare :size="12" />
+                                <a href="#" @click.prevent="openComment(log.id)"
+                                    >Commented on "{{ log.anchor }}"</a
+                                >
                             </template>
                         </div>
                     </div>
                     <div v-if="msg.think" class="message-think-wrapper">
                         <details class="think-block" :open="thinkingExpanded">
                             <summary>Thoughts</summary>
-                            <div class="think-content" v-html="renderMarkdown(msg.think)"></div>
+                            <div
+                                class="think-content"
+                                v-html="renderMarkdown(msg.think)"
+                            ></div>
                         </details>
                     </div>
-                    
+
                     <div
                         v-if="msg.content"
                         class="message-content"
@@ -89,29 +128,59 @@
 
             <div v-if="streaming" class="message assistant">
                 <div v-if="currentToolLogs.length > 0" class="tool-logs">
-                    <div v-for="(log, idx) in currentToolLogs" :key="idx" class="tool-log-item">
+                    <div
+                        v-for="(log, idx) in currentToolLogs"
+                        :key="idx"
+                        class="tool-log-item"
+                    >
                         <template v-if="log.type === 'read'">
                             <FileText :size="12" /> Read {{ log.file }}
                         </template>
                         <template v-else-if="log.type === 'comment'">
-                            <MessageSquare :size="12" /> <a href="#" @click.prevent="openComment(log.id)">Commented on "{{ log.anchor }}"</a>
+                            <MessageSquare :size="12" />
+                            <a href="#" @click.prevent="openComment(log.id)"
+                                >Commented on "{{ log.anchor }}"</a
+                            >
                         </template>
                     </div>
                 </div>
                 <template v-if="streamBuffer">
-                    <div v-if="parseThinkBlock(streamBuffer).think" class="message-think-wrapper">
+                    <div
+                        v-if="parseThinkBlock(streamBuffer).think"
+                        class="message-think-wrapper"
+                    >
                         <details class="think-block" :open="thinkingExpanded">
                             <summary>
-                                <span v-if="!streamBuffer.includes('</think>')">Thinking<span class="anim-dots"></span></span>
+                                <span v-if="!streamBuffer.includes('</think>')"
+                                    >Thinking<span class="anim-dots"></span
+                                ></span>
                                 <span v-else>Thoughts</span>
                             </summary>
-                            <div class="think-content" v-html="renderMarkdown(parseThinkBlock(streamBuffer).think)"></div>
+                            <div
+                                class="think-content"
+                                v-html="
+                                    renderMarkdown(
+                                        parseThinkBlock(streamBuffer).think,
+                                    )
+                                "
+                            ></div>
                         </details>
                     </div>
-                    <div v-if="parseThinkBlock(streamBuffer).content" class="message-content" v-html="renderMarkdown(parseThinkBlock(streamBuffer).content)"></div>
+                    <div
+                        v-if="parseThinkBlock(streamBuffer).content"
+                        class="message-content"
+                        v-html="
+                            renderMarkdown(
+                                parseThinkBlock(streamBuffer).content,
+                            )
+                        "
+                    ></div>
                 </template>
                 <div v-else class="message-think-wrapper">
-                    <span class="thinking-label">{{ currentActivityLabel || 'Thinking' }}</span><span class="anim-dots"></span>
+                    <span class="thinking-label">{{
+                        currentActivityLabel || "Thinking"
+                    }}</span
+                    ><span class="anim-dots"></span>
                 </div>
             </div>
         </div>
@@ -124,23 +193,28 @@
                 }}</span
             >
             <span class="usage-sep">·</span>
-            
-            <div class="context-circle" :title="`~${sessionStats.approxTokens.toLocaleString()} tokens est.`">
+
+            <div
+                class="context-circle"
+                :title="`~${sessionStats.approxTokens.toLocaleString()} tokens est.`"
+            >
                 <svg viewBox="0 0 36 36" class="circular-chart">
-                    <path class="circle-bg"
-                    d="M18 2.0845
+                    <path
+                        class="circle-bg"
+                        d="M18 2.0845
                         a 15.9155 15.9155 0 0 1 0 31.831
                         a 15.9155 15.9155 0 0 1 0 -31.831"
                     />
-                    <path class="circle"
-                    :stroke-dasharray="`${Math.min(100, (sessionStats.approxTokens / 128000) * 100)}, 100`"
-                    d="M18 2.0845
+                    <path
+                        class="circle"
+                        :stroke-dasharray="`${Math.min(100, (sessionStats.approxTokens / 128000) * 100)}, 100`"
+                        d="M18 2.0845
                         a 15.9155 15.9155 0 0 1 0 31.831
                         a 15.9155 15.9155 0 0 1 0 -31.831"
                     />
                 </svg>
             </div>
-            
+
             <span
                 v-if="sessionStats.approxTokens > 100000"
                 class="usage-warn"
@@ -150,62 +224,195 @@
         </div>
 
         <!-- Workspace index status -->
-        <div v-if="agentCaps.indexWorkspace && indexedDocCount > 0" class="index-bar">
-            <span class="index-stat">Indexed {{ indexedDocCount }} doc{{ indexedDocCount !== 1 ? 's' : '' }}</span>
+        <div
+            v-if="agentCaps.indexWorkspace && indexedDocCount > 0"
+            class="index-bar"
+        >
+            <span class="index-stat"
+                >Indexed {{ indexedDocCount }} doc{{
+                    indexedDocCount !== 1 ? "s" : ""
+                }}</span
+            >
         </div>
-
 
         <div class="chat-input-area">
             <div v-if="showSlashMenu" class="slash-menu">
-                <div class="slash-menu-title">Select {{ slashCommandType === 'root' ? 'command' : slashCommandType }}</div>
+                <div class="slash-menu-title">
+                    Select
+                    {{
+                        slashCommandType === "root"
+                            ? "command"
+                            : slashCommandType
+                    }}
+                </div>
                 <div class="slash-menu-items">
                     <template v-if="slashCommandType === 'root'">
-                        <button v-for="(cmd, i) in filteredRootCommands" :key="cmd.id" :class="['slash-menu-item', { active: slashSelectedIndex === i }]" @click="setSlashCommandType(cmd.id)">
+                        <button
+                            v-for="(cmd, i) in filteredRootCommands"
+                            :key="cmd.id"
+                            :class="[
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === i },
+                            ]"
+                            @click="setSlashCommandType(cmd.id)"
+                        >
                             {{ cmd.label }}
                         </button>
                     </template>
                     <template v-else-if="slashCommandType === 'model'">
-                        <div v-if="filteredModels.length === 0" class="slash-menu-hint">
+                        <div
+                            v-if="filteredModels.length === 0"
+                            class="slash-menu-hint"
+                        >
                             No models. Add a provider in Settings → AI.
                         </div>
-                        <button v-for="(m, i) in filteredModels" :key="m.id" :class="['slash-menu-item', { active: slashSelectedIndex === i }]" @click="selectSlashCommand(m.id)">
+                        <button
+                            v-for="(m, i) in filteredModels"
+                            :key="m.id"
+                            :class="[
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === i },
+                            ]"
+                            @click="selectSlashCommand(m.id)"
+                        >
                             {{ m.label }}
                         </button>
                     </template>
                     <template v-else-if="slashCommandType === 'effort'">
-                        <button v-for="(e, i) in filteredEfforts" :key="e" :class="['slash-menu-item', { active: slashSelectedIndex === i }]" @click="selectSlashCommand(e)">
+                        <button
+                            v-for="(e, i) in filteredEfforts"
+                            :key="e"
+                            :class="[
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === i },
+                            ]"
+                            @click="selectSlashCommand(e)"
+                        >
                             {{ e }}
                         </button>
                     </template>
                     <template v-else-if="slashCommandType === 'tools'">
-                        <div class="slash-menu-hint">Use ↑↓ to navigate, Space or Enter to toggle</div>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 0 }]">
+                        <div class="slash-menu-hint">
+                            Use ↑↓ to navigate, Space or Enter to toggle
+                        </div>
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 0 },
+                            ]"
+                        >
                             <span class="cap-label">Index workspace</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.indexWorkspace" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="agentCaps.indexWorkspace"
+                                    @change="saveAgentCaps" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 1 }]">
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 1 },
+                            ]"
+                        >
                             <span class="cap-label">Read docs</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.readDocs" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="agentCaps.readDocs"
+                                    @change="saveAgentCaps" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 2 }]">
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 2 },
+                            ]"
+                        >
                             <span class="cap-label">List dir tree</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.listTree" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="agentCaps.listTree"
+                                    @change="saveAgentCaps" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 3 }]">
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 3 },
+                            ]"
+                        >
                             <span class="cap-label">Web search</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.webSearch" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="agentCaps.webSearch"
+                                    @change="saveAgentCaps" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 4 }]">
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 4 },
+                            ]"
+                        >
                             <span class="cap-label">Post comments</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.postComments" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="agentCaps.postComments"
+                                    @change="saveAgentCaps" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 5 }]">
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 5 },
+                            ]"
+                        >
                             <span class="cap-label">Suggest edits</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="agentCaps.suggestEdits" @change="saveAgentCaps" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="agentCaps.suggestEdits"
+                                    @change="saveAgentCaps" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
-                        <label :class="['cap-row', 'slash-menu-item', { active: slashSelectedIndex === 6 }]">
+                        <label
+                            :class="[
+                                'cap-row',
+                                'slash-menu-item',
+                                { active: slashSelectedIndex === 6 },
+                            ]"
+                        >
                             <span class="cap-label">Show thinking</span>
-                            <span class="toggle-switch"><input type="checkbox" v-model="showThinking" @change="toggleShowThinking" /><span class="toggle-track"></span></span>
+                            <span class="toggle-switch"
+                                ><input
+                                    type="checkbox"
+                                    v-model="showThinking"
+                                    @change="toggleShowThinking" /><span
+                                    class="toggle-track"
+                                ></span
+                            ></span>
                         </label>
                     </template>
                 </div>
@@ -220,6 +427,8 @@
                     @keydown.up="handleUp"
                     @keydown.down="handleDown"
                     @keydown.space="handleSpace"
+                    @keydown="handleInputKeydown"
+                    @paste="handlePaste"
                     @input="handleInput"
                     rows="2"
                 />
@@ -233,24 +442,41 @@
                 </button>
             </div>
             <div class="chat-input-footer">
-                Model: {{ store.config?.assistant?.model || 'None selected' }} &nbsp;·&nbsp; Effort: {{ effortLevel }}
+                Model:
+                {{ store.config?.assistant?.model || "None selected" }}
+                &nbsp;·&nbsp; Effort: {{ effortLevel }}
             </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, nextTick, onUnmounted } from "vue";
+import {
+    ref,
+    reactive,
+    computed,
+    watch,
+    onMounted,
+    nextTick,
+    onUnmounted,
+} from "vue";
 import { useAppStore } from "../../store";
 import { storage } from "../../utils/storage.js";
 import { v4 as uuidv4 } from "uuid";
-import { Sparkles, SendHorizonal, ChevronDown, History, MessageSquare, FileText } from "lucide-vue-next";
+import {
+    Sparkles,
+    SendHorizonal,
+    ChevronDown,
+    History,
+    MessageSquare,
+    FileText,
+} from "lucide-vue-next";
 import { marked } from "marked";
 
 marked.setOptions({ breaks: true, gfm: true });
 
 const store = useAppStore();
-const assistantName = computed(() => store.config?.assistant?.name || 'Spark')
+const assistantName = computed(() => store.config?.assistant?.name || "Spark");
 const messagesEl = ref(null);
 const userInputEl = ref(null);
 const userInput = ref("");
@@ -301,6 +527,53 @@ const effortLevel = ref("Medium");
 const showSlashMenu = ref(false);
 const slashCommandType = ref(null);
 
+const pastedMultilineContents = new Map();
+
+function handlePaste(e) {
+    const text = e.clipboardData.getData("text");
+    if (text && text.trim().includes("\n")) {
+        e.preventDefault();
+        const lines = text.split("\n").length;
+        const id = uuidv4().slice(0, 8);
+        const marker = `[${lines} lines pasted #${id}]`;
+        pastedMultilineContents.set(marker, text);
+
+        const el = userInputEl.value;
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        userInput.value =
+            userInput.value.slice(0, start) +
+            marker +
+            userInput.value.slice(end);
+
+        nextTick(() => {
+            el.selectionStart = el.selectionEnd = start + marker.length;
+        });
+    }
+}
+
+function handleInputKeydown(e) {
+    if (e.key === "Backspace") {
+        const el = userInputEl.value;
+        const start = el.selectionStart;
+        if (start === el.selectionEnd) {
+            const textBefore = userInput.value.slice(0, start);
+            const match = textBefore.match(/\[\d+ lines pasted #[a-f0-9]+\]$/);
+            if (match) {
+                e.preventDefault();
+                const marker = match[0];
+                userInput.value =
+                    textBefore.slice(0, -marker.length) +
+                    userInput.value.slice(start);
+                pastedMultilineContents.delete(marker);
+                nextTick(() => {
+                    el.selectionStart = el.selectionEnd = start - marker.length;
+                });
+            }
+        }
+    }
+}
+
 const availableModels = ref([]);
 
 let modelsFetchedForProviders = null;
@@ -308,7 +581,7 @@ async function fetchProviderModels() {
     const cfg = store.config;
     if (!cfg || !cfg.providers || !cfg.providers.length) return;
 
-    const providersKey = JSON.stringify(cfg.providers.map(p => p.id));
+    const providersKey = JSON.stringify(cfg.providers.map((p) => p.id));
     if (modelsFetchedForProviders === providersKey) return;
 
     try {
@@ -317,30 +590,45 @@ async function fetchProviderModels() {
             if (!provider.baseUrl) continue;
             try {
                 const res = await fetch(`${provider.baseUrl}/models`, {
-                    headers: provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}
+                    headers: provider.apiKey
+                        ? { Authorization: `Bearer ${provider.apiKey}` }
+                        : {},
                 });
                 if (!res.ok) continue;
                 const data = await res.json();
                 if (data && Array.isArray(data.data)) {
-                    const pModels = data.data.map(m => ({ 
-                        id: m.id, 
+                    const pModels = data.data.map((m) => ({
+                        id: m.id,
                         label: `${m.id} (${provider.label || provider.id})`,
-                        providerId: provider.id
+                        providerId: provider.id,
                     }));
                     allModels.push(...pModels);
                 }
             } catch (e) {
-                if (import.meta.env.DEV) console.warn(`[AIChat] Failed to fetch models for provider ${provider.id}`, e);
+                if (import.meta.env.DEV)
+                    console.warn(
+                        `[AIChat] Failed to fetch models for provider ${provider.id}`,
+                        e,
+                    );
             }
         }
         if (allModels.length > 0) {
-            const uniqueModels = Array.from(new Map(allModels.map(m => [m.id, m])).values());
+            const uniqueModels = Array.from(
+                new Map(allModels.map((m) => [m.id, m])).values(),
+            );
             availableModels.value = uniqueModels;
             modelsFetchedForProviders = providersKey;
 
             const currentModel = store.config?.assistant?.model;
-            if (currentModel && !uniqueModels.some(m => m.id === currentModel)) {
-                if (import.meta.env.DEV) console.warn("[AIChat] Stored model not in providers, clearing:", currentModel);
+            if (
+                currentModel &&
+                !uniqueModels.some((m) => m.id === currentModel)
+            ) {
+                if (import.meta.env.DEV)
+                    console.warn(
+                        "[AIChat] Stored model not in providers, clearing:",
+                        currentModel,
+                    );
                 if (!store.config.assistant) store.config.assistant = {};
                 store.config.assistant.model = "";
                 store.config.assistant.providerId = "";
@@ -350,34 +638,43 @@ async function fetchProviderModels() {
             availableModels.value = [];
         }
     } catch (e) {
-        if (import.meta.env.DEV) console.warn("[AIChat] Failed to fetch provider models", e);
+        if (import.meta.env.DEV)
+            console.warn("[AIChat] Failed to fetch provider models", e);
     }
 }
 
-watch(() => store.config?.providers, () => {
-    modelsFetchedForProviders = null;
-    fetchProviderModels();
-}, { deep: true });
+watch(
+    () => store.config?.providers,
+    () => {
+        modelsFetchedForProviders = null;
+        fetchProviderModels();
+    },
+    { deep: true },
+);
 
 onMounted(async () => {
     hydrateFromConfig();
     await migrateLocalStoragePrefs();
     fetchProviderModels();
-    window.addEventListener('keydown', handleGlobalKeydown);
+    window.addEventListener("keydown", handleGlobalKeydown);
 });
 
-watch(() => store.config?.assistant, (val) => {
-    if (val) hydrateFromConfig();
-}, { deep: false });
+watch(
+    () => store.config?.assistant,
+    (val) => {
+        if (val) hydrateFromConfig();
+    },
+    { deep: false },
+);
 
 const cancelLoop = ref(false);
 
 function handleGlobalKeydown(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
         e.preventDefault();
         toggleThinking();
     }
-    if (e.key === 'Escape' && streaming.value) {
+    if (e.key === "Escape" && streaming.value) {
         e.preventDefault();
         cancelLoop.value = true;
         window.canonic.ai.cancel();
@@ -389,34 +686,46 @@ function toggleThinking() {
     persistAssistantPrefs();
 }
 
-const effortLevels = ['Low', 'Medium', 'High'];
+const effortLevels = ["Low", "Medium", "High"];
 
 const slashSelectedIndex = ref(0);
 
 const rootCommands = [
-    { id: 'model', label: '/model (Select Model)' },
-    { id: 'effort', label: '/effort (Set Effort Level)' },
-    { id: 'tools', label: '/tools (Agent Tools)' }
+    { id: "model", label: "/model (Select Model)" },
+    { id: "effort", label: "/effort (Set Effort Level)" },
+    { id: "tools", label: "/tools (Agent Tools)" },
 ];
 
 const filteredRootCommands = computed(() => {
     const query = userInput.value.trim().toLowerCase();
-    if (!query || query === '/') return rootCommands;
-    return rootCommands.filter(c => ('/' + c.id).startsWith(query) || c.label.toLowerCase().includes(query));
+    if (!query || query === "/") return rootCommands;
+    return rootCommands.filter(
+        (c) =>
+            ("/" + c.id).startsWith(query) ||
+            c.label.toLowerCase().includes(query),
+    );
 });
 
 const filteredModels = computed(() => {
-    const query = userInput.value.replace(/^\/model\s*/i, '').trim().toLowerCase();
+    const query = userInput.value
+        .replace(/^\/model\s*/i, "")
+        .trim()
+        .toLowerCase();
     if (!query) return availableModels.value;
-    return availableModels.value.filter(m => 
-        m.label.toLowerCase().includes(query) || m.id.toLowerCase().includes(query)
+    return availableModels.value.filter(
+        (m) =>
+            m.label.toLowerCase().includes(query) ||
+            m.id.toLowerCase().includes(query),
     );
 });
 
 const filteredEfforts = computed(() => {
-    const query = userInput.value.replace(/^\/effort\s*/i, '').trim().toLowerCase();
+    const query = userInput.value
+        .replace(/^\/effort\s*/i, "")
+        .trim()
+        .toLowerCase();
     if (!query) return effortLevels;
-    return effortLevels.filter(e => e.toLowerCase().includes(query));
+    return effortLevels.filter((e) => e.toLowerCase().includes(query));
 });
 
 function toggleShowThinking() {
@@ -426,18 +735,18 @@ function toggleShowThinking() {
 function handleInput() {
     slashSelectedIndex.value = 0;
     const text = userInput.value;
-    if (text.startsWith('/') && !text.includes(' ')) {
+    if (text.startsWith("/") && !text.includes(" ")) {
         showSlashMenu.value = true;
-        slashCommandType.value = 'root';
-    } else if (text.startsWith('/model ')) {
+        slashCommandType.value = "root";
+    } else if (text.startsWith("/model ")) {
         showSlashMenu.value = true;
-        slashCommandType.value = 'model';
-    } else if (text.startsWith('/effort ')) {
+        slashCommandType.value = "model";
+    } else if (text.startsWith("/effort ")) {
         showSlashMenu.value = true;
-        slashCommandType.value = 'effort';
-    } else if (text.startsWith('/tools ')) {
+        slashCommandType.value = "effort";
+    } else if (text.startsWith("/tools ")) {
         showSlashMenu.value = true;
-        slashCommandType.value = 'tools';
+        slashCommandType.value = "tools";
     } else {
         showSlashMenu.value = false;
         slashCommandType.value = null;
@@ -445,59 +754,87 @@ function handleInput() {
 }
 
 function getSlashMenuLength() {
-    if (slashCommandType.value === 'root') return filteredRootCommands.value.length;
-    if (slashCommandType.value === 'model') return filteredModels.value.length;
-    if (slashCommandType.value === 'effort') return filteredEfforts.value.length;
-    if (slashCommandType.value === 'tools') return 7;
+    if (slashCommandType.value === "root")
+        return filteredRootCommands.value.length;
+    if (slashCommandType.value === "model") return filteredModels.value.length;
+    if (slashCommandType.value === "effort")
+        return filteredEfforts.value.length;
+    if (slashCommandType.value === "tools") return 7;
     return 0;
 }
 
 function handleUp(e) {
     if (!showSlashMenu.value) return;
     e.preventDefault();
-    slashSelectedIndex.value = (slashSelectedIndex.value - 1 + getSlashMenuLength()) % getSlashMenuLength();
+    slashSelectedIndex.value =
+        (slashSelectedIndex.value - 1 + getSlashMenuLength()) %
+        getSlashMenuLength();
 }
 
 function handleDown(e) {
     if (!showSlashMenu.value) return;
     e.preventDefault();
-    slashSelectedIndex.value = (slashSelectedIndex.value + 1) % getSlashMenuLength();
+    slashSelectedIndex.value =
+        (slashSelectedIndex.value + 1) % getSlashMenuLength();
 }
 
 function handleSpace(e) {
-    if (showSlashMenu.value && slashCommandType.value === 'tools') {
+    if (showSlashMenu.value && slashCommandType.value === "tools") {
         e.preventDefault();
-        const tools = ['indexWorkspace', 'readDocs', 'listTree', 'webSearch', 'postComments', 'suggestEdits'];
+        const tools = [
+            "indexWorkspace",
+            "readDocs",
+            "listTree",
+            "webSearch",
+            "postComments",
+            "suggestEdits",
+        ];
         if (slashSelectedIndex.value === 6) {
             showThinking.value = !showThinking.value;
             toggleShowThinking();
-            store.logEvent("ai:setting_changed", { setting: "showThinking", value: showThinking.value, source: "slash_command" });
+            store.logEvent("ai:setting_changed", {
+                setting: "showThinking",
+                value: showThinking.value,
+                source: "slash_command",
+            });
         } else {
             const tool = tools[slashSelectedIndex.value];
             agentCaps[tool] = !agentCaps[tool];
             saveAgentCaps();
-            store.logEvent("ai:setting_changed", { setting: tool, value: agentCaps[tool], source: "slash_command" });
+            store.logEvent("ai:setting_changed", {
+                setting: tool,
+                value: agentCaps[tool],
+                source: "slash_command",
+            });
         }
     }
 }
 
 function executeSlashSelection() {
-    if (slashCommandType.value === 'root') {
+    if (slashCommandType.value === "root") {
         const cmd = filteredRootCommands.value[slashSelectedIndex.value]?.id;
         if (cmd) setSlashCommandType(cmd);
-    } else if (slashCommandType.value === 'model') {
+    } else if (slashCommandType.value === "model") {
         const selected = filteredModels.value[slashSelectedIndex.value]?.id;
         if (selected) {
             selectSlashCommand(selected);
-            store.logEvent("ai:setting_changed", { setting: "model", value: selected, source: "slash_command" });
+            store.logEvent("ai:setting_changed", {
+                setting: "model",
+                value: selected,
+                source: "slash_command",
+            });
         }
-    } else if (slashCommandType.value === 'effort') {
+    } else if (slashCommandType.value === "effort") {
         const selected = filteredEfforts.value[slashSelectedIndex.value];
         if (selected) {
             selectSlashCommand(selected);
-            store.logEvent("ai:setting_changed", { setting: "effort", value: selected, source: "slash_command" });
+            store.logEvent("ai:setting_changed", {
+                setting: "effort",
+                value: selected,
+                source: "slash_command",
+            });
         }
-    } else if (slashCommandType.value === 'tools') {
+    } else if (slashCommandType.value === "tools") {
         showSlashMenu.value = false;
         slashCommandType.value = null;
         userInput.value = "";
@@ -507,24 +844,26 @@ function executeSlashSelection() {
 
 function setSlashCommandType(type) {
     slashCommandType.value = type;
-    userInput.value = '/' + type + ' ';
+    userInput.value = "/" + type + " ";
     userInputEl.value?.focus();
 }
 
 function selectSlashCommand(value) {
-    if (slashCommandType.value === 'model') {
+    if (slashCommandType.value === "model") {
         if (store.config) {
             if (!store.config.assistant) store.config.assistant = {};
             store.config.assistant.model = value;
-            
-            const selectedModelObj = availableModels.value.find(m => m.id === value);
+
+            const selectedModelObj = availableModels.value.find(
+                (m) => m.id === value,
+            );
             if (selectedModelObj && selectedModelObj.providerId) {
                 store.config.assistant.providerId = selectedModelObj.providerId;
             }
 
             store.saveConfig(JSON.parse(JSON.stringify(store.config)));
         }
-    } else if (slashCommandType.value === 'effort') {
+    } else if (slashCommandType.value === "effort") {
         effortLevel.value = value;
         persistAssistantPrefs();
     }
@@ -535,23 +874,30 @@ function selectSlashCommand(value) {
 }
 
 const AI_ACTIVITY_LABELS = {
-    thinking: 'Thinking',
-    web_search: 'Searching the web',
-    browsing: 'Browsing',
-    reading_file: 'Reading file',
-}
+    thinking: "Thinking",
+    web_search: "Searching the web",
+    browsing: "Browsing",
+    reading_file: "Reading file",
+};
 
 const currentActivityLabel = computed(() => {
-    const a = activityStatus.value
-    if (!a) return 'Thinking'
-    return a.label || AI_ACTIVITY_LABELS[a.type] || 'Thinking'
-})
+    const a = activityStatus.value;
+    if (!a) return "Thinking";
+    return a.label || AI_ACTIVITY_LABELS[a.type] || "Thinking";
+});
 
 const sessionStats = ref({ messages: 0, approxTokens: 0 });
 const indexedDocCount = ref(0);
 
 // ── Agent capabilities ────────────────────────────────────────────────────────
-const DEFAULT_CAPS = { indexWorkspace: true, readDocs: true, listTree: true, webSearch: true, postComments: true, suggestEdits: true };
+const DEFAULT_CAPS = {
+    indexWorkspace: true,
+    readDocs: true,
+    listTree: true,
+    webSearch: true,
+    postComments: true,
+    suggestEdits: true,
+};
 const agentCaps = reactive({ ...DEFAULT_CAPS });
 
 async function persistAssistantPrefs() {
@@ -563,7 +909,9 @@ async function persistAssistantPrefs() {
         thinkingExpanded: thinkingExpanded.value,
         caps: { ...agentCaps },
     };
-    const nextConfig = JSON.parse(JSON.stringify({ ...store.config, assistant: nextAssistant }));
+    const nextConfig = JSON.parse(
+        JSON.stringify({ ...store.config, assistant: nextAssistant }),
+    );
     await store.saveConfig(nextConfig);
 }
 
@@ -575,8 +923,10 @@ function hydrateFromConfig() {
     const a = store.config?.assistant;
     if (!a) return;
     if (a.effortLevel) effortLevel.value = a.effortLevel;
-    if (typeof a.showThinking === "boolean") showThinking.value = a.showThinking;
-    if (typeof a.thinkingExpanded === "boolean") thinkingExpanded.value = a.thinkingExpanded;
+    if (typeof a.showThinking === "boolean")
+        showThinking.value = a.showThinking;
+    if (typeof a.thinkingExpanded === "boolean")
+        thinkingExpanded.value = a.thinkingExpanded;
     if (a.caps) Object.assign(agentCaps, a.caps);
 }
 
@@ -588,9 +938,18 @@ async function migrateLocalStoragePrefs() {
     const oldShow = storage.getItem("canonic:showThinking");
     const oldExpand = storage.getItem("canonic:thinkingExpanded");
     const oldCaps = storage.getItem("canonic:agentCaps");
-    if (oldEffort && !a.effortLevel) { a.effortLevel = oldEffort; changed = true; }
-    if (oldShow !== null && typeof a.showThinking !== "boolean") { a.showThinking = oldShow !== "false"; changed = true; }
-    if (oldExpand !== null && typeof a.thinkingExpanded !== "boolean") { a.thinkingExpanded = oldExpand === "true"; changed = true; }
+    if (oldEffort && !a.effortLevel) {
+        a.effortLevel = oldEffort;
+        changed = true;
+    }
+    if (oldShow !== null && typeof a.showThinking !== "boolean") {
+        a.showThinking = oldShow !== "false";
+        changed = true;
+    }
+    if (oldExpand !== null && typeof a.thinkingExpanded !== "boolean") {
+        a.thinkingExpanded = oldExpand === "true";
+        changed = true;
+    }
     if (oldCaps && !a.caps) {
         try {
             a.caps = { ...DEFAULT_CAPS, ...JSON.parse(oldCaps) };
@@ -598,7 +957,9 @@ async function migrateLocalStoragePrefs() {
         } catch {}
     }
     if (changed) {
-        const nextConfig = JSON.parse(JSON.stringify({ ...store.config, assistant: a }));
+        const nextConfig = JSON.parse(
+            JSON.stringify({ ...store.config, assistant: a }),
+        );
         await store.saveConfig(nextConfig);
     }
     storage.setItem("canonic:effortLevel", "");
@@ -610,9 +971,16 @@ async function migrateLocalStoragePrefs() {
 
 function resolveAssistant() {
     const cfg = store.config;
-    if (!cfg) return { apiKey: "", baseUrl: "", model: "", name: "Spark", extraInstructions: "" };
+    if (!cfg)
+        return {
+            apiKey: "",
+            baseUrl: "",
+            model: "",
+            name: "Spark",
+            extraInstructions: "",
+        };
     const provider = cfg.providers?.find(
-        (p) => p.id === cfg.assistant?.providerId
+        (p) => p.id === cfg.assistant?.providerId,
     );
     return {
         apiKey: provider?.apiKey || "",
@@ -632,9 +1000,18 @@ const suggestions = [
 
 function buildSystemPrompt(name, extraInstructions) {
     const toolHints = [];
-    if (agentCaps.readDocs) toolHints.push('Use the `read_file` tool to fetch any workspace doc from the index when you need it.');
-    if (agentCaps.listTree) toolHints.push('Use the `list_workspace` tool to discover the directory structure (dirs + files, 3 levels deep by default). Helpful before reading files when you do not know the layout.');
-    if (agentCaps.postComments) toolHints.push('Use the `post_comment` tool to leave an inline comment anchored to an exact quoted passage from the current document. `anchor` must match the text verbatim. Prefer one or two precise comments over many vague ones.');
+    if (agentCaps.readDocs)
+        toolHints.push(
+            "Use the `read_file` tool to fetch any workspace doc from the index when you need it.",
+        );
+    if (agentCaps.listTree)
+        toolHints.push(
+            "Use the `list_workspace` tool to discover the directory structure (dirs + files, 3 levels deep by default). Helpful before reading files when you do not know the layout.",
+        );
+    if (agentCaps.postComments)
+        toolHints.push(
+            "Use the `post_comment` tool to leave an inline comment anchored to an exact quoted passage from the current document. `anchor` must match the text verbatim. Prefer one or two precise comments over many vague ones.",
+        );
 
     let instructions = `You are ${name}, a sharp, seasoned technical mentor reviewing the user's document. Your job: brainstorm, challenge assumptions, spot gaps, ask clarifying questions. Never write the document for them.
 
@@ -644,7 +1021,7 @@ When the user is exploring ideas, push back where push-back is warranted. When f
 
 The full current document is provided in <current_document>. A workspace file index (paths only) may be provided in <workspace_index>.
 
-${toolHints.length ? 'Tools available:\n' + toolHints.map(t => '- ' + t).join('\n') : ''}
+${toolHints.length ? "Tools available:\n" + toolHints.map((t) => "- " + t).join("\n") : ""}
 
 CRITICAL: When the user asks you to comment, leave a comment, annotate, mark up, flag, or critique passages, you MUST call the post_comment tool — do not just describe the comment in chat. Quote the exact anchor text verbatim from the current document. You may post multiple comments in one turn by calling the tool multiple times.
 
@@ -660,7 +1037,7 @@ function openComment(id) {
     // Slight delay to ensure panel is open before scrolling
     setTimeout(() => {
         const el = document.getElementById(`comment-${id}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
 }
 
@@ -698,7 +1075,8 @@ async function buildWorkspaceBlock() {
     try {
         allFiles = await window.canonic.files.list(workspacePath);
     } catch (e) {
-        if (import.meta.env.DEV) console.warn("[AIChat] Could not list workspace files:", e);
+        if (import.meta.env.DEV)
+            console.warn("[AIChat] Could not list workspace files:", e);
         return "";
     }
 
@@ -716,10 +1094,17 @@ async function buildWorkspaceBlock() {
 let cachedSystemContent = "";
 
 async function sendMessage() {
-    const content = userInput.value.trim();
+    let content = userInput.value.trim();
     if (!content || streaming.value) return;
 
-    if (content.startsWith('/') && !content.includes(' ')) {
+    // Replace multiline paste markers with actual content
+    for (const [marker, fullText] of pastedMultilineContents.entries()) {
+        content = content.replace(marker, fullText);
+    }
+    // Clear the map after sending
+    pastedMultilineContents.clear();
+
+    if (content.startsWith("/") && !content.includes(" ")) {
         const cmd = filteredRootCommands.value[slashSelectedIndex.value]?.id;
         if (cmd) {
             showSlashMenu.value = true;
@@ -738,7 +1123,8 @@ async function sendMessage() {
     showingHistory.value = false;
     scrollToBottom();
 
-    const { apiKey, baseUrl, model, name, extraInstructions } = resolveAssistant();
+    const { apiKey, baseUrl, model, name, extraInstructions } =
+        resolveAssistant();
     if (!apiKey) {
         if (import.meta.env.DEV) console.warn("[AIChat] No API key found");
         store.aiChatMessages.push({
@@ -752,9 +1138,12 @@ async function sendMessage() {
     }
 
     const docContext = store.currentContent
-        ? `\n\n<current_document path="${store.currentFile || 'untitled'}">\n${store.currentContent}\n</current_document>`
+        ? `\n\n<current_document path="${store.currentFile || "untitled"}">\n${store.currentContent}\n</current_document>`
         : "";
-    cachedSystemContent = buildSystemPrompt(name, extraInstructions) + await buildWorkspaceBlock() + docContext;
+    cachedSystemContent =
+        buildSystemPrompt(name, extraInstructions) +
+        (await buildWorkspaceBlock()) +
+        docContext;
 
     cancelLoop.value = false;
     await performChatRequest(apiKey, baseUrl, model);
@@ -780,11 +1169,15 @@ async function performChatRequest(apiKey, baseUrl, model) {
                 activeToolCalls[delta.index] = {
                     id: delta.id,
                     type: delta.type || "function",
-                    function: { name: delta.function?.name || "", arguments: "" }
+                    function: {
+                        name: delta.function?.name || "",
+                        arguments: "",
+                    },
                 };
             }
             if (delta.function && delta.function.arguments) {
-                activeToolCalls[delta.index].function.arguments += delta.function.arguments;
+                activeToolCalls[delta.index].function.arguments +=
+                    delta.function.arguments;
             }
         }
     });
@@ -798,9 +1191,13 @@ async function performChatRequest(apiKey, baseUrl, model) {
         const rawResponse = streamBuffer.value;
         const { think, content } = parseThinkBlock(rawResponse);
         const toolCallsArray = Object.values(activeToolCalls);
-        
+
         const finalContent = content || "";
-        const isEmpty = !finalContent && !think && toolCallsArray.length === 0 && currentToolLogs.value.length === 0;
+        const isEmpty =
+            !finalContent &&
+            !think &&
+            toolCallsArray.length === 0 &&
+            currentToolLogs.value.length === 0;
 
         if (!isEmpty) {
             store.aiChatMessages.push({
@@ -808,41 +1205,85 @@ async function performChatRequest(apiKey, baseUrl, model) {
                 role: "assistant",
                 content: finalContent,
                 think: think,
-                tool_calls: toolCallsArray.length > 0 ? toolCallsArray : undefined,
-                toolLogs: [...currentToolLogs.value]
+                tool_calls:
+                    toolCallsArray.length > 0 ? toolCallsArray : undefined,
+                toolLogs: [...currentToolLogs.value],
             });
         }
         currentToolLogs.value = [];
         store.saveCurrentAiChat();
         scrollToBottom();
 
-        sessionStats.value.approxTokens += Math.ceil((content.length + rawResponse.length) / 4);
+        sessionStats.value.approxTokens += Math.ceil(
+            (content.length + rawResponse.length) / 4,
+        );
         sessionStats.value.messages++;
         streamBuffer.value = "";
 
         if (toolCallsArray.length > 0 && !cancelLoop.value) {
             for (const tc of toolCallsArray) {
-                if (tc.function.name === 'read_file') {
+                if (tc.function.name === "read_file") {
                     try {
                         const args = JSON.parse(tc.function.arguments);
-                        const fileContent = await window.canonic.files.read(store.workspacePath, args.path);
-                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: fileContent });
-                        currentToolLogs.value.push({ type: 'read', file: args.path });
+                        const fileContent = await window.canonic.files.read(
+                            store.workspacePath,
+                            args.path,
+                        );
+                        store.aiChatMessages.push({
+                            role: "tool",
+                            tool_call_id: tc.id,
+                            name: tc.function.name,
+                            content: fileContent,
+                        });
+                        currentToolLogs.value.push({
+                            type: "read",
+                            file: args.path,
+                        });
                     } catch (e) {
-                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: "Error: " + e.message });
+                        store.aiChatMessages.push({
+                            role: "tool",
+                            tool_call_id: tc.id,
+                            name: tc.function.name,
+                            content: "Error: " + e.message,
+                        });
                     }
-                } else if (tc.function.name === 'list_workspace') {
+                } else if (tc.function.name === "list_workspace") {
                     try {
-                        const args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
-                        const result = await window.canonic.files.tree(store.workspacePath, { maxDepth: args.maxDepth || 3 });
-                        const lines = (result.entries || []).map(e => (e.type === 'dir' ? `${e.path}/` : e.path));
-                        const body = lines.join("\n") + (result.truncated ? "\n<!-- truncated: entries cap reached -->" : "");
-                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: body });
-                        currentToolLogs.value.push({ type: 'tree', count: lines.length, depth: result.maxDepth });
+                        const args = tc.function.arguments
+                            ? JSON.parse(tc.function.arguments)
+                            : {};
+                        const result = await window.canonic.files.tree(
+                            store.workspacePath,
+                            { maxDepth: args.maxDepth || 3 },
+                        );
+                        const lines = (result.entries || []).map((e) =>
+                            e.type === "dir" ? `${e.path}/` : e.path,
+                        );
+                        const body =
+                            lines.join("\n") +
+                            (result.truncated
+                                ? "\n<!-- truncated: entries cap reached -->"
+                                : "");
+                        store.aiChatMessages.push({
+                            role: "tool",
+                            tool_call_id: tc.id,
+                            name: tc.function.name,
+                            content: body,
+                        });
+                        currentToolLogs.value.push({
+                            type: "tree",
+                            count: lines.length,
+                            depth: result.maxDepth,
+                        });
                     } catch (e) {
-                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: "Error: " + e.message });
+                        store.aiChatMessages.push({
+                            role: "tool",
+                            tool_call_id: tc.id,
+                            name: tc.function.name,
+                            content: "Error: " + e.message,
+                        });
                     }
-                } else if (tc.function.name === 'post_comment') {
+                } else if (tc.function.name === "post_comment") {
                     try {
                         const args = JSON.parse(tc.function.arguments);
                         const commentId = uuidv4();
@@ -856,15 +1297,31 @@ async function performChatRequest(apiKey, baseUrl, model) {
                             resolved: false,
                             createdAt: new Date().toISOString(),
                         });
-                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: "Comment posted." });
-                        currentToolLogs.value.push({ type: 'comment', id: commentId, anchor: args.anchor });
+                        store.aiChatMessages.push({
+                            role: "tool",
+                            tool_call_id: tc.id,
+                            name: tc.function.name,
+                            content: "Comment posted.",
+                        });
+                        currentToolLogs.value.push({
+                            type: "comment",
+                            id: commentId,
+                            anchor: args.anchor,
+                        });
                     } catch (e) {
-                        if (import.meta.env.DEV) console.error("[AIChat] post_comment failed:", e);
-                        store.aiChatMessages.push({ role: "tool", tool_call_id: tc.id, name: tc.function.name, content: "Error: " + e.message });
+                        if (import.meta.env.DEV)
+                            console.error("[AIChat] post_comment failed:", e);
+                        store.aiChatMessages.push({
+                            role: "tool",
+                            tool_call_id: tc.id,
+                            name: tc.function.name,
+                            content: "Error: " + e.message,
+                        });
                     }
                 }
             }
-            if (!cancelLoop.value) await performChatRequest(apiKey, baseUrl, model);
+            if (!cancelLoop.value)
+                await performChatRequest(apiKey, baseUrl, model);
         } else {
             streaming.value = false;
             window.canonic.ai.removeListeners();
@@ -872,14 +1329,18 @@ async function performChatRequest(apiKey, baseUrl, model) {
     });
 
     window.canonic.ai.onError((msg) => {
-        store.aiChatMessages.push({ id: uuidv4(), role: "assistant", content: `Error: ${msg}` });
+        store.aiChatMessages.push({
+            id: uuidv4(),
+            role: "assistant",
+            content: `Error: ${msg}`,
+        });
         store.saveCurrentAiChat();
         streaming.value = false;
         window.canonic.ai.removeListeners();
         scrollToBottom();
     });
 
-    const contextMessages = store.aiChatMessages.slice(-20).map(m => {
+    const contextMessages = store.aiChatMessages.slice(-20).map((m) => {
         const out = { role: m.role, content: m.content || "" };
         if (m.tool_calls) out.tool_calls = m.tool_calls;
         if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
@@ -895,8 +1356,12 @@ async function performChatRequest(apiKey, baseUrl, model) {
             function: {
                 name: "read_file",
                 description: "Read a workspace file",
-                parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] }
-            }
+                parameters: {
+                    type: "object",
+                    properties: { path: { type: "string" } },
+                    required: ["path"],
+                },
+            },
         });
     }
     if (agentCaps.listTree) {
@@ -904,14 +1369,18 @@ async function performChatRequest(apiKey, baseUrl, model) {
             type: "function",
             function: {
                 name: "list_workspace",
-                description: "List directories and files in the workspace, up to maxDepth levels deep (default 3, max 5). Returns relative paths only — does not read file content. Use this to discover structure, then use read_file on specific files.",
+                description:
+                    "List directories and files in the workspace, up to maxDepth levels deep (default 3, max 5). Returns relative paths only — does not read file content. Use this to discover structure, then use read_file on specific files.",
                 parameters: {
                     type: "object",
                     properties: {
-                        maxDepth: { type: "integer", description: "1-5, default 3" }
-                    }
-                }
-            }
+                        maxDepth: {
+                            type: "integer",
+                            description: "1-5, default 3",
+                        },
+                    },
+                },
+            },
         });
     }
     if (agentCaps.postComments) {
@@ -919,23 +1388,37 @@ async function performChatRequest(apiKey, baseUrl, model) {
             type: "function",
             function: {
                 name: "post_comment",
-                description: "Leave an inline comment on a specific document passage",
-                parameters: { type: "object", properties: { anchor: { type: "string", description: "Exact text" }, body: { type: "string", description: "Comment" } }, required: ["anchor", "body"] }
-            }
+                description:
+                    "Leave an inline comment on a specific document passage",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        anchor: { type: "string", description: "Exact text" },
+                        body: { type: "string", description: "Comment" },
+                    },
+                    required: ["anchor", "body"],
+                },
+            },
         });
     }
 
-    const ipcPayload = JSON.parse(JSON.stringify({
-        messages: contextMessages,
-        system: cachedSystemContent,
-        model,
-        apiKey,
-        baseUrl,
-        tools: CANONIC_TOOLS.length > 0 ? CANONIC_TOOLS : undefined
-    }));
-    window.canonic.ai.chat(ipcPayload).catch(err => {
+    const ipcPayload = JSON.parse(
+        JSON.stringify({
+            messages: contextMessages,
+            system: cachedSystemContent,
+            model,
+            apiKey,
+            baseUrl,
+            tools: CANONIC_TOOLS.length > 0 ? CANONIC_TOOLS : undefined,
+        }),
+    );
+    window.canonic.ai.chat(ipcPayload).catch((err) => {
         if (import.meta.env.DEV) console.error("IPC invoke error:", err);
-        store.aiChatMessages.push({ id: uuidv4(), role: "assistant", content: `Error: ${err.message}` });
+        store.aiChatMessages.push({
+            id: uuidv4(),
+            role: "assistant",
+            content: `Error: ${err.message}`,
+        });
         streaming.value = false;
         scrollToBottom();
     });
@@ -950,7 +1433,7 @@ async function scrollToBottom() {
 
 onUnmounted(() => {
     window.canonic.ai.removeListeners();
-    window.removeEventListener('keydown', handleGlobalKeydown);
+    window.removeEventListener("keydown", handleGlobalKeydown);
 });
 </script>
 
@@ -983,7 +1466,9 @@ onUnmounted(() => {
     justify-content: center;
     color: var(--text-muted);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
     padding: 0;
 }
 
@@ -1003,8 +1488,18 @@ onUnmounted(() => {
     overflow-y: auto;
     padding: 12px;
     padding-top: 56px;
-    mask-image: linear-gradient(to bottom, transparent 0%, black 56px, black 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 56px, black 100%);
+    mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 56px,
+        black 100%
+    );
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 56px,
+        black 100%
+    );
 }
 
 .history-list {
@@ -1131,14 +1626,20 @@ onUnmounted(() => {
 }
 
 .anim-dots::after {
-    content: '.';
+    content: ".";
     animation: dots 1.5s steps(3, end) infinite;
 }
 
 @keyframes dots {
-    0% { content: '.'; }
-    33% { content: '..'; }
-    66% { content: '...'; }
+    0% {
+        content: ".";
+    }
+    33% {
+        content: "..";
+    }
+    66% {
+        content: "...";
+    }
 }
 
 .chat-messages {
@@ -1149,8 +1650,18 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    mask-image: linear-gradient(to bottom, transparent 0%, black 56px, black 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 56px, black 100%);
+    mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 56px,
+        black 100%
+    );
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 56px,
+        black 100%
+    );
 }
 
 .ai-intro {
@@ -1232,16 +1743,31 @@ onUnmounted(() => {
     border: 1px solid var(--border);
 }
 
-.message-content :deep(p) { margin: 0 0 8px 0; }
-.message-content :deep(p:last-child) { margin-bottom: 0; }
+.message-content :deep(p) {
+    margin: 0 0 8px 0;
+}
+.message-content :deep(p:last-child) {
+    margin-bottom: 0;
+}
 .message-content :deep(ul),
-.message-content :deep(ol) { margin: 4px 0 8px 0; padding-left: 20px; }
-.message-content :deep(li) { margin: 2px 0; }
-.message-content :deep(li > p) { margin: 0; }
+.message-content :deep(ol) {
+    margin: 4px 0 8px 0;
+    padding-left: 20px;
+}
+.message-content :deep(li) {
+    margin: 2px 0;
+}
+.message-content :deep(li > p) {
+    margin: 0;
+}
 .message-content :deep(h1),
 .message-content :deep(h2),
 .message-content :deep(h3),
-.message-content :deep(h4) { margin: 10px 0 4px 0; font-size: 0.95rem; font-weight: 600; }
+.message-content :deep(h4) {
+    margin: 10px 0 4px 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
 .message-content :deep(code) {
     background: var(--bg-base);
     padding: 1px 5px;
@@ -1269,8 +1795,15 @@ onUnmounted(() => {
     border-left: 2px solid var(--border);
     color: var(--text-muted);
 }
-.message-content :deep(a) { color: var(--accent); text-decoration: underline; }
-.message-content :deep(hr) { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+.message-content :deep(a) {
+    color: var(--accent);
+    text-decoration: underline;
+}
+.message-content :deep(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+}
 
 .thinking-label {
     font-size: 0.8rem;
@@ -1356,7 +1889,12 @@ onUnmounted(() => {
     align-items: center;
     flex-shrink: 0;
 }
-.toggle-switch input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle-switch input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
 .toggle-track {
     display: block;
     width: 28px;
@@ -1379,8 +1917,12 @@ onUnmounted(() => {
     transition: transform 0.2s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
-.toggle-switch input[type="checkbox"]:checked + .toggle-track { background: var(--accent); }
-.toggle-switch input[type="checkbox"]:checked + .toggle-track::after { transform: translateX(12px); }
+.toggle-switch input[type="checkbox"]:checked + .toggle-track {
+    background: var(--accent);
+}
+.toggle-switch input[type="checkbox"]:checked + .toggle-track::after {
+    transform: translateX(12px);
+}
 
 .chat-input-area {
     display: flex;
@@ -1495,7 +2037,7 @@ onUnmounted(() => {
     min-width: 180px;
     max-height: 250px;
     overflow-y: auto;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 100;
     margin-bottom: 5px;
 }
@@ -1529,7 +2071,8 @@ onUnmounted(() => {
     font-size: 0.8rem;
     cursor: pointer;
 }
-.slash-menu-item:hover, .slash-menu-item.active {
+.slash-menu-item:hover,
+.slash-menu-item.active {
     background: var(--bg-hover);
 }
 

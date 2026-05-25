@@ -6,7 +6,7 @@
 
 **Local-first document editor for product teams — powered by Git.**
 
-[Documentation](docs/HOWTO.md) · [Install](#install) · [Canonic Skills](#canonic-skills) · [Build From Source](#build-from-source) · [Report a Bug](https://github.com/Canonical-AI/canonic/issues)
+[Documentation](docs/HOWTO.md) · [Install](#install) · [Canonic Skills](#canonic-skill) · [Build From Source](#build-from-source) · [Report a Bug](https://github.com/Canonical-AI/canonic/issues)
 
 ***
 
@@ -102,17 +102,17 @@ Grab the latest build for your platform from the [Releases](https://github.com/C
 
 ## Canonic Skills
 
-**[Canonic Skills](https://github.com/Canonical-AI/canonic-skills)** is a separate companion repo of optional plugins and templates — slash commands, structured prompts, PM workflows — you can drop into a Canonic workspace.
+**[Canonic Skills](https://github.com/Canonical-AI/canonic-skill)** is a separate companion repo of optional plugins and templates — slash commands, structured prompts, PM workflows — you can drop into a Canonic workspace.
 
 Install (in your Canonic workspace folder):
 
 ```bash
-git clone https://github.com/Canonical-AI/canonic-skills.git .canonic/skills
+git clone https://github.com/Canonical-AI/canonic-skill.git .canonic/skills
 ```
 
 Then enable individual skills in **Settings → Skills** inside the app.
 
-See the [canonic-skills README](https://github.com/Canonical-AI/canonic-skills#readme) for the full skill catalog and authoring guide.
+See the [canonic-skill README](https://github.com/Canonical-AI/canonic-skill#readme) for the full skill catalog and authoring guide.
 
 <br />
 

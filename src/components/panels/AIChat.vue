@@ -423,7 +423,7 @@
                     v-model="userInput"
                     class="chat-input"
                     placeholder="Ask a question about this document... (Type '/' for commands)"
-                    @keydown.enter.prevent="handleEnter"
+                    @keydown.enter="handleEnter"
                     @keydown.up="handleUp"
                     @keydown.down="handleDown"
                     @keydown.space="handleSpace"
@@ -1052,6 +1052,7 @@ function renderMarkdown(text) {
 
 function handleEnter(e) {
     if (e.shiftKey) return;
+    e.preventDefault();
     if (showSlashMenu.value) {
         executeSlashSelection();
         return;

@@ -1051,7 +1051,9 @@ function renderMarkdown(text) {
 }
 
 function handleEnter(e) {
-    if (e.shiftKey) return;
+    const isMod = e.metaKey || e.ctrlKey;
+    if (e.shiftKey && !isMod) return; // Shift+Enter (no mod) = newline
+
     e.preventDefault();
     if (showSlashMenu.value) {
         executeSlashSelection();

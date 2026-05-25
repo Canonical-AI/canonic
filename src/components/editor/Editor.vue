@@ -1126,9 +1126,19 @@ onMounted(() => {
 /* Tables */
 .milkdown .ProseMirror table {
     border-collapse: collapse;
+    /* Auto layout sizes columns by content, full table width so the table
+       spans the editor and columns proportionally absorb remaining space. */
+    table-layout: auto;
     width: 100%;
     margin: 16px 0;
     font-size: 0.9em;
+}
+
+.milkdown .ProseMirror th,
+.milkdown .ProseMirror td {
+    /* Drop prosemirror-tables' fixed-layout min-width — let cells shrink
+       to fit the widest content in their column, not a hard floor. */
+    min-width: 0 !important;
 }
 
 .milkdown .ProseMirror th,

@@ -9,3 +9,7 @@ dist-electron/
 
 CLAUDE.md
 CLAUDE/
+
+# Playwright artifacts
+test-results/
+playwright-report/

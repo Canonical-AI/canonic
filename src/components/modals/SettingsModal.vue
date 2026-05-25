@@ -696,9 +696,7 @@
                                 @click="form.tabsEnabled = !form.tabsEnabled"
                             >
                                 <div class="card-header">
-                                    <span class="card-label"
-                                        >Editor tabs</span
-                                    >
+                                    <span class="card-label">Editor tabs</span>
                                     <div
                                         class="toggle"
                                         :class="{ on: form.tabsEnabled }"
@@ -713,7 +711,9 @@
                             </div>
                         </div>
                         <div
-                            v-show="shouldShow('editorTabsPosition', 'appearance')"
+                            v-show="
+                                shouldShow('editorTabsPosition', 'appearance')
+                            "
                             v-if="form.tabsEnabled"
                             id="setting-editorTabsPosition"
                             class="field"
@@ -743,6 +743,116 @@
                                         }}</span>
                                     </div>
                                 </label>
+                            </div>
+                        </div>
+
+                        <p
+                            v-show="shouldShow('copyOnSelect', 'appearance')"
+                            class="section-heading"
+                        >
+                            Clipboard & Selection
+                        </p>
+                        <div
+                            v-show="shouldShow('copyOnSelect', 'appearance')"
+                            id="setting-copyOnSelect"
+                            class="field"
+                        >
+                            <div
+                                class="settings-card"
+                                :class="{ active: form.clipboard.copyOnSelect }"
+                                @click="
+                                    form.clipboard.copyOnSelect =
+                                        !form.clipboard.copyOnSelect
+                                "
+                            >
+                                <div class="card-header">
+                                    <span class="card-label"
+                                        >Copy on select</span
+                                    >
+                                    <div
+                                        class="toggle"
+                                        :class="{
+                                            on: form.clipboard.copyOnSelect,
+                                        }"
+                                    >
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                </div>
+                                <p class="card-desc">
+                                    Automatically copy text to clipboard when
+                                    selected.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div
+                            v-show="
+                                shouldShow('middleClickPaste', 'appearance')
+                            "
+                            id="setting-middleClickPaste"
+                            class="field"
+                        >
+                            <div
+                                class="settings-card"
+                                :class="{
+                                    active: form.clipboard.middleClickPaste,
+                                }"
+                                @click="
+                                    form.clipboard.middleClickPaste =
+                                        !form.clipboard.middleClickPaste
+                                "
+                            >
+                                <div class="card-header">
+                                    <span class="card-label"
+                                        >Middle-click paste</span
+                                    >
+                                    <div
+                                        class="toggle"
+                                        :class="{
+                                            on: form.clipboard.middleClickPaste,
+                                        }"
+                                    >
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                </div>
+                                <p class="card-desc">
+                                    Paste clipboard content with the middle
+                                    mouse button.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div
+                            v-show="shouldShow('ctrlClickPaste', 'appearance')"
+                            id="setting-ctrlClickPaste"
+                            class="field"
+                        >
+                            <div
+                                class="settings-card"
+                                :class="{
+                                    active: form.clipboard.ctrlClickPaste,
+                                }"
+                                @click="
+                                    form.clipboard.ctrlClickPaste =
+                                        !form.clipboard.ctrlClickPaste
+                                "
+                            >
+                                <div class="card-header">
+                                    <span class="card-label"
+                                        >Ctrl-click paste</span
+                                    >
+                                    <div
+                                        class="toggle"
+                                        :class="{
+                                            on: form.clipboard.ctrlClickPaste,
+                                        }"
+                                    >
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                </div>
+                                <p class="card-desc">
+                                    Paste clipboard content with Ctrl + Click.
+                                </p>
                             </div>
                         </div>
 
@@ -1357,6 +1467,11 @@ const form = reactive({
     grainOpacity: 0.02,
     tabsEnabled: true,
     tabsPosition: "bottom",
+    clipboard: {
+        copyOnSelect: false,
+        middleClickPaste: false,
+        ctrlClickPaste: false,
+    },
     autoShareWorkspace: false,
     autoShareAllWorkspaces: false,
     sharingExcludedPaths: [],
@@ -1571,6 +1686,24 @@ const allSettingsMetadata = [
         tab: "appearance",
     },
     {
+        id: "copyOnSelect",
+        label: "Copy on select",
+        desc: "Automatically copy text to clipboard when selected.",
+        tab: "appearance",
+    },
+    {
+        id: "middleClickPaste",
+        label: "Middle-click paste",
+        desc: "Paste clipboard content with the middle mouse button.",
+        tab: "appearance",
+    },
+    {
+        id: "ctrlClickPaste",
+        label: "Ctrl-click paste",
+        desc: "Paste clipboard content with Ctrl + Click.",
+        tab: "appearance",
+    },
+    {
         id: "shareScope",
         label: "Default share scope",
         desc: "What gets shared when you click 'Share'.",
@@ -1682,8 +1815,12 @@ onMounted(async () => {
             grainEnabled: !!cfg.grainEnabled,
             grainOpacity: cfg.grainOpacity ?? 0.02,
             tabsEnabled: cfg.tabsEnabled !== false,
-            tabsPosition:
-                cfg.tabsPosition === "top" ? "top" : "bottom",
+            tabsPosition: cfg.tabsPosition === "top" ? "top" : "bottom",
+            clipboard: {
+                copyOnSelect: !!cfg.clipboard?.copyOnSelect,
+                middleClickPaste: !!cfg.clipboard?.middleClickPaste,
+                ctrlClickPaste: !!cfg.clipboard?.ctrlClickPaste,
+            },
         };
         Object.assign(form, loaded);
         initialState = JSON.parse(JSON.stringify(loaded));
@@ -1771,7 +1908,7 @@ async function confirmReset() {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 500;
+    z-index: 10000;
 }
 
 .modal {

@@ -591,6 +591,98 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ***
 
+## Editor Slash Menu & Tables (EDT)
+
+> Typing `/` (or `Cmd/Ctrl+I`) in the editor opens a searchable slash menu for inserting blocks (headings, lists, table, code, mermaid, divider). When the cursor is inside a table, a floating toolbar and right-click context menu provide add/delete row, add/delete column, and delete-table actions.
+
+### Slash menu
+
+* scenario: slash trigger opens menu
+  given: a writable document with an editable editor
+  when: the user types `/`
+  then: the slash menu tooltip appears anchored to the caret with the root "Insert" entry highlighted
+
+* scenario: Cmd/Ctrl+I opens slash menu
+  given: a writable document with an editable editor
+  when: the user presses Cmd/Ctrl+I
+  then: the slash menu tooltip appears at the caret
+
+* scenario: rapid Cmd/Ctrl+I+T inserts a table
+  given: a writable document with an editable editor
+  when: the user presses Cmd/Ctrl+I then T within 500ms
+  then: a 2x2 table is inserted at the caret and the slash menu closes
+
+* scenario: filter narrows submenu
+  given: the slash menu is open in the Insert submenu
+  when: the user types `mermaid`
+  then: the highlighted item is "Mermaid Diagram" and pressing Enter inserts a mermaid block
+
+* scenario: Escape closes menu
+  given: the slash menu is open
+  when: the user presses Escape
+  then: the menu closes and focus returns to the editor
+
+* scenario: trigger slash is removed on action
+  given: the user typed `/` to open the menu
+  when: an action is selected
+  then: the trigger `/` character is removed from the document before the block is inserted
+
+### Table toolbar
+
+* scenario: toolbar appears inside a table
+  given: a table exists in the editor
+  when: the user clicks any cell
+  then: a floating table toolbar appears above the table
+
+* scenario: add row below
+  given: the table toolbar is visible
+  when: the user clicks "Add row below"
+  then: a new row is appended after the current row and the table row count increases by one
+
+* scenario: add row above
+  given: the table toolbar is visible
+  when: the user clicks "Add row above"
+  then: a new row is inserted before the current row
+
+* scenario: delete row
+  given: the table toolbar is visible and the table has at least two rows
+  when: the user clicks "Delete row"
+  then: the row containing the cursor is removed
+
+* scenario: add column right
+  given: the table toolbar is visible
+  when: the user clicks "Add column right"
+  then: every row gains a cell to the right of the current column
+
+* scenario: add column left
+  given: the table toolbar is visible
+  when: the user clicks "Add column left"
+  then: every row gains a cell to the left of the current column
+
+* scenario: delete column
+  given: the table toolbar is visible and the table has at least two columns
+  when: the user clicks "Delete column"
+  then: the column containing the cursor is removed from every row
+
+* scenario: delete table
+  given: the table toolbar is visible
+  when: the user clicks "Delete Table"
+  then: the entire table node is removed from the document
+
+### Table context menu
+
+* scenario: right-click inside table opens context menu
+  given: a table exists in the editor
+  when: the user right-clicks a cell
+  then: a context menu appears with row and column add/delete entries
+
+* scenario: context menu action mutates table
+  given: the table context menu is open
+  when: the user clicks "Add Row Below" or "Delete Column"
+  then: the corresponding prosemirror table command runs and the menu closes
+
+***
+
 ## Wiki-Links (WKL)
 
 > `[[doc-name]]` syntax renders as inline chips. Chips navigate to or create the referenced document. Anchors (`[[doc#heading]]`) scroll to a matching heading.

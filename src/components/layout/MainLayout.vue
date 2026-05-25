@@ -332,9 +332,7 @@
                 <PeerFileViewer v-else-if="store.peerFileContent" />
                 <template v-else-if="store.currentFile">
                     <EditorTabs
-                        v-if="
-                            store.tabsEnabled && store.tabsPosition === 'top'
-                        "
+                        v-if="store.tabsEnabled && store.tabsPosition === 'top'"
                     />
                     <div
                         class="split-row"
@@ -359,9 +357,7 @@
                         />
                     </div>
                     <EditorTabs
-                        v-if="
-                            store.tabsEnabled && store.tabsPosition !== 'top'
-                        "
+                        v-if="store.tabsEnabled && store.tabsPosition !== 'top'"
                     />
                 </template>
                 <div v-else class="empty-state">
@@ -654,6 +650,8 @@ const isMac = ref(
         /Mac|iPhone|iPad/.test(navigator.platform || ""),
 );
 const THEME_KEY = "canonic:theme";
+
+// TODO: this needs to be all configable not hard coded
 const BUILTIN_THEMES = [
     "hal2001",
     "auteur",
@@ -740,6 +738,63 @@ function onDocClick(e) {
     }
 }
 
+function handleGlobalMouseUp() {
+    if (!store.config?.clipboard?.copyOnSelect) return;
+    const selection = window.getSelection();
+    const text = selection.toString();
+    if (text && text.length > 0) {
+        navigator.clipboard.writeText(text);
+    }
+}
+
+async function handleGlobalMouseDown(e) {
+    // Middle click is button 1
+    const isMiddleClick = e.button === 1;
+    // Ctrl-click is primary button + ctrlKey
+    const isCtrlClick = e.button === 0 && e.ctrlKey;
+
+    const middleEnabled = store.config?.clipboard?.middleClickPaste;
+    const ctrlEnabled = store.config?.clipboard?.ctrlClickPaste;
+
+    if ((isMiddleClick && middleEnabled) || (isCtrlClick && ctrlEnabled)) {
+        const target = e.target;
+        const isInput =
+            target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+        const isEditable =
+            target.isContentEditable ||
+            target.closest('[contenteditable="true"]');
+
+        if (isInput || isEditable) {
+            e.preventDefault();
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    if (isInput) {
+                        const start = target.selectionStart;
+                        const end = target.selectionEnd;
+                        const val = target.value;
+                        target.value =
+                            val.slice(0, start) + text + val.slice(end);
+                        target.selectionStart = target.selectionEnd =
+                            start + text.length;
+                        target.dispatchEvent(
+                            new Event("input", { bubbles: true }),
+                        );
+                    } else {
+                        // For ProseMirror or other contentEditable areas
+                        document.execCommand("insertText", false, text);
+                    }
+                }
+            } catch (err) {
+                console.warn(
+                    "[MainLayout] Failed to read from clipboard:",
+                    err,
+                );
+            }
+        }
+    }
+}
+
 // Restore workspace on page reload (hash URL preserves /workspace but Pinia store is fresh)
 onMounted(async () => {
     // Apply persisted font & theme immediately
@@ -767,6 +822,8 @@ onMounted(async () => {
     }
 
     document.addEventListener("click", onDocClick, true);
+    document.addEventListener("mouseup", handleGlobalMouseUp);
+    document.addEventListener("mousedown", handleGlobalMouseDown);
 
     // Listen for menu events
     if (window.canonic?.menu) {
@@ -865,6 +922,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener("click", onDocClick, true);
+    document.removeEventListener("mouseup", handleGlobalMouseUp);
+    document.removeEventListener("mousedown", handleGlobalMouseDown);
     document.removeEventListener("keydown", onGlobalKeydown);
 });
 

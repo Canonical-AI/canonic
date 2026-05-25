@@ -58,11 +58,57 @@ You can open any folder as a workspace — including folders that already have a
 
 Canonic uses a WYSIWYG markdown editor. You can:
 
-* Use markdown syntax directly (`**bold**`, `## heading`, `- list item`) or use the toolbar
+* Use markdown syntax directly (`**bold**`, `## heading`, `- list item`) or use the floating toolbar that appears when you select text (bold, italic, strikethrough, link, list, quote, comment)
 
 * Double-click a document title to rename it
 
 * Drag files and folders in the sidebar to reorganize
+
+* **Zoom**: `Cmd++` / `Cmd+-` increases / decreases font size and proportionally scales headings and table sizing
+
+### Slash Menu (Insert Blocks)
+
+Type `/` anywhere in a document or press `Cmd/Ctrl+I` to open the slash menu. Pick a block type:
+
+* **Insert → Text & Headings** — Heading 1/2/3, Quote
+* **Insert → Lists** — Bullet, Numbered, Task list
+* **Insert → Table** — inserts a 2x2 GFM table
+* **Insert → Code Block**, **Mermaid Diagram**, **Divider**
+
+Filter by typing after `/` (e.g. `/mermaid`). Use arrows + Enter to pick, Escape to close.
+
+**Quick-table shortcut**: press `Cmd/Ctrl+I` then `T` within ~500ms to insert a table without navigating menus.
+
+### Editing Tables
+
+Click any cell in a table to reveal the floating **table toolbar** above the table, with `Row`, `Col`, and `Delete Table` controls. Right-click a cell for the same actions as a context menu.
+
+Tables use GFM markdown — they always have a header row. Deleting the header row promotes the first body row to header automatically (so the table never becomes malformed).
+
+Columns auto-size to their widest content. The table fills the editor width; if one column needs more room, the others shrink.
+
+### Wiki-Links
+
+Type `[[doc-name]]` to insert an inline link chip. Typing `[[` opens a picker of existing documents. Anchors work too: `[[doc#heading]]` jumps to a heading inside that document.
+
+### Mermaid Diagrams
+
+Type a fenced ` ```mermaid ` block (or insert via the slash menu) to embed a live diagram. The card renders a preview with an inline editor for the diagram source.
+
+### Find & Replace
+
+* **`Cmd+F`** — in-document find, with `Cmd+G` / `Cmd+Shift+G` for next/previous match and replace controls
+* **`Cmd+Shift+F`** — workspace-wide find & replace across every file in the workspace
+
+### Clipboard
+
+* **Copy on select** — selecting text automatically copies it to the primary selection clipboard
+* **Middle-click** or **`Ctrl+click`** to paste the primary selection
+* **AI chat paste** — pasting more than ~2000 characters into the AI input truncates with a "load full content" affordance so long pastes don't blow past the context window
+
+### Session Tabs
+
+Open documents stack as tabs at the bottom of the editor by default. Position is configurable in Settings → Editor (Top / Bottom / Hidden). Drag tabs to reorder; middle-click to close.
 
 ### Saving
 
@@ -109,9 +155,9 @@ When you're happy with a draft, click **Merge → main** in the editor topbar (o
 
 The **History** tab in the right panel shows all commits for the current document, most recent first.
 
-* Click any commit to see a diff — added lines in green, removed lines in red
-
+* Click any commit to see a **parent-vs-commit diff** — added lines in green, removed lines in red
 * The diff shows only changed lines for a clean view
+* The **Commit modal** includes a live diff preview of the changes you're about to commit so you can sanity-check before snapshotting
 
 **Named versions** let you tag a specific commit with a meaningful name (e.g. "Approved by stakeholders"). Click **Version** in the editor toolbar to save one. Named versions appear in the History panel alongside regular commits.
 
@@ -132,6 +178,10 @@ Selected text that has a comment is highlighted in the editor. Click the highlig
 ### Resolving Comments
 
 Click **Resolve** on a comment to mark it done. Resolved comments are hidden by default. Toggle the "Show resolved" option in the Comments panel to see them.
+
+### AI-Suggested Comments
+
+When the AI annotates a document via the chat, its comments are tagged as agent-authored. The Comments panel has a **Delete all AI suggestions** button so you can clear them in bulk after reviewing.
 
 ***
 
@@ -155,7 +205,37 @@ Works with OpenRouter, OpenAI, Mistral, DeepSeek, Groq, Ollama, or any OpenAI-co
 
 Type a message in the AI panel. The current document is always included as context. The AI will respond with questions and challenges — not rewrites.
 
-Chat history is session-only and resets on app restart.
+**Input behaviour**:
+
+* **Enter** or **`Cmd/Ctrl+Enter`** — send
+* **`Shift+Enter`** — newline inside the message
+* **`Esc`** — cancel an in-flight response. Partial text already streamed in is retained so you don't lose context.
+
+**Tools the assistant can call** (each gated by a capability toggle in Settings → AI):
+
+* `read_doc` — read another document in the workspace
+* `list_workspace` — list files and folders
+* `web_search` — fetch a snippet from the web
+* `post_comment` — drop an inline comment anchored to a quoted span in the current document
+* `suggest_edits` — propose a ghost-text edit you can accept or reject
+
+The assistant's tool calls show up as a single-line log row inside its message so you can see what it actually did.
+
+### Slash Commands (in AI Chat)
+
+Type `/` in the chat input to open a small picker:
+
+* `/model` — switch the model used for the assistant
+* `/effort` — switch the effort/quality level (Low / Medium / High)
+* `/tools` — toggle individual capabilities on or off; `Space` toggles, `Enter` closes the menu
+
+Preferences (model, effort, tools, system prompt) are persisted to your `config.json` so they survive restarts.
+
+### Compact Mode
+
+On narrow windows, the AI panel docks as a centered floating modal instead of squeezing into the side panel. Streaming, tools, and history all keep working the same way.
+
+Chat history is session-only and resets on app restart unless you explicitly save it.
 
 ***
 
@@ -205,21 +285,35 @@ Search is indexed in-memory and re-indexed when you open or save a document.
 
 ## Settings
 
-Access settings via the **gear icon** in the top-right.
+Access settings via the **gear icon** in the sidebar bottom (or the native menu).
+
+The Settings modal has a left-side tab list plus an **All Settings** search at the top — type any keyword (e.g. `tabs`, `mermaid`, `share`) to jump to the matching control regardless of tab.
 
 ### Profile
 
 * Change display name (used in commits and comments)
-
 * Change API key and model
-
 * Check for updates manually
 
 ### Sharing Defaults
 
 * Set default share scope (none / file / directory / workspace)
-
 * Set default access level (read / comment)
+
+### Editor
+
+* **Session tabs** — show / hide and position (Top / Bottom)
+* **Paragraph spacing** — toggle wider paragraph gaps
+* **Window transparency** — opacity + blur for the main window
+* **Organic grain** — subtle background grain overlay; opacity adjustable
+
+### AI Capabilities
+
+Per-tool toggles for the assistant: index workspace, read docs, list tree, web search, post comments, suggest edits. Disable any tool you don't want the assistant to call.
+
+### Editing the Config File Directly
+
+The **File** menu has **Open Config File** (opens `~/.config/canonic/config.json` in your default editor) and **Reload Config** (re-reads the file without restarting the app). Useful when scripting or hand-editing provider entries.
 
 ### Danger Zone
 
@@ -229,15 +323,44 @@ Access settings via the **gear icon** in the top-right.
 
 ## Keyboard Shortcuts
 
-| Shortcut          | Action                        |
-| ----------------- | ----------------------------- |
-| `Cmd+S`           | Save document                 |
-| `Cmd+Shift+S`     | Commit checkpoint             |
-| `Cmd+L`           | Select current line/block     |
-| `Shift+ArrowUp`   | Move selected block(s) up     |
-| `Shift+ArrowDown` | Move selected block(s) down   |
-| `Cmd++` / `Cmd+-` | Increase / decrease font size |
-| `Cmd+F`           | Focus search                  |
+Most shortcuts use `Cmd` on macOS and `Ctrl` on Linux / Windows. Custom bindings are configurable in Settings → Keybindings.
+
+### Editor
+
+| Shortcut              | Action                                             |
+| --------------------- | -------------------------------------------------- |
+| `Cmd+S`               | Save document                                      |
+| `Cmd+Shift+S`         | Commit checkpoint                                  |
+| `Cmd+L`               | Select current line / block                        |
+| `Shift+ArrowUp/Down`  | Move selected block(s) up / down                   |
+| `Cmd++` / `Cmd+-`     | Increase / decrease font size                      |
+| `Cmd+F`               | Find in current document                           |
+| `Cmd+Shift+F`         | Find & replace across the workspace                |
+| `Cmd+G` / `Cmd+Shift+G` | Next / previous find match                       |
+| `Tab` (with ghost text) | Accept the inline AI completion                  |
+
+### Slash Menu & Tables
+
+| Shortcut              | Action                                             |
+| --------------------- | -------------------------------------------------- |
+| `/`                   | Open slash menu at cursor                          |
+| `Cmd+I`               | Open slash menu (no `/` inserted)                  |
+| `Cmd+I` then `T`      | Insert a 2x2 table (within ~500ms)                 |
+| `Cmd+Alt+ArrowUp`     | Add table row above current row                    |
+| `Cmd+Alt+ArrowDown`   | Add table row below current row                    |
+| `Cmd+Alt+ArrowLeft`   | Add table column left of current column            |
+| `Cmd+Alt+ArrowRight`  | Add table column right of current column           |
+| `Cmd+Alt+Backspace`   | Delete the current row (promotes next body row to header if you delete the header row) |
+| Right-click in cell   | Open the table context menu                        |
+
+### AI Chat
+
+| Shortcut              | Action                                             |
+| --------------------- | -------------------------------------------------- |
+| `Enter` / `Cmd+Enter` | Send the message                                   |
+| `Shift+Enter`         | Newline inside the message                         |
+| `Esc`                 | Cancel the in-flight assistant response            |
+| `/`                   | Open the chat slash menu (`/model`, `/effort`, `/tools`) |
 
 ***
 

@@ -1,6 +1,8 @@
 <template>
     <Milkdown />
     <WikiLinkTooltip ref="wikiTooltipRef" />
+    <SlashMenuTooltip ref="slashTooltipRef" />
+    <EditorContextMenu ref="contextMenuRef" />
 </template>
 
 <script setup>
@@ -38,7 +40,140 @@ import { $view, $prose } from "@milkdown/utils";
 import { wikiLinkRemarkPlugin, wikiLinkNode } from "./wiki-link/index.js";
 import WikiLinkChip from "./wiki-link/WikiLinkChip.vue";
 import WikiLinkTooltip from "./wiki-link/WikiLinkTooltip.vue";
+import SlashMenuTooltip from "./slash-menu/SlashMenuTooltip.vue";
+import { createSlashMenuPlugin } from "./slash-menu/index.js";
+import TableToolbar from "./TableToolbar.vue";
+import EditorContextMenu from "./EditorContextMenu.vue";
 import { createInlineCompletionPlugin } from "./inline-completion/index.js";
+import { isInTable, selectedRect } from "@milkdown/prose/tables";
+
+// Milkdown's GFM table schema splits rows into `table_header_row` and
+// `table_row`, with different child cell types. The raw prosemirror-tables
+// commands assume one row type with mixed cells and produce schema errors.
+// Replicate the table-edit ops with per-row type lookups + guards so the
+// context menu mutations stay valid. See TableToolbar.vue for the
+// equivalent helpers used by the floating toolbar.
+function _tableTypes(state) {
+    return {
+        cell: state.schema.nodes.table_cell,
+        header: state.schema.nodes.table_header,
+        row: state.schema.nodes.table_row,
+        headerRow: state.schema.nodes.table_header_row,
+    };
+}
+function _cellTypeForRow(rowNode, t) {
+    return rowNode?.type === t.headerRow ? t.header : t.cell;
+}
+function addRowAtCtx(state, dispatch, side) {
+    if (!isInTable(state)) return false;
+    if (!dispatch) return true;
+    const t = _tableTypes(state);
+    if (!t.cell || !t.row) return false;
+    const rect = selectedRect(state);
+    const { map, tableStart, table } = rect;
+    const rowIndex = side === "after" ? rect.bottom : rect.top;
+    const safeIndex = Math.max(1, rowIndex);
+    let rowPos = tableStart;
+    for (let i = 0; i < safeIndex; i++) rowPos += table.child(i).nodeSize;
+    const cells = [];
+    for (let col = 0; col < map.width; col++) {
+        const headerCol = table.nodeAt(map.map[col]);
+        cells.push(
+            t.cell.createAndFill({ alignment: headerCol?.attrs.alignment }),
+        );
+    }
+    dispatch(state.tr.insert(rowPos, t.row.create(null, cells)));
+    return true;
+}
+function addColumnAtCtx(state, dispatch, side) {
+    if (!isInTable(state)) return false;
+    if (!dispatch) return true;
+    const t = _tableTypes(state);
+    if (!t.cell || !t.header) return false;
+    const rect = selectedRect(state);
+    const { map, tableStart, table } = rect;
+    const col = side === "after" ? rect.right : rect.left;
+    const tr = state.tr;
+    for (let row = map.height - 1; row >= 0; row--) {
+        const rowNode = table.child(row);
+        const cellType = _cellTypeForRow(rowNode, t);
+        let rowStart = tableStart;
+        for (let i = 0; i < row; i++) rowStart += table.child(i).nodeSize;
+        let cellPos = rowStart + 1;
+        for (let c = 0; c < col && c < rowNode.childCount; c++) {
+            cellPos += rowNode.child(c).nodeSize;
+        }
+        const refIndex = Math.min(
+            rowNode.childCount - 1,
+            Math.max(0, col === rowNode.childCount ? col - 1 : col),
+        );
+        const refCell = rowNode.child(refIndex);
+        tr.insert(
+            cellPos,
+            cellType.createAndFill({ alignment: refCell.attrs.alignment }),
+        );
+    }
+    dispatch(tr);
+    return true;
+}
+function deleteRowSafeCtx(state, dispatch) {
+    if (!isInTable(state)) return false;
+    const rect = selectedRect(state);
+    const { map, tableStart, table } = rect;
+    const t = _tableTypes(state);
+    const rowIndex = rect.top;
+    if (rowIndex === 0) {
+        if (map.height < 2) return false;
+        if (!t.headerRow || !t.header) return false;
+        if (!dispatch) return true;
+        const headerRow = table.child(0);
+        const firstBody = table.child(1);
+        const newHeaderCells = [];
+        for (let c = 0; c < firstBody.childCount; c++) {
+            const src = firstBody.child(c);
+            newHeaderCells.push(
+                t.header.createAndFill(
+                    { alignment: src.attrs.alignment },
+                    src.content,
+                ),
+            );
+        }
+        const newHeaderRow = t.headerRow.create(null, newHeaderCells);
+        const headerStart = tableStart;
+        const headerEnd = headerStart + headerRow.nodeSize;
+        const bodyEnd = headerEnd + firstBody.nodeSize;
+        dispatch(state.tr.replaceWith(headerStart, bodyEnd, newHeaderRow));
+        return true;
+    }
+    if (map.height - 1 <= 1) return false;
+    if (!dispatch) return true;
+    let rowPos = tableStart;
+    for (let i = 0; i < rowIndex; i++) rowPos += table.child(i).nodeSize;
+    const rowSize = table.child(rowIndex).nodeSize;
+    dispatch(state.tr.delete(rowPos, rowPos + rowSize));
+    return true;
+}
+function deleteColumnSafeCtx(state, dispatch) {
+    if (!isInTable(state)) return false;
+    const rect = selectedRect(state);
+    const { map, table, tableStart } = rect;
+    if (map.width <= 1) return false;
+    const col = rect.left;
+    if (!dispatch) return true;
+    const tr = state.tr;
+    for (let row = map.height - 1; row >= 0; row--) {
+        const rowNode = table.child(row);
+        if (col >= rowNode.childCount) continue;
+        let rowStart = tableStart;
+        for (let i = 0; i < row; i++) rowStart += table.child(i).nodeSize;
+        let cellPos = rowStart + 1;
+        for (let c = 0; c < col; c++) cellPos += rowNode.child(c).nodeSize;
+        const cellSize = rowNode.child(col).nodeSize;
+        tr.delete(cellPos, cellPos + cellSize);
+    }
+    dispatch(tr);
+    return true;
+}
 import {
     findReplacePlugin,
     findReplaceSet,
@@ -198,11 +333,89 @@ const floatingToolbarPlugin = $prose(
         }),
 );
 
+const tableToolbarPlugin = $prose(
+    (ctx) =>
+        new Plugin({
+            view: pluginViewFactory({ component: TableToolbar }),
+        }),
+);
+
 // --- Wiki-link trigger ---
 
 const wikiTooltipRef = ref(null);
+const slashTooltipRef = ref(null);
+const contextMenuRef = ref(null);
 
 const WIKI_KEY = new PluginKey("wikiLinkTrigger");
+
+const tableContextMenuPlugin = $prose(
+    () =>
+        new Plugin({
+            props: {
+                handleDOMEvents: {
+                    contextmenu(view, event) {
+                        const pos = view.posAtCoords({
+                            left: event.clientX,
+                            top: event.clientY,
+                        });
+                        if (!pos) return false;
+                        const $pos = view.state.doc.resolve(pos.pos);
+                        let isInsideTable = false;
+                        for (let d = $pos.depth; d > 0; d--) {
+                            const t = $pos.node(d).type.name;
+                            if (t === "table_cell" || t === "table_header") {
+                                isInsideTable = true;
+                                break;
+                            }
+                        }
+
+                        if (isInsideTable) {
+                            event.preventDefault();
+                            contextMenuRef.value?.open(
+                                event.clientX,
+                                event.clientY,
+                                "table",
+                                (action) => {
+                                    const { state, dispatch } = view;
+                                    try {
+                                        switch (action) {
+                                            case "addRowBefore":
+                                                addRowAtCtx(state, dispatch, "before");
+                                                break;
+                                            case "addRowAfter":
+                                                addRowAtCtx(state, dispatch, "after");
+                                                break;
+                                            case "deleteRow":
+                                                deleteRowSafeCtx(state, dispatch);
+                                                break;
+                                            case "addColBefore":
+                                                addColumnAtCtx(state, dispatch, "before");
+                                                break;
+                                            case "addColAfter":
+                                                addColumnAtCtx(state, dispatch, "after");
+                                                break;
+                                            case "deleteCol":
+                                                deleteColumnSafeCtx(state, dispatch);
+                                                break;
+                                        }
+                                    } catch (err) {
+                                        console.warn(
+                                            "[TableContextMenu] command failed:",
+                                            action,
+                                            err,
+                                        );
+                                    }
+                                    view.focus();
+                                },
+                            );
+                            return true;
+                        }
+                        return false;
+                    },
+                },
+            },
+        }),
+);
 
 const wikiTriggerPlugin = $prose(
     () =>
@@ -273,6 +486,8 @@ watch(
 const inlineCompletionPlugin = $prose(() =>
     createInlineCompletionPlugin(completionConfig),
 );
+
+const slashMenuPlugin = createSlashMenuPlugin(slashTooltipRef);
 
 // --- Task lists ---
 
@@ -759,6 +974,40 @@ const dragHandlePlugin = $prose(() => {
             handleKeyDown(view, event) {
                 const keys = hotkeys.value;
 
+                // Table editing hotkeys: Cmd/Ctrl+Alt + arrow/backspace.
+                // The helpers each call `isInTable(state)` first, so they're
+                // no-ops outside a table and we don't need to guard here.
+                const mod = event.metaKey || event.ctrlKey;
+                if (mod && event.altKey) {
+                    const { state, dispatch } = view;
+                    let handled = false;
+                    try {
+                        switch (event.key) {
+                            case "ArrowUp":
+                                handled = addRowAtCtx(state, dispatch, "before");
+                                break;
+                            case "ArrowDown":
+                                handled = addRowAtCtx(state, dispatch, "after");
+                                break;
+                            case "ArrowLeft":
+                                handled = addColumnAtCtx(state, dispatch, "before");
+                                break;
+                            case "ArrowRight":
+                                handled = addColumnAtCtx(state, dispatch, "after");
+                                break;
+                            case "Backspace":
+                                handled = deleteRowSafeCtx(state, dispatch);
+                                break;
+                        }
+                    } catch (err) {
+                        console.warn("[TableHotkey] failed:", event.key, err);
+                    }
+                    if (handled) {
+                        event.preventDefault();
+                        return true;
+                    }
+                }
+
                 if (isHotkeyMatch(event, keys.selectLine)) {
                     const { state, dispatch } = view;
                     const { selection } = state;
@@ -930,6 +1179,7 @@ const { loading, get } = useEditor((root) =>
         .use(history)
         .use(listener)
         .use(floatingToolbarPlugin)
+        .use(tableToolbarPlugin)
         .use(taskCheckboxPlugin)
         .use(trailingParagraphPlugin)
         .use(mermaidConvertPlugin)
@@ -944,6 +1194,8 @@ const { loading, get } = useEditor((root) =>
         )
         .use(wikiLinkNode)
         .use(wikiTriggerPlugin)
+        .use(slashMenuPlugin)
+        .use(tableContextMenuPlugin)
         .use(inlineCompletionPlugin)
         .use(lineNumbersPlugin)
         .use(imagePastePlugin)

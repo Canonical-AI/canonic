@@ -517,9 +517,18 @@ function cancelGenerating() {
     store.saveCurrentAiChat();
 }
 
+const cancelLoop = ref(false);
+
 function handleGlobalKeydown(e) {
     if (e.key === "Escape" && streaming.value) {
+        e.preventDefault();
         cancelGenerating();
+        cancelLoop.value = true;
+        window.canonic.ai.cancel();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
+        e.preventDefault();
+        toggleThinking();
     }
 }
 
@@ -701,30 +710,7 @@ onMounted(async () => {
     hydrateFromConfig();
     await migrateLocalStoragePrefs();
     fetchProviderModels();
-    window.addEventListener("keydown", handleGlobalKeydown);
 });
-
-watch(
-    () => store.config?.assistant,
-    (val) => {
-        if (val) hydrateFromConfig();
-    },
-    { deep: false },
-);
-
-const cancelLoop = ref(false);
-
-function handleGlobalKeydown(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
-        e.preventDefault();
-        toggleThinking();
-    }
-    if (e.key === "Escape" && streaming.value) {
-        e.preventDefault();
-        cancelLoop.value = true;
-        window.canonic.ai.cancel();
-    }
-}
 
 function toggleThinking() {
     thinkingExpanded.value = !thinkingExpanded.value;
@@ -1481,7 +1467,6 @@ async function scrollToBottom() {
 
 onUnmounted(() => {
     window.canonic.ai.removeListeners();
-    window.removeEventListener("keydown", handleGlobalKeydown);
 });
 </script>
 

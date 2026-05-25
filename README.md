@@ -6,22 +6,20 @@
 
 **Local-first document editor for product teams — powered by Git.**
 
-[Download](#installation) · [Docs](docs/) · [Report a Bug](https://github.com/Canonical-AI/canonic/issues)
+[Documentation](docs/HOWTO.md) · [Install](#install) · [Canonic Skills](#canonic-skills) · [Build From Source](#build-from-source) · [Report a Bug](https://github.com/Canonical-AI/canonic/issues)
 
----
+***
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.0.4--alpha-orange.svg)](package.json)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#installation)
+[![Version](https://img.shields.io/badge/version-0.0.20--alpha-orange.svg)](package.json)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#install)
 
 </div>
 
----
+***
 
-> **Write first. Build second.**  
-> Canonic is a markdown editor that keeps your product artifacts organized, versioned, and always on your machine — with an AI assistant designed to help you *think*, not to think for you.
-
----
+> **Write first. Build second.**
+> Canonic is a markdown editor for product managers that keeps your artifacts organized, versioned, and always on your machine — with an AI assistant designed to help you *think*, not to think for you.
 
 <div align="center">
 
@@ -29,180 +27,182 @@
 
 </div>
 
----
+***
 
 ## Why Canonic
 
-Product work lives in too many places. Strategy docs in Notion, specs in Confluence, decisions in Slack threads, and history nowhere. Canonic brings it together in one local-first workspace — backed by Git so nothing is ever lost.
+Product work lives in too many places. strategy in Notion, specs in Confluence, decisions in Slack threads, and history nowhere. Canonic brings it together in one local-first workspace, backed by Git so nothing is ever lost.
 
-| Without Canonic | With Canonic |
-|---|---|
-| Scattered artifacts across tools | Everything in one workspace |
-| No version history on decisions | Full Git history on every document |
-| AI that writes for you | AI that helps you think |
-| Lock-in to cloud providers | Your files, on your machine |
-| "Final\_v2\_FINAL.doc" chaos | Clean branches and checkpoints |
+* **Local-first.** Plain markdown files on your machine. Open them in any editor; sync them however you want.
 
----
+* **Git under the hood.** Every workspace is a Git repo. Save checkpoints, branch per document, view full history — no terminal required.
 
-## Features
+* **AI that asks, not writes.** The built-in assistant brainstorms and challenges; it doesn't ghostwrite your docs.
 
-### Local-First, Always Yours
-All documents live on your machine as plain markdown files. No sync issues, no subscriptions required, no vendor lock-in. Open your workspace in any text editor — Canonic just makes it better.
+* **Built for product work.** Inline comments, peer sharing, GFM tables, mermaid diagrams, wiki-links, find & replace across the workspace.
 
-### Git-Powered Versioning
-Every workspace is a Git repository. Save checkpoints, branch per document, view full history, and resolve conflicts — without ever touching a terminal. Drop Canonic on an existing repo and it adapts automatically.
+* **Works with your repos.** Drop Canonic on an existing `.git` folder and it adapts.
 
-### AI That Respects Your Thinking
-The built-in assistant is configured to *brainstorm and review*, not to write for you. It asks questions, surfaces gaps, and helps you sharpen ideas — designed for people who want to do their own thinking before they build.
+***
 
-### Structured for Product Work
-Start from a blank canvas or use the **PM Framework** template — structured around the documents that actually matter: vision, personas, features, decisions, retros, and GTM.
+## Documentation
 
-### Inline Comments & Collaboration
-Anchor comments to specific text selections. Share workspaces via token-secured links with granular access controls at the file, directory, or workspace level.
+Full usage guide, keyboard shortcuts, and feature walkthroughs:
 
-### Works With Your Existing Repos
-Open any folder with a `.git` directory — Canonic detects it, skips re-initialization, shows real commit history, and commits alongside your other tools without interfering.
+**➜** **[docs/HOWTO.md](docs/HOWTO.md)**
 
----
+<br />
 
-### Installation
+***
 
-#### macOS (via Homebrew)
+## Install
+
+### macOS (Homebrew)
+
 ```bash
 brew tap Canonical-AI/tap
 brew install --cask canonic
 ```
 
-#### Direct Download
-Download the latest version for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
-- **macOS:** `.dmg` (Apple Silicon / Intel)
-- **Windows:** `.exe`
-- **Linux (x64):** `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz`
-- **Linux (arm64):** `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz` (ideal for ARM Arch Linux, postmarketOS, PinePhone, Raspberry Pi, etc.)
+### Linux
 
----
+**AppImage**
 
-#### Linux Installation
-
-##### AppImage
-Make the downloaded `.AppImage` executable and run:
 ```bash
-chmod +x canonic-arm64.AppImage
-./canonic-arm64.AppImage
+chmod +x canonic-*.AppImage
+./canonic-*.AppImage
 ```
 
-##### Flatpak
-Use the Flatpak package to run within a secure sandbox (highly recommended for postmarketOS and other Alpine-based environments lacking standard host glibc):
-```bash
-# one-time, if the flathub remote is missing:
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+**Flatpak** (recommended on Alpine-based / postmarketOS):
 
-flatpak install --user canonic-aarch64.flatpak
+```bash
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user canonic-*.flatpak
 flatpak run ai.canonic.app
 ```
 
-##### Pacman (Arch Linux / postmarketOS)
-Install the native package using pacman:
-```bash
-sudo pacman -U canonic-aarch64.pacman
-```
-
----
-
-## Release Pipeline
-
-Canonic uses an automated release pipeline triggered by Pull Requests.
-
-### 1. Versioning
-Versions are incremented automatically upon merging a PR into `main`. Use GitHub Labels to control the bump:
-- `major`: Increments the first digit (X.0.0). Use for breaking changes.
-- `minor`: Increments the second digit (0.X.0). Use for new features.
-- `patch` (default): Increments the third digit (0.0.X). Use for bug fixes.
-
-### 2. Release Notes
-The **PR Description** is automatically captured and used as the release notes for the drafted release. 
-
-### 3. CI/CD Flow
-1. **Merge PR:** The `Version Bump` workflow identifies the label, bumps `package.json`, creates a Draft Release with your notes, and pushes a tag.
-2. **Auto-Build:** The tag push triggers the `Release` workflow, which builds the binaries and uploads them to the draft.
-
-### 4. Setup Requirement
-To allow the versioning workflow to trigger the build workflow, you must add a GitHub Personal Access Token (PAT) to your repository secrets:
-- **Name:** `RELEASE_TOKEN`
-- **Permissions:** `repo` (for classic PAT) or `contents:write` (for fine-grained PAT).
-
----
-
-### Run Locally (for Development)
-
-This starts both the Vite dev server and the Electron window.
-
-### Build for Production
+**Pacman** (Arch / postmarketOS):
 
 ```bash
-npm run build
+sudo pacman -U canonic-*.pacman
 ```
 
-Output goes to `dist-electron/`. Canonic uses [electron-builder](https://www.electron.build/) and distributes via GitHub Releases with automatic background updates.
+### Direct download (all platforms)
 
----
+Grab the latest build for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
+
+* **macOS** — `.dmg` (Apple Silicon / Intel)
+* **Windows** — `.exe`
+* **Linux x64** — `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz`
+* **Linux arm64** — `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz` (ARM Arch, postmarketOS, PinePhone, Raspberry Pi)
+
+<br />
+
+***
+
+## Canonic Skills
+
+**[Canonic Skills](https://github.com/Canonical-AI/canonic-skills)** is a separate companion repo of optional plugins and templates — slash commands, structured prompts, PM workflows — you can drop into a Canonic workspace.
+
+Install (in your Canonic workspace folder):
+
+```bash
+git clone https://github.com/Canonical-AI/canonic-skills.git .canonic/skills
+```
+
+Then enable individual skills in **Settings → Skills** inside the app.
+
+See the [canonic-skills README](https://github.com/Canonical-AI/canonic-skills#readme) for the full skill catalog and authoring guide.
+
+<br />
+
+A useful pattern is to create a `.docs` folder in your code repo with :
+
+```
+/canonic init .docs/
+```
+
+add `.docs` to your `.gitignore`unless you want to commit docs to your repo. alternatively you can create a separate repo just for dos. Thats what I do!
+
+***
+
+<br />
+
+## Build From Source
+
+Requirements: Node 20+ and `npm`.
+
+```bash
+git clone https://github.com/Canonical-AI/canonic.git
+cd canonic
+npm install
+```
+
+### Run in development
+
+Starts Vite dev server + Electron with hot reload:
+
+```bash
+npm run dev
+```
+
+### Production build
+
+```bash
+npm run build           # current platform
+npm run build:mac       # macOS .dmg + .zip
+npm run build:win       # Windows .exe
+npm run build:linux     # Linux .AppImage / .deb / .pacman / .flatpak / .tar.gz
+```
+
+Output lands in `dist-electron/`. Canonic packages via [electron-builder](https://www.electron.build/) and distributes via GitHub Releases with background updates.
+
+### Testing
+
+Two-tier suite:
+
+| Command            | What                                                                     | Where                               | When                                |
+| ------------------ | ------------------------------------------------------------------------ | ----------------------------------- | ----------------------------------- |
+| `npm test`         | Vitest unit + integration (pure logic, store actions, mocked IPC)        | `tests/unit/`, `tests/integration/` | Every PR via CI                     |
+| `npm run test:e2e` | Playwright + real Electron (slash menu, table ops, real ProseMirror DOM) | `tests/e2e/`                        | Local only (requires built `dist/`) |
+
+Run `npm test` before committing — all unit tests must pass. E2e is opt-in and slower (\~25 s per test) but catches schema and integration issues unit tests can't.
+
+### Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for branching conventions, commit message style, the spec-driven development rule, and the demo-mode rule.
+
+Quick rules:
+
+* Always target the `dev` branch in PRs, never `main`
+
+* Run `npm test` before pushing — all tests must pass
+
+* Every new feature gets a Given / When / Then spec in `docs/specs/REQUIREMENTS.md`
+
+* Every new feature must work in demo mode (`public/demo/config.json`)
+
+***
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| UI Framework | [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/) |
-| Desktop Shell | [Electron](https://www.electronjs.org/) |
-| Editor | [Milkdown](https://milkdown.dev/) |
-| Version Control | [isomorphic-git](https://isomorphic-git.org/) |
-| State Management | [Pinia](https://pinia.vuejs.org/) |
-| Search | [FlexSearch](https://github.com/nextapps-de/flexsearch) |
-| AI | OpenRouter (OpenAI-compatible, multi-model) |
+| Layer            | Technology                                                              |
+| ---------------- | ----------------------------------------------------------------------- |
+| UI Framework     | [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/)               |
+| Desktop Shell    | [Electron](https://www.electronjs.org/)                                 |
+| Editor           | [Milkdown](https://milkdown.dev/) (ProseMirror)                         |
+| Version Control  | [isomorphic-git](https://isomorphic-git.org/)                           |
+| State Management | [Pinia](https://pinia.vuejs.org/)                                       |
+| Search           | [FlexSearch](https://github.com/nextapps-de/flexsearch)                 |
+| AI               | Any OpenAI-compatible provider via OpenRouter, OpenAI, Mistral, Groq, … |
 
----
-
-## Architecture
-
-```
-canonic/
-├── electron/          # Main process, IPC handlers, git operations
-├── src/               # Vue 3 frontend (renderer process)
-│   ├── components/    # UI components
-│   ├── stores/        # Pinia state management
-│   └── composables/   # Shared logic
-├── docs/              # Project documentation and specs
-└── public/            # Static assets
-```
-
-**Key design decisions:**
-- Two-process Electron architecture — renderer never touches the filesystem directly
-- Per-document Git branching — each doc lives on its own branch, merged back on save
-- Sidecar storage — comments and config live in `~/.config/canonic/`, separate from workspace files
-- IPC-first — all file, git, and AI operations go through typed IPC handlers
-
----
-
-## Configuration
-
-User preferences and AI API keys are stored in `~/.config/canonic/config.json`. Canonic supports any OpenAI-compatible provider via [OpenRouter](https://openrouter.ai/).
-
-Set your API key in **Settings → AI** within the app.
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development setup, branching conventions, and PR guidelines.
-
----
+***
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
----
+***
 
 <div align="center">
 

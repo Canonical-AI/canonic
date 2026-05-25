@@ -100,29 +100,44 @@ Grab the latest build for your platform from the [Releases](https://github.com/C
 
 ***
 
-## Canonic Skills
+## Canonic Skill
 
-**[Canonic Skills](https://github.com/Canonical-AI/canonic-skill)** is a separate companion repo of optional plugins and templates — slash commands, structured prompts, PM workflows — you can drop into a Canonic workspace.
+**[canonic-skill](https://github.com/Canonical-AI/canonic-skill)** is a separate companion repo — an agent CLI extension that lets coding agents (Claude Code, Gemini CLI, etc.) hand off design and requirements work to Canonic. The agent opens a markdown doc in Canonic, waits for you to review or edit it, then resumes with your changes as source of truth.
 
-Install (in your Canonic workspace folder):
+Install in your agent of choice:
+
+**Claude Code**
 
 ```bash
-git clone https://github.com/Canonical-AI/canonic-skill.git .canonic/skills
+npx skills add Canonical-AI/canonic-skill --local
 ```
 
-Then enable individual skills in **Settings → Skills** inside the app.
+**Gemini CLI**
 
-See the [canonic-skill README](https://github.com/Canonical-AI/canonic-skill#readme) for the full skill catalog and authoring guide.
+```bash
+gemini extensions install https://github.com/Canonical-AI/canonic-skill --auto-update
+```
+
+Other agents: see [canonic-skill/INSTALL.md](https://github.com/Canonical-AI/canonic-skill/blob/main/INSTALL.md).
 
 <br />
 
-A useful pattern is to create a `.docs` folder in your code repo with :
+### Usage
 
+Once installed, invoke from your agent:
+
+```bash
+/canonic init               # bootstrap a vision.md in a Canonic workspace
+/canonic review path/to/doc.md   # open a doc in Canonic, wait for human review
 ```
+
+A useful pattern is to create a `.docs` folder in your code repo with:
+
+```bash
 /canonic init .docs/
 ```
 
-add `.docs` to your `.gitignore`unless you want to commit docs to your repo. alternatively you can create a separate repo just for dos. Thats what I do!
+Add `.docs` to `.gitignore` unless you want to commit docs to your repo. Alternatively, create a separate repo just for docs — that's what I do.
 
 ***
 

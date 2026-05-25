@@ -441,6 +441,9 @@
                     <SendHorizonal :size="14" />
                 </button>
             </div>
+            <div v-if="streaming" class="cancel-hint">
+                Hit <kbd>Esc</kbd> to cancel
+            </div>
             <div class="chat-input-footer">
                 Model:
                 {{ store.config?.assistant?.model || "None selected" }}
@@ -485,6 +488,48 @@ const streamBuffer = ref("");
 const activityStatus = ref(null);
 
 const showingHistory = ref(false);
+
+function cancelGenerating() {
+    if (!streaming.value) return;
+    cancelLoop.value = true;
+    window.canonic.ai.removeListeners();
+
+    // Finalize what we have
+    const rawResponse = streamBuffer.value;
+    const { think, content } = parseThinkBlock(rawResponse);
+    const toolCallsArray = Object.values(activeToolCalls);
+
+    if (content || think || toolCallsArray.length > 0) {
+        store.aiChatMessages.push({
+            id: uuidv4(),
+            role: "assistant",
+            content: content || "(Cancelled)",
+            think: think,
+            tool_calls: toolCallsArray.length > 0 ? toolCallsArray : undefined,
+            toolLogs: [...currentToolLogs.value],
+            cancelled: true,
+        });
+    }
+
+    streaming.value = false;
+    streamBuffer.value = "";
+    currentToolLogs.value = [];
+    store.saveCurrentAiChat();
+}
+
+function handleGlobalKeydown(e) {
+    if (e.key === "Escape" && streaming.value) {
+        cancelGenerating();
+    }
+}
+
+onMounted(() => {
+    window.addEventListener("keydown", handleGlobalKeydown);
+});
+
+onUnmounted(() => {
+    window.removeEventListener("keydown", handleGlobalKeydown);
+});
 
 function startNewChat() {
     store.newAiChat();
@@ -2028,6 +2073,21 @@ onUnmounted(() => {
     color: var(--text-muted);
     text-align: right;
     padding-right: 4px;
+}
+.cancel-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: -2px;
+    margin-bottom: 2px;
+}
+.cancel-hint kbd {
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 0.65rem;
+    font-family: inherit;
 }
 .slash-menu {
     position: absolute;

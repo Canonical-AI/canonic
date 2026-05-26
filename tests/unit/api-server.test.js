@@ -154,6 +154,72 @@ describe('api-server', () => {
     expect(res.body.error).toBe('method not allowed')
   })
 
+  it('GET /comments without file returns map of all comments', async () => {
+    const commentsDir = path.join(os.homedir(), '.config', 'canonic', 'comments')
+    fs.mkdirSync(commentsDir, { recursive: true })
+    const fixture = [{ id: 'c1', text: 'Looks good', author: 'john' }]
+    const fixtureFile = path.join(commentsDir, '__api_test_doc.json')
+    fs.writeFileSync(fixtureFile, JSON.stringify(fixture), 'utf-8')
+
+    try {
+      const res = await request('GET', '/comments')
+      expect(res.status).toBe(200)
+      expect(res.body.comments).toBeTypeOf('object')
+      expect(res.body.comments['__api/test/doc']).toBeUndefined()
+      // docId underscore decodes to slashes — `__api_test_doc` → `/_api/test/doc` (leading _→/ is harmless)
+      expect(Object.values(res.body.comments).some(arr =>
+        Array.isArray(arr) && arr.some(c => c.id === 'c1'))).toBe(true)
+    } finally {
+      fs.unlinkSync(fixtureFile)
+    }
+  })
+
+  it('GET /comments?file=<relPath> returns comments for that doc', async () => {
+    const commentsDir = path.join(os.homedir(), '.config', 'canonic', 'comments')
+    fs.mkdirSync(commentsDir, { recursive: true })
+    const fixture = [{ id: 'c2', text: 'review me', author: 'priya' }]
+    const fixtureFile = path.join(commentsDir, 'apitestVisionDoc.md.json')
+    fs.writeFileSync(fixtureFile, JSON.stringify(fixture), 'utf-8')
+
+    try {
+      const res = await request('GET', '/comments?file=apitestVisionDoc.md')
+      expect(res.status).toBe(200)
+      expect(res.body.file).toBe('apitestVisionDoc.md')
+      expect(res.body.comments).toEqual(fixture)
+    } finally {
+      fs.unlinkSync(fixtureFile)
+    }
+  })
+
+  it('GET /comments?file=<missing> returns empty array', async () => {
+    const res = await request('GET', '/comments?file=does-not-exist.md')
+    expect(res.status).toBe(200)
+    expect(res.body.comments).toEqual([])
+  })
+
+  it('GET /comments requires auth', async () => {
+    const res = await request('GET', '/comments', null, 'bad-token')
+    expect(res.status).toBe(401)
+  })
+
+  it('cancelSession() fires session-cancel event so caller-app refocus runs', async () => {
+    const start = await request('POST', '/session/start', {
+      file: 'spec.md', agentName: 'A', callbackUrl: 'http://127.0.0.1:9/done',
+    })
+    capturedEvents.length = 0
+    const result = apiServer.cancelSession(start.body.sessionId)
+    expect(result.ok).toBe(true)
+    expect(capturedEvents[0]?.type).toBe('session-cancel')
+    expect(capturedEvents[0].data.sessionId).toBe(start.body.sessionId)
+  })
+
+  it('cancelSession() is a no-op when sessionId does not match active session', () => {
+    capturedEvents.length = 0
+    const result = apiServer.cancelSession('nonexistent-sid')
+    expect(result.ok).toBe(true)
+    expect(capturedEvents.length).toBe(0)
+  })
+
   it('submitAction returns error when callbackUrl is unreachable', async () => {
     const startRes = await request('POST', '/session/start', {
       file: 'spec.md',

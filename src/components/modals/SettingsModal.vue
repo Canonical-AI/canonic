@@ -1137,6 +1137,18 @@
                             {{ navItems.workspace }}
                         </h3>
                         <div
+                            v-show="activeTab !== 'all'"
+                            v-if="store.workspacePath"
+                            class="workspace-info field"
+                        >
+                            <p class="info-label">Current workspace</p>
+                            <p class="info-path">{{ store.workspacePath }}</p>
+                            <button class="switch-btn" @click="switchWorkspace">
+                                Switch workspace
+                            </button>
+                        </div>
+
+                        <div
                             v-show="shouldShow('workspacePath', 'workspace')"
                             id="setting-workspacePath"
                             class="field"
@@ -1156,17 +1168,6 @@
                             <p class="field-hint">
                                 New workspaces created here by default.
                             </p>
-                        </div>
-                        <div
-                            v-show="activeTab !== 'all'"
-                            v-if="store.workspacePath"
-                            class="workspace-info"
-                        >
-                            <p class="info-label">Current workspace</p>
-                            <p class="info-path">{{ store.workspacePath }}</p>
-                            <button class="switch-btn" @click="switchWorkspace">
-                                Switch workspace
-                            </button>
                         </div>
                     </div>
 

@@ -1246,4 +1246,77 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user opens workspace W2
   then: the tab strip is empty in W2
 
-*Last updated: 2026-05-23*
+## External File Sync (EXT)
+
+* scenario: file added outside the app appears in the sidebar
+  given: a workspace is open
+  when: another process creates a new `.md` file under the workspace
+  then: the sidebar file tree updates to include the new file within a second, with no user action
+
+* scenario: file deleted outside the app disappears from the sidebar
+  given: a workspace is open and a file `X.md` is visible in the sidebar
+  when: another process deletes `X.md`
+  then: `X.md` is removed from the sidebar file tree
+
+* scenario: active doc content reloads when changed on disk and buffer is clean
+  given: the active doc is open and the buffer has no unsaved edits
+  when: another process modifies the active doc on disk
+  then: the editor re-renders with the new disk content automatically
+
+* scenario: external change while buffer is dirty shows a toast and preserves edits
+  given: the active doc has unsaved edits
+  when: another process modifies the active doc on disk
+  then: a toast appears noting the on-disk change, the unsaved edits remain in the buffer, and the user can click "Reload from disk" to discard edits and load the disk content
+
+## Agent API — Read Comments (AGT-CMT)
+
+* scenario: agent reads comments for one doc
+  given: Canonic is running and the agent has the lockfile token
+  when: the agent calls `GET /comments?file=<relPath>` with Bearer auth
+  then: the response is `200 { file, comments: [...] }` with the saved comments for that doc, or an empty array if none exist
+
+* scenario: agent reads all comments in workspace
+  given: Canonic is running and the agent has the lockfile token
+  when: the agent calls `GET /comments` (no `file` param) with Bearer auth
+  then: the response is `200 { comments: { <relPath>: [...], ... } }` mapping every doc with stored comments to its comment array
+
+* scenario: missing or bad auth is rejected
+  given: a GET request to `/comments` with no Authorization header or a wrong token
+  when: the server handles the request
+  then: it returns `401 unauthorized` and no comment data
+
+## Agent Session Routing (AGT-RTE)
+
+* scenario: agent sends an explicit workspace and relative file
+  given: Canonic is running with workspace W1 open
+  when: the agent calls `POST /session/start` with `workspacePath: W2` and a relative `file`
+  then: Canonic switches to workspace W2, opens the file, and the agent-waiting pill is visible
+
+* scenario: agent sends an absolute file path with no workspace
+  given: workspace W1 is in the recent-workspaces list at path `/Users/me/W1`
+  when: the agent calls `POST /session/start` with `file: /Users/me/W1/Vision/spec.md` and no `workspacePath`
+  then: Canonic resolves W1 from recent workspaces, opens it, opens `Vision/spec.md`, and the agent-waiting pill is visible
+
+* scenario: agent sends a file under the currently open workspace
+  given: workspace W1 is open
+  when: the agent calls `POST /session/start` with a relative `file` and `workspacePath: W1` (or no workspacePath)
+  then: Canonic does not re-open the workspace, just opens the file, and the agent-waiting pill is visible
+
+## Agent Session Focus Return (AGT-FOC)
+
+* scenario: focus returns to caller on submit (macOS)
+  given: the user is in a terminal that POSTs `/session/start` to Canonic, and Canonic steals focus
+  when: the user clicks a prompt in the pill (Submit)
+  then: after the callback fires and the session ends, the OS app that was frontmost before Canonic stole focus is reactivated
+
+* scenario: focus returns to caller on cancel (macOS)
+  given: an agent session is active with a captured caller app
+  when: the user clicks "Cancel session" in the pill, or the agent POSTs `/session/cancel`
+  then: the previously-frontmost OS app is reactivated
+
+* scenario: non-macOS platforms no-op safely
+  given: Canonic is running on Linux or Windows
+  when: an agent session starts and ends
+  then: the caller-refocus step is skipped without error
+
+*Last updated: 2026-05-26*

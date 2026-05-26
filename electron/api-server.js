@@ -6,6 +6,36 @@ const os = require('os')
 
 const CANONIC_DIR = path.join(os.homedir(), '.config', 'canonic')
 const LOCKFILE = path.join(CANONIC_DIR, 'api.lock')
+const COMMENTS_DIR = path.join(CANONIC_DIR, 'comments')
+
+function docIdFor(relPath) {
+  return relPath.replace(/[\\/]/g, '_')
+}
+
+function readCommentsFor(relPath) {
+  const file = path.join(COMMENTS_DIR, `${docIdFor(relPath)}.json`)
+  if (!fs.existsSync(file)) return []
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf-8'))
+  } catch {
+    return []
+  }
+}
+
+function readAllComments() {
+  if (!fs.existsSync(COMMENTS_DIR)) return {}
+  const out = {}
+  for (const entry of fs.readdirSync(COMMENTS_DIR)) {
+    if (!entry.endsWith('.json')) continue
+    const relPath = entry.slice(0, -5).replace(/_/g, '/')
+    try {
+      out[relPath] = JSON.parse(fs.readFileSync(path.join(COMMENTS_DIR, entry), 'utf-8'))
+    } catch {
+      out[relPath] = []
+    }
+  }
+  return out
+}
 
 let server = null
 let token = null
@@ -74,7 +104,8 @@ function getAppVersion() {
 }
 
 async function handleRequest(req, res) {
-  const { pathname } = new URL(req.url, 'http://127.0.0.1')
+  const url = new URL(req.url, 'http://127.0.0.1')
+  const { pathname } = url
 
   if (req.method === 'GET' && pathname === '/ping') {
     return sendJson(res, 200, { ok: true, version: getAppVersion() })
@@ -86,6 +117,14 @@ async function handleRequest(req, res) {
   }
 
   if (!checkAuth(req, res)) return
+
+  if (req.method === 'GET' && pathname === '/comments') {
+    const file = url.searchParams.get('file')
+    if (file) {
+      return sendJson(res, 200, { file, comments: readCommentsFor(file) })
+    }
+    return sendJson(res, 200, { comments: readAllComments() })
+  }
 
   if (req.method === 'POST' && pathname === '/session/start') {
     const body = await readBody(req)
@@ -164,7 +203,11 @@ async function submitAction(sessionId, prompt, content) {
 }
 
 function cancelSession(sessionId) {
-  if (activeSession?.sessionId === sessionId) activeSession = null
+  if (activeSession?.sessionId === sessionId) {
+    const sid = activeSession.sessionId
+    activeSession = null
+    onEventCallback?.({ type: 'session-cancel', data: { sessionId: sid } })
+  }
   return { ok: true }
 }
 

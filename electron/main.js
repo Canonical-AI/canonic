@@ -1462,7 +1462,11 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle("share:open-link", async (_, url) => {
-    if (url.startsWith("http://") || url.startsWith("https://")) {
+    if (
+      url.startsWith("http://") ||
+      url.startsWith("https://") ||
+      url.startsWith("mailto:")
+    ) {
       shell.openExternal(url);
     }
   });

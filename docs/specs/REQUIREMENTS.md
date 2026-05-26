@@ -114,6 +114,31 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user opens it
   then: the template selection screen does not appear
 
+* scenario: app restart restores last workspace
+  given: the user previously opened at least one workspace and global config is set up
+  when: the app launches
+  then: the most recently opened workspace is reopened automatically and the workspace picker is skipped
+
+* scenario: app restart with no prior workspace
+  given: global config exists but no workspace has ever been opened
+  when: the app launches
+  then: the workspace picker is shown
+
+* scenario: app restart with first-run setup pending
+  given: global config has not yet been created
+  when: the app launches
+  then: the first-run setup screen is shown and no auto-reopen is attempted
+
+* scenario: last workspace path is missing or unreadable
+  given: the recorded last workspace cannot be opened (deleted folder, permissions, etc.)
+  when: the app launches and auto-reopen fails
+  then: the workspace picker is shown with an error message naming the failed workspace
+
+* scenario: switch workspace after auto-reopen
+  given: the app auto-reopened the last workspace
+  when: the user chooses Switch Workspace from settings
+  then: the workspace picker is shown and no auto-reopen runs again in the same session
+
 ***
 
 ## Sharing Scope & Permissions (SHR)
@@ -579,6 +604,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user clicks the link button
   then: the link mark is removed immediately with no input shown
 
+* scenario: link edit inline
+  given: the selection covers an existing link
+  when: the toolbar is shown
+  then: an inline URL input appears next to the formatting buttons pre-filled with the current href, and the bold/italic/etc. buttons remain available
+
+* scenario: link href update via inline input
+  given: the inline URL input is visible with the current href
+  when: the user edits the value and presses Enter or blurs the input
+  then: the link mark is rewritten with the new href across the same range; if the value is empty the link mark is removed
+
 * scenario: comment from toolbar
   given: text is selected and the toolbar is visible
   when: the user clicks the comment button
@@ -680,6 +715,38 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the table context menu is open
   when: the user clicks "Add Row Below" or "Delete Column"
   then: the corresponding prosemirror table command runs and the menu closes
+
+### Markdown link clicks
+
+* scenario: left-click on a markdown link opens it
+  given: the editor contains a `[label](https://example.com)` link
+  when: the user left-clicks the link text with no modifier keys
+  then: the URL opens in the system browser and the editor caret does not move into the link
+
+* scenario: only safe schemes open externally
+  given: the editor contains a link with an unsupported scheme (e.g. `javascript:` or `file:`)
+  when: the user left-clicks the link
+  then: nothing is opened and the caret is not placed inside the link
+
+* scenario: mailto links open in the default mail client
+  given: the editor contains a `mailto:` link
+  when: the user left-clicks it
+  then: the system mail client is launched
+
+* scenario: right-click on a link selects the link and shows the floating toolbar
+  given: the editor contains a markdown link
+  when: the user right-clicks the link text
+  then: the link's full text range is selected, the floating toolbar appears with the link button active, and the OS context menu is suppressed
+
+* scenario: right-click on non-link text keeps the native context menu
+  given: the editor cursor is on regular paragraph text
+  when: the user right-clicks the text
+  then: the OS context menu appears with spelling and grammar entries intact
+
+* scenario: keyboard navigation enters a link
+  given: the caret is adjacent to a markdown link
+  when: the user moves the caret with arrow keys
+  then: the caret moves through the link text without opening the URL
 
 ***
 

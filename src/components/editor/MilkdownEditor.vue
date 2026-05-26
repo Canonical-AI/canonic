@@ -303,6 +303,95 @@ const highlightPlugin = new Plugin({
     },
 });
 
+function findLinkRange(doc, pos, markType) {
+    const $pos = doc.resolve(pos);
+    const parent = $pos.parent;
+    const idx = $pos.index();
+    const child = parent.maybeChild(idx);
+    const mark = child && markType.isInSet(child.marks);
+    if (!mark) return null;
+    const start = $pos.start();
+    const offsets = [];
+    let off = 0;
+    parent.forEach((c) => {
+        offsets.push(off);
+        off += c.nodeSize;
+    });
+    offsets.push(off);
+    let left = idx;
+    while (
+        left > 0 &&
+        parent.child(left - 1).marks.some((m) => m.eq(mark))
+    )
+        left--;
+    let right = idx;
+    while (
+        right < parent.childCount - 1 &&
+        parent.child(right + 1).marks.some((m) => m.eq(mark))
+    )
+        right++;
+    return { from: start + offsets[left], to: start + offsets[right + 1] };
+}
+
+const linkClickPlugin = new Plugin({
+    props: {
+        handleClickOn(view, pos, node, _nodePos, event) {
+            if (event.button !== 0) return false;
+            if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.altKey ||
+                event.shiftKey
+            )
+                return false;
+            const linkMark = view.state.schema.marks.link;
+            if (!linkMark) return false;
+            const $pos = view.state.doc.resolve(pos);
+            const mark =
+                linkMark.isInSet($pos.marks()) ||
+                node.marks?.find((m) => m.type === linkMark);
+            if (!mark) return false;
+            const href = mark.attrs?.href;
+            if (!href) return false;
+            event.preventDefault();
+            const safe = /^(https?:|mailto:)/i.test(href);
+            if (safe) window.canonic?.share?.openLink?.(href);
+            return true;
+        },
+        handleDOMEvents: {
+            contextmenu(view, event) {
+                const a = event.target?.closest?.("a");
+                if (!a || !view.dom.contains(a)) return false;
+                const linkMark = view.state.schema.marks.link;
+                if (!linkMark) return false;
+                const found = view.posAtCoords({
+                    left: event.clientX,
+                    top: event.clientY,
+                });
+                if (!found) return false;
+                const range = findLinkRange(
+                    view.state.doc,
+                    found.pos,
+                    linkMark,
+                );
+                if (!range) return false;
+                event.preventDefault();
+                view.dispatch(
+                    view.state.tr.setSelection(
+                        TextSelection.create(
+                            view.state.doc,
+                            range.from,
+                            range.to,
+                        ),
+                    ),
+                );
+                view.focus();
+                return true;
+            },
+        },
+    },
+});
+
 // --- isDark provide ---
 
 const LIGHT_THEMES = new Set(["paper", "latte"]);
@@ -1166,6 +1255,7 @@ const { loading, get } = useEditor((root) =>
             ctx.update(prosePluginsCtx, (plugins) => [
                 ...plugins,
                 highlightPlugin,
+                linkClickPlugin,
                 findReplacePlugin(),
             ]);
             ctx.update(remarkPluginsCtx, (plugins) => [

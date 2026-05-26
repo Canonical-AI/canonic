@@ -16,9 +16,19 @@
         <button class="tb-btn" :class="{ active: marks.strike }" @click="exec('strike')" title="Strikethrough">
           <Strikethrough :size="14" />
         </button>
-        <button class="tb-btn" :class="{ active: marks.link }" @click="clickLink" title="Link">
+        <button class="tb-btn" :class="{ active: marks.link }" @click="clickLink" :title="marks.link ? 'Remove link' : 'Add link'">
           <LinkIcon :size="14" />
         </button>
+        <template v-if="marks.link">
+          <input
+            v-model="editHrefValue"
+            class="tb-url-input tb-url-inline"
+            placeholder="https://…"
+            @keydown.enter.prevent="commitHrefEdit"
+            @blur="commitHrefEdit"
+            @mousedown.stop
+          />
+        </template>
         <div class="tb-divider" />
         <button class="tb-btn" @click="exec('bulletList')" title="Bullet list">
           <List :size="14" />
@@ -74,6 +84,9 @@ const marks = reactive({ bold: false, italic: false, strike: false, link: false 
 const addingLink = ref(false)
 const urlValue = ref('')
 const urlInputEl = ref(null)
+const editHrefValue = ref('')
+let lastLinkHref = ''
+let lastLinkRange = null
 
 let lastSelectionText = ''
 let lastCoords = { left: 0, top: 0 }
@@ -95,6 +108,25 @@ function updateState() {
   marks.italic = schema.marks.emphasis ? state.doc.rangeHasMark(from, to, schema.marks.emphasis) : false
   marks.strike = schema.marks.strike_through ? state.doc.rangeHasMark(from, to, schema.marks.strike_through) : false
   marks.link = schema.marks.link ? state.doc.rangeHasMark(from, to, schema.marks.link) : false
+
+  if (marks.link) {
+    let href = ''
+    state.doc.nodesBetween(from, to, (node) => {
+      if (!href) {
+        const m = node.marks.find((x) => x.type === schema.marks.link)
+        if (m) href = m.attrs.href || ''
+      }
+    })
+    lastLinkHref = href
+    lastLinkRange = { from, to }
+    if (document.activeElement?.classList?.contains('tb-url-inline') !== true) {
+      editHrefValue.value = href
+    }
+  } else {
+    lastLinkHref = ''
+    lastLinkRange = null
+    editHrefValue.value = ''
+  }
 
   lastSelectionText = state.doc.textBetween(from, to, ' ')
 
@@ -196,6 +228,21 @@ function clickComment() {
   if (!openCommentFromToolbar) return
   openCommentFromToolbar(lastSelectionText, lastCoords)
 }
+
+function commitHrefEdit() {
+  const next = editHrefValue.value.trim()
+  if (!lastLinkRange) return
+  if (next === lastLinkHref) return
+  const v = view.value
+  if (!v) return
+  const { from, to } = lastLinkRange
+  const linkMark = v.state.schema.marks.link
+  if (!linkMark) return
+  let tr = v.state.tr.removeMark(from, to, linkMark)
+  if (next) tr = tr.addMark(from, to, linkMark.create({ href: next }))
+  v.dispatch(tr)
+  lastLinkHref = next
+}
 </script>
 
 <style scoped>
@@ -272,6 +319,14 @@ function clickComment() {
 
 .tb-url-input:focus { border-color: var(--accent-muted); }
 .tb-url-input::placeholder { color: var(--text-muted, var(--text-secondary)); }
+
+.tb-url-inline {
+  width: 160px;
+  margin: 0 4px;
+  height: 22px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
 
 .tb-url-ok {
   width: auto;

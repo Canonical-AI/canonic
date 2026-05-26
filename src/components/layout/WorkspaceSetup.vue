@@ -3,6 +3,11 @@
         <!-- First-run setup gates everything -->
         <SetupScreen v-if="showSetup" @done="onSetupDone" />
 
+        <!-- Auto-launching last workspace -->
+        <div v-else-if="autoLaunching" class="auto-loading">
+            <div class="auto-loading-spinner" />
+        </div>
+
         <!-- Workspace picker -->
         <div v-else class="workspace-card">
             <div class="card-header">
@@ -191,6 +196,9 @@ const showSettings = ref(false);
 const error = ref("");
 const creating = ref(false);
 const launchingDemo = ref(false);
+const autoLaunching = ref(
+    !store.workspacePath && store.recentWorkspaces.length > 0,
+);
 
 const newName = ref("");
 const newPath = ref("");
@@ -235,9 +243,22 @@ onMounted(() => {
 async function checkSetup() {
     const exists = await window.canonic.config.exists();
     showSetup.value = !exists;
-    if (!showSetup.value) {
-        await store.loadConfig();
-        await store.logEvent("app:start");
+    if (showSetup.value) {
+        autoLaunching.value = false;
+        return;
+    }
+    await store.loadConfig();
+    await store.logEvent("app:start");
+    if (autoLaunching.value) {
+        const last = store.recentWorkspaces[0];
+        try {
+            await store.openWorkspace(last.path, "blank");
+            router.push("/workspace");
+        } catch (err) {
+            error.value = `Could not reopen "${last.name}": ${err.message}`;
+        } finally {
+            autoLaunching.value = false;
+        }
     }
 }
 checkSetup();
@@ -330,6 +351,25 @@ function formatTime(ts) {
     justify-content: center;
     min-height: 100vh;
     background: var(--bg-base);
+}
+
+.auto-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auto-loading-spinner {
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: auto-spin 0.8s linear infinite;
+}
+
+@keyframes auto-spin {
+    to { transform: rotate(360deg); }
 }
 
 .workspace-card {

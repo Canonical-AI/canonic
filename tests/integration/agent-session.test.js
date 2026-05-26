@@ -219,4 +219,36 @@ describe('agent session store', () => {
     sessionCancelCb()
     expect(store.agentActivity).toBeNull()
   })
+
+  // --- workspace fallback resolution ---
+
+  it('resolves workspace from recentWorkspaces when file is absolute and wsParam missing', async () => {
+    store.recentWorkspaces = [
+      { path: '/Users/me/ws-a', name: 'ws-a', openedAt: 1 },
+      { path: '/Users/me/ws-b', name: 'ws-b', openedAt: 2 },
+    ]
+    mockApi.workspace.init.mockResolvedValue({ path: '/Users/me/ws-b', isExternal: false })
+
+    await store.startAgentSession({
+      sessionId: 'sid-abs',
+      file: '/Users/me/ws-b/Vision/spec.md',
+      agentName: 'Claude Code',
+    })
+
+    expect(mockApi.workspace.init).toHaveBeenCalledWith('/Users/me/ws-b', 'blank')
+    expect(store.currentFile).toBe('Vision/spec.md')
+    expect(store.agentSession.file).toBe('Vision/spec.md')
+  })
+
+  it('opens file under current workspace when wsParam matches existing workspacePath', async () => {
+    store.workspacePath = '/ws'
+    await store.startAgentSession({
+      sessionId: 'sid-same',
+      file: 'spec.md',
+      agentName: 'Claude Code',
+      workspacePath: '/ws',
+    })
+    expect(mockApi.workspace.init).not.toHaveBeenCalled()
+    expect(store.currentFile).toBe('spec.md')
+  })
 })

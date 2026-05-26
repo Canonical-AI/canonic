@@ -153,7 +153,7 @@
                 :style="{ '--editor-font-size': editorFontSize + 'px' }"
             >
                 <ProsemirrorAdapterProvider>
-                    <MilkdownProvider :key="store.currentFile">
+                    <MilkdownProvider :key="`${store.currentFile}:${store.editorRevision}`">
                         <MilkdownEditor
                             ref="milkdownEditor"
                             :content="store.currentContent"

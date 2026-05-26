@@ -258,6 +258,8 @@ export const useAppStore = defineStore("app", () => {
   const peerFileComments = ref([]); // comments visible in sidebar when viewing a peer file
   const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
+  const externalChangeNotice = ref(null); // { file, at } when active doc changed on disk while dirty
+  const editorRevision = ref(0); // bump to force editor remount (e.g. after reload-from-disk)
   const fileIndex = ref({});
   const appVersion = ref(__APP_VERSION__ || "");
 
@@ -482,8 +484,30 @@ export const useAppStore = defineStore("app", () => {
   }
 
   if (api.files.onIndexUpdate) {
-    api.files.onIndexUpdate((idx) => {
+    api.files.onIndexUpdate(async (idx) => {
       fileIndex.value = idx;
+      // External fs change — repopulate sidebar tree
+      if (!workspacePath.value || isDemoMode.value) return;
+      await refreshFiles();
+      // Sync active doc if still on disk
+      if (!currentFile.value) return;
+      if (isDirty.value) {
+        externalChangeNotice.value = {
+          file: currentFile.value,
+          at: Date.now(),
+        };
+        return;
+      }
+      try {
+        const disk = await api.files.read(
+          workspacePath.value,
+          currentFile.value,
+        );
+        if (disk != null && disk !== currentContent.value) {
+          currentContent.value = disk;
+          editorRevision.value += 1;
+        }
+      } catch {}
     });
   }
 
@@ -873,6 +897,17 @@ export const useAppStore = defineStore("app", () => {
 
   function clearUnsaved(filePath) {
     delete unsavedBuffer[filePath];
+  }
+
+  async function reloadCurrentFromDisk() {
+    if (!workspacePath.value || !currentFile.value) return;
+    const disk = await api.files.read(workspacePath.value, currentFile.value);
+    if (disk == null) return;
+    currentContent.value = disk;
+    isDirty.value = false;
+    clearUnsaved(currentFile.value);
+    externalChangeNotice.value = null;
+    editorRevision.value += 1;
   }
 
   // ==========================================
@@ -1678,13 +1713,41 @@ export const useAppStore = defineStore("app", () => {
   }) {
     agentActivity.value = null;
     agentSession.value = { sessionId, agentName, file, startedAt: Date.now() };
-    const ws = wsParam || workspacePath.value;
+
+    // Resolve workspace + file path.
+    // Agent may send: (a) explicit wsParam + relative file, (b) absolute file
+    // under a known workspace with no wsParam, (c) relative file matching current ws.
+    let ws = wsParam;
+    let relFile = file;
+    const isAbsolute = file && (file.startsWith("/") || /^[A-Za-z]:[\\/]/.test(file));
+
+    if (!ws && isAbsolute) {
+      const match = recentWorkspaces.value.find(
+        (w) =>
+          file === w.path ||
+          file.startsWith(w.path.endsWith("/") ? w.path : w.path + "/"),
+      );
+      if (match) ws = match.path;
+    }
+    if (!ws) ws = workspacePath.value;
+
+    if (ws && isAbsolute) {
+      const prefix = ws.endsWith("/") ? ws : ws + "/";
+      if (file.startsWith(prefix)) relFile = file.slice(prefix.length);
+    }
+
     if (ws && ws !== workspacePath.value) {
       await openWorkspace(ws);
     }
-    if (file && ws) {
-      await openFile(file);
+    if (relFile && workspacePath.value) {
+      await openFile(relFile);
     }
+    agentSession.value = {
+      sessionId,
+      agentName,
+      file: relFile,
+      startedAt: Date.now(),
+    };
   }
 
   async function cancelAgentSession() {
@@ -1908,6 +1971,9 @@ export const useAppStore = defineStore("app", () => {
     peerFileComments,
     activeCommentId,
     networkChanged,
+    externalChangeNotice,
+    editorRevision,
+    reloadCurrentFromDisk,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,

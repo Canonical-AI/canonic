@@ -523,6 +523,7 @@
         <ConfirmModal />
 
         <AgentSessionPill />
+        <ExternalChangeToast />
 
         <!-- Organic Grain Overlay -->
         <div class="grain-overlay" />
@@ -592,6 +593,7 @@ import SettingsModal from "../modals/SettingsModal.vue";
 import ConfirmModal from "../modals/ConfirmModal.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
+import ExternalChangeToast from "./ExternalChangeToast.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
 
 const store = useAppStore();

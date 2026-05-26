@@ -12,7 +12,7 @@ const {
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const { exec, execSync, spawnSync } = require("child_process");
+const { exec, execFile, execSync, spawnSync } = require("child_process");
 const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const semver = require("semver");
@@ -21,6 +21,40 @@ const configService = require("./config");
 const versionsService = require("./versions");
 const apiServer = require("./api-server");
 const { startWatcher, stopWatcher, getIndex } = require("./fileIndex");
+
+// Tracks the OS app that was frontmost when each agent session started, so we
+// can return focus to it when the session ends (submit/cancel). macOS only.
+const callerAppBySession = new Map();
+
+function captureFrontmostApp() {
+  if (process.platform !== "darwin") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    execFile(
+      "osascript",
+      ["-e", 'tell application "System Events" to get name of first process whose frontmost is true'],
+      { timeout: 1500 },
+      (err, stdout) => {
+        if (err) return resolve(null);
+        const name = (stdout || "").trim();
+        if (!name || name === "Canonic" || name === "Electron") return resolve(null);
+        // Only accept conservative app-name characters to avoid AppleScript injection
+        if (!/^[\w .\-+()]{1,64}$/.test(name)) return resolve(null);
+        resolve(name);
+      },
+    );
+  });
+}
+
+function refocusApp(name) {
+  if (process.platform !== "darwin" || !name) return;
+  if (!/^[\w .\-+()]{1,64}$/.test(name)) return;
+  execFile(
+    "osascript",
+    ["-e", `tell application "${name}" to activate`],
+    { timeout: 1500 },
+    () => {},
+  );
+}
 
 // Services loaded lazily in setupIpcHandlers to ensure logger is ready
 let gitService;
@@ -864,10 +898,24 @@ app.whenReady().then(async () => {
   }
 
   await apiServer
-    .start((event) => {
+    .start(async (event) => {
       if (event.type === "session-start") {
+        // Capture the OS frontmost app BEFORE we steal focus so we can return
+        // to it when the session ends.
+        const caller = await captureFrontmostApp();
+        if (caller && event.data?.sessionId) {
+          callerAppBySession.set(event.data.sessionId, caller);
+        }
         mainWindow?.focus();
         if (process.platform === "darwin") app.focus({ steal: true });
+      } else if (
+        event.type === "session-done" ||
+        event.type === "session-cancel"
+      ) {
+        const sid = event.data?.sessionId;
+        const caller = sid ? callerAppBySession.get(sid) : null;
+        if (sid) callerAppBySession.delete(sid);
+        if (caller) refocusApp(caller);
       }
       mainWindow?.webContents.send(`agent:${event.type}`, event.data);
     })

@@ -55,6 +55,11 @@ const DEFAULTS = {
     wordBoundaryOnly: true,
     extraInstructions: "",
   },
+  theme: {
+    light: "paper",
+    dark: "hal2001",
+    auto: true,
+  },
 };
 
 // --- Slug helpers ---
@@ -172,6 +177,7 @@ function read() {
         },
       },
       completion: { ...DEFAULTS.completion, ...(migrated.completion || {}) },
+      theme: { ...DEFAULTS.theme, ...(migrated.theme || {}) },
     };
   } catch (err) {
     if (isDev) console.error("[Config] Error reading config:", err);
@@ -202,6 +208,7 @@ function write(config) {
       caps: { ...DEFAULTS.assistant.caps, ...(config.assistant?.caps || {}) },
     },
     completion: { ...DEFAULTS.completion, ...(config.completion || {}) },
+    theme: { ...DEFAULTS.theme, ...(config.theme || {}) },
   };
 
   if (isDev)

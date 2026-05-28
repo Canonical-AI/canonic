@@ -769,6 +769,20 @@ function createMenu() {
                 mainWindow?.webContents.send("menu:change-theme", "gruvbox");
               },
             },
+            { type: "separator" },
+            {
+              label: "Open Config File",
+              click: async () => {
+                const err = await shell.openPath(configService.CONFIG_PATH);
+                if (err) dialog.showErrorBox("Open Config Failed", err);
+              },
+            },
+            {
+              label: "Reload Config",
+              click: () => {
+                mainWindow?.webContents.send("menu:reload-config");
+              },
+            },
           ],
         },
         {

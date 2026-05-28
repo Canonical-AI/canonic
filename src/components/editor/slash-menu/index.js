@@ -15,6 +15,15 @@ export const createSlashMenuPlugin = (tooltipRef) => {
             if (text !== "/") return false;
             if (!view.editable) return false;
 
+            // Only fire if preceded by a space (so " /") fires but "/" doesn't)
+            if (from > 0) {
+              const charBefore = view.state.doc.textBetween(from - 1, from);
+              if (charBefore !== " ") return false;
+            } else {
+              // At position 0 (start of doc) — no preceding space
+              return false;
+            }
+
             if (tooltipRef.value?.visible) return false;
 
             // Insert the slash manually so the user sees it while the menu is open

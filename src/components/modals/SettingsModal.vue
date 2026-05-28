@@ -859,11 +859,76 @@
                         <p v-show="activeTab !== 'all'" class="section-heading">
                             Theming
                         </p>
-                        <div v-show="activeTab !== 'all'" class="field">
+                        <div
+                            v-show="shouldShow('themeAuto', 'appearance')"
+                            id="setting-themeAuto"
+                            class="field"
+                        >
+                            <div
+                                class="settings-card"
+                                :class="{ active: form.theme.auto }"
+                                @click="form.theme.auto = !form.theme.auto"
+                            >
+                                <div class="card-header">
+                                    <span class="card-label"
+                                        >Match system theme</span
+                                    >
+                                    <div
+                                        class="toggle"
+                                        :class="{ on: form.theme.auto }"
+                                    >
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                </div>
+                                <p class="card-desc">
+                                    Automatically switch between light and dark
+                                    themes when your system appearance
+                                    changes.
+                                </p>
+                            </div>
+                        </div>
+                        <div
+                            v-show="shouldShow('themeLight', 'appearance')"
+                            id="setting-themeLight"
+                            class="field"
+                        >
+                            <label class="field-label">Light theme</label>
+                            <select
+                                v-model="form.theme.light"
+                                class="field-select"
+                            >
+                                <option
+                                    v-for="t in builtinThemeNames"
+                                    :key="t"
+                                    :value="t"
+                                >
+                                    {{ t }}
+                                </option>
+                            </select>
                             <p class="field-hint">
-                                Theming and theme importing settings are coming
-                                soon. You can currently switch themes via the
-                                palette icon in the titlebar.
+                                Applied when the system is in light mode.
+                            </p>
+                        </div>
+                        <div
+                            v-show="shouldShow('themeDark', 'appearance')"
+                            id="setting-themeDark"
+                            class="field"
+                        >
+                            <label class="field-label">Dark theme</label>
+                            <select
+                                v-model="form.theme.dark"
+                                class="field-select"
+                            >
+                                <option
+                                    v-for="t in builtinThemeNames"
+                                    :key="t"
+                                    :value="t"
+                                >
+                                    {{ t }}
+                                </option>
+                            </select>
+                            <p class="field-hint">
+                                Applied when the system is in dark mode.
                             </p>
                         </div>
                     </div>
@@ -1449,6 +1514,21 @@ const navIcons = {
     updates: RefreshCw,
     danger: Trash2,
 };
+
+const builtinThemeNames = [
+    "hal2001",
+    "auteur",
+    "paper",
+    "mocha",
+    "macchiato",
+    "latte",
+    "dracula",
+    "nord",
+    "solarized",
+    "gruvbox",
+    "tokyo",
+];
+
 const activeTabLabel = computed(() => navItems[activeTab.value]);
 
 let initialState = null;
@@ -1468,6 +1548,11 @@ const form = reactive({
     grainOpacity: 0.02,
     tabsEnabled: true,
     tabsPosition: "bottom",
+    theme: {
+        light: "paper",
+        dark: "hal2001",
+        auto: true,
+    },
     clipboard: {
         copyOnSelect: false,
         middleClickPaste: false,
@@ -1687,6 +1772,24 @@ const allSettingsMetadata = [
         tab: "appearance",
     },
     {
+        id: "themeAuto",
+        label: "Match system theme",
+        desc: "Auto-switch light and dark themes based on system preference.",
+        tab: "appearance",
+    },
+    {
+        id: "themeLight",
+        label: "Light theme",
+        desc: "Theme applied in light mode.",
+        tab: "appearance",
+    },
+    {
+        id: "themeDark",
+        label: "Dark theme",
+        desc: "Theme applied in dark mode.",
+        tab: "appearance",
+    },
+    {
         id: "copyOnSelect",
         label: "Copy on select",
         desc: "Automatically copy text to clipboard when selected.",
@@ -1817,6 +1920,10 @@ onMounted(async () => {
             grainOpacity: cfg.grainOpacity ?? 0.02,
             tabsEnabled: cfg.tabsEnabled !== false,
             tabsPosition: cfg.tabsPosition === "top" ? "top" : "bottom",
+            theme: {
+                ...form.theme,
+                ...(cfg.theme || {}),
+            },
             clipboard: {
                 copyOnSelect: !!cfg.clipboard?.copyOnSelect,
                 middleClickPaste: !!cfg.clipboard?.middleClickPaste,

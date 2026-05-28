@@ -1319,4 +1319,162 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: an agent session starts and ends
   then: the caller-refocus step is skipped without error
 
-*Last updated: 2026-05-26*
+***
+
+## AI Control (AIC)
+
+> Agent-driven implementation surface in Canonic's right panel. PMs start coding-agent sessions from inside the app to kick off and steer engineering work without leaving the planning context.
+
+### Agent Configuration
+
+* scenario: no agents configured
+  given: no agents have been configured
+  when: the user opens the Implementation panel
+  then: an empty state is shown with a "Configure an agent" button
+
+* scenario: load preset agents
+  given: the Implementation panel mounts
+  when: presets are loaded from main process
+  then: Claude Code, Gemini CLI, Codex, OpenCode, and Pi are listed with install status
+
+* scenario: select preset agent
+  given: at least one preset agent is configured
+  when: the user clicks the agent selector and picks an agent
+  then: that agent becomes active, name appears in header
+
+* scenario: add custom agent
+  given: the agent selector popup is open
+  when: the user clicks "Add agent" then "Custom" and fills name and binary path
+  then: the custom agent appears in configured agents list
+
+* scenario: reject uninstalled agent
+  given: a preset agent binary is not installed on system
+  when: the user tries to select it
+  then: the agent is not selected and a "Not installed" badge is shown
+
+### Flavor and Model
+
+* scenario: toggle reviewer/implementer flavor
+  given: the Implementation panel is open
+  when: the user clicks the Reviewer or Implementer pill
+  then: only one pill is active at a time, flavor switches accordingly
+
+* scenario: implementer shows target directory
+  given: flavor is set to Implementer
+  when: the user views the panel
+  then: a target directory path is shown, clickable to open a folder picker
+
+* scenario: change model
+  given: an agent is selected
+  when: the user clicks the model text and types a model name
+  then: the model is updated for the next session
+
+* scenario: cycle effort level
+  given: an agent is selected
+  when: the user clicks the effort text
+  then: effort cycles through low, medium, high
+
+### Session Management
+
+* scenario: start session with prompt
+  given: an agent is selected and Implementation panel is open
+  when: the user types a prompt and presses Enter
+  then: a session starts, user message appears, status changes to running
+
+* scenario: context injection shown as de-emphasis
+  given: a session starts with context doc or selection
+  when: the chat renders
+  then: context injection lines appear as low-emphasis italic text outside message containers
+
+* scenario: streaming thinking indicator
+  given: a session is running
+  when: the agent is processing
+  then: a Thinking indicator with animated dots is shown
+
+* scenario: session persists across doc switches
+  given: a session is running in Implementation panel
+  when: the user switches to a different document
+  then: the session keeps running and chat state is preserved
+
+* scenario: stop session
+  given: a session is running
+  when: the user clicks the stop button
+  then: the agent process is terminated and status changes to ended
+
+* scenario: open in terminal
+  given: a session is running or ended
+  when: the user clicks "Open in terminal"
+  then: a resume command is copied to clipboard
+
+* scenario: error handling
+  given: an agent binary is not found or crashes
+  when: a session is started
+  then: an error message is displayed and status changes to error
+
+### Session History
+
+* scenario: history panel collapsed by default
+  given: the Implementation panel is open
+  when: the user views the bottom of the panel
+  then: a History toggle is shown, collapsed
+
+* scenario: expand history shows recent sessions
+  given: at least one previous session exists
+  when: the user clicks the History toggle
+  then: up to 5 recent sessions are shown with title, agent, date, and status
+
+* scenario: filter history by title
+  given: the history panel is expanded
+  when: the user types in the filter input
+  then: only sessions whose title matches the filter are shown
+
+* scenario: delete history entry
+  given: the history panel is expanded with entries
+  when: the user clicks the delete button on an entry
+  then: that entry is removed from history
+
+* scenario: save session on end
+  given: a session ends
+  when: the session finalizes
+  then: an entry is added to session history
+
+### MCP Server
+
+* scenario: MCP initialize returns capabilities
+  given: the MCP server is running
+  when: an agent sends an initialize request
+  then: protocol version, tools capability, and server info are returned
+
+* scenario: MCP tools/list returns all tools
+  given: the MCP server is running
+  when: an agent sends a tools/list request
+  then: all 8 tools are listed with descriptions and input schemas
+
+* scenario: read_doc returns file content
+  given: a workspace is open with an existing doc
+  when: an agent calls read_doc with a valid path
+  then: the markdown content is returned
+
+* scenario: write_doc overwrites file
+  given: a workspace is open
+  when: an agent calls write_doc with path and content
+  then: the file is written and editor repaints via file watcher
+
+* scenario: post_comment writes comment
+  given: a workspace is open
+  when: an agent calls post_comment with path, text, and optional anchor
+  then: a comment is persisted and emitted to the renderer
+
+* scenario: get_workspace_info returns state
+  given: a workspace is open
+  when: an agent calls get_workspace_info
+  then: workspace name, path, and current branch are returned
+
+### Demo Mode
+
+* scenario: demo mode shows configured agents
+  given: demo mode is active
+  when: the Implementation panel mounts
+  then: Claude Code appears as a configured agent with demo session history entries
+
+*Last updated: 2026-05-28*

@@ -225,6 +225,31 @@ export const useAppStore = defineStore("app", () => {
   const agentActivity = ref(null); // null | { activityType, label }
   const actionPickerOpen = ref(false);
 
+  // ── AI Control: Agent configuration ─────────────────────────────────────
+  const agentPresets = ref([])         // loaded from main process: [{ id, name, binary, installHint, installed }]
+  const configuredAgents = ref([])     // [{ id, name, type: 'preset'|'custom', presetId?, binary, args?, mcpConfigPath? }]
+  const activeAgentId = ref(null)
+  const activeModel = ref('')          // current model name
+  const activeEffort = ref('medium')   // 'low' | 'medium' | 'high'
+  const activeFlavor = ref('reviewer') // 'reviewer' | 'implementer'
+  const targetDir = ref(null)          // target directory for implementer mode
+
+  // ── AI Control: Active session ──────────────────────────────────────────
+  const controlSession = ref(null)     // { id, agentId, agentName, model, effort, flavor, cwd, status, startedAt, pid? }
+  const controlMessages = ref([])      // [{ id, role, content, type, toolCalls, timestamp }]
+  const controlStatus = ref('idle')    // 'idle' | 'starting' | 'running' | 'waiting' | 'error' | 'ended'
+  const controlTokenCount = ref(0)
+  const controlHasRealTokens = ref(false)  // true once an agent reports real usage; stops char-estimate
+  const controlStreamBuffer = ref('')
+  const controlLineBuffer = ref('')    // holds an incomplete trailing JSONL line between stdout chunks
+
+  // ── AI Control: Session history ─────────────────────────────────────────
+  const controlHistory = ref([])       // [{ id, title, agentId, agentName, model, effort, flavor, cwd, status, startedAt, endedAt, messageCount }]
+
+  // ── AI Control: MCP state ───────────────────────────────────────────────
+  const mcpPort = ref(null)
+  const mcpOptOuts = ref({})          // { [agentId]: true }
+
   // Peer discovery state
   const discoveredPeers = ref([]);
   const persistedPeers = ref([]);
@@ -454,6 +479,30 @@ export const useAppStore = defineStore("app", () => {
       agentActivity.value = null;
       actionPickerOpen.value = false;
     });
+  }
+
+  // Register AI Control IPC listeners once
+  if (api.agentControl) {
+    api.agentControl.onStdout((data) => handleControlStdout(data))
+    api.agentControl.onStderr((data) => handleControlStderr(data))
+    api.agentControl.onExit((data) => handleControlExit(data))
+    api.agentControl.onError((data) => handleControlError(data))
+    api.agentControl.onCopyToClipboard?.(({ text }) => {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(() => {})
+      }
+    })
+    // An agent (Pi) queued comments to the inbox; main ingested them — reload the panel.
+    api.agentControl.onCommentsIngested?.(({ count }) => {
+      if (count > 0) {
+        loadComments()
+        controlMessages.value.push({
+          id: crypto.randomUUID(), role: 'context',
+          content: `Added ${count} comment${count === 1 ? '' : 's'} to the workspace.`,
+          type: 'context-injection', timestamp: Date.now()
+        })
+      }
+    })
   }
 
   // Wire share stats listener once — updates whichever file is being shared
@@ -1413,6 +1462,13 @@ export const useAppStore = defineStore("app", () => {
     demoFiles.value = cfg.files ? { ...cfg.files } : {};
     isDemoMode.value = true;
 
+    // AI Control demo data
+    controlHistory.value = (cfg.agentSessions || []).map(s => ({ ...s }))
+    configuredAgents.value = (cfg.configuredAgents || []).map(a => ({ ...a }))
+    if (configuredAgents.value.length > 0 && !activeAgentId.value) {
+      activeAgentId.value = configuredAgents.value[0].id
+    }
+
     await openWorkspace(demoPath, cfg.template || "pm-framework");
 
     if (cfg.files && workspacePath.value) {
@@ -1432,6 +1488,9 @@ export const useAppStore = defineStore("app", () => {
     demoFiles.value = {};
     _demoComments.value = {};
     comments.value = comments.value.filter((c) => !c.isDemo);
+    controlHistory.value = []
+    configuredAgents.value = []
+    activeAgentId.value = null
   }
 
   async function startShare(options) {
@@ -1796,6 +1855,883 @@ export const useAppStore = defineStore("app", () => {
     actionPickerOpen.value = false;
   }
 
+  // ── AI Control: Agent config actions ────────────────────────────────────
+  async function loadAgentPresets() {
+    if (api.agentControl?.getPresets) {
+      agentPresets.value = await api.agentControl.getPresets()
+    }
+  }
+
+  async function loadConfiguredAgents() {
+    // Load custom agents from config
+    if (api.agentControl?.getCustomAgents) {
+      const custom = await api.agentControl.getCustomAgents()
+      const presets = agentPresets.value.map(p => ({
+        id: p.id,
+        name: p.name,
+        type: 'preset',
+        presetId: p.id,
+        binary: p.binary,
+        injectContext: !!p.injectContext,
+        outputFormat: p.outputFormat,
+        installed: p.installed
+      }))
+      configuredAgents.value = [...presets, ...custom]
+      
+      // Set default active agent to first installed preset
+      if (!activeAgentId.value && configuredAgents.value.length > 0) {
+        const firstInstalled = configuredAgents.value.find(a => a.installed !== false)
+        if (firstInstalled) activeAgentId.value = firstInstalled.id
+      }
+    }
+  }
+
+  async function addCustomAgent(config) {
+    if (api.agentControl?.addCustomAgent) {
+      const result = await api.agentControl.addCustomAgent(config)
+      if (result.ok) {
+        configuredAgents.value.push(result.agent)
+      }
+      return result
+    }
+  }
+
+  async function removeCustomAgent(id) {
+    if (api.agentControl?.removeCustomAgent) {
+      await api.agentControl.removeCustomAgent(id)
+      configuredAgents.value = configuredAgents.value.filter(a => a.id !== id)
+      if (activeAgentId.value === id) {
+        activeAgentId.value = configuredAgents.value[0]?.id || null
+      }
+    }
+  }
+
+  function setActiveAgent(agentId) {
+    if (controlStatus.value === 'running') {
+      // Save current session to history before switching
+      saveControlSessionToHistory()
+    }
+    activeAgentId.value = agentId
+    // Reset session state
+    controlMessages.value = []
+    controlStatus.value = 'idle'
+    controlTokenCount.value = 0
+    controlHasRealTokens.value = false
+    controlStreamBuffer.value = ''
+    controlLineBuffer.value = ''
+    // Wipe model selection — the real model is unknown until a session starts (or the user
+    // opens the model dropdown, which triggers a live fetch). Show "default" until then.
+    activeModel.value = ''
+    availableModels.value = []
+    defaultModelHint.value = ''
+  }
+
+  const availableModels = ref([])       // models populated on demand by discoverAgentModels
+  const modelsLoading = ref(false)      // true while fetching models for the dropdown
+  const defaultModelHint = ref('')      // agent's suggested default (for placeholder)
+
+  // Called when the user opens the model selector — fetches live and shows a loading state.
+  async function openModelSelector() {
+    if (!activeAgentId.value) return
+    modelsLoading.value = true
+    try {
+      await discoverAgentModels(activeAgentId.value)
+    } finally {
+      modelsLoading.value = false
+    }
+  }
+
+  async function discoverAgentModels(agentId) {
+    const agent = configuredAgents.value.find(a => a.id === agentId)
+    if (!agent) return
+    const presetId = agent.type === 'preset' ? (agent.presetId || agent.id) : null
+    if (!presetId) return
+    if (api.agentControl?.getModels) {
+      const result = await api.agentControl.getModels({ agentId: presetId })
+      if (result.models && result.models.length > 0) {
+        availableModels.value = result.models
+      }
+      // Remember the default as a placeholder hint, but do NOT auto-select it —
+      // activeModel stays empty ("default") until the user picks or a session reports one.
+      if (result.defaultModel) defaultModelHint.value = result.defaultModel
+    }
+  }
+
+  function setAgentModel(model) {
+    activeModel.value = model
+    saveAgentControlPrefs()
+  }
+
+  function setAgentEffort(effort) {
+    activeEffort.value = effort
+    saveAgentControlPrefs()
+  }
+
+  function setActiveFlavor(flavor) {
+    activeFlavor.value = flavor
+    saveAgentControlPrefs()
+  }
+
+  function setTargetDir(dir) {
+    targetDir.value = dir
+    saveAgentControlPrefs()
+  }
+
+  async function pickTargetDirectory() {
+    if (api.agentControl?.pickDirectory) {
+      const dir = await api.agentControl.pickDirectory()
+      if (dir) targetDir.value = dir
+      saveAgentControlPrefs()
+    }
+  }
+
+  async function saveAgentControlPrefs() {
+    if (!config.value) return
+    const next = JSON.parse(JSON.stringify(config.value))
+    if (!next.agentControl) next.agentControl = {}
+    next.agentControl.activeAgentId = activeAgentId.value
+    next.agentControl.model = activeModel.value
+    next.agentControl.effort = activeEffort.value
+    next.agentControl.flavor = activeFlavor.value
+    next.agentControl.targetDir = targetDir.value
+    await saveConfig(next)
+  }
+
+  function hydrateAgentControlPrefs() {
+    const ac = config.value?.agentControl
+    if (!ac) return
+    if (ac.activeAgentId) activeAgentId.value = ac.activeAgentId
+    if (ac.model) activeModel.value = ac.model
+    if (ac.effort) activeEffort.value = ac.effort
+    if (ac.flavor) activeFlavor.value = ac.flavor
+    if (ac.targetDir) targetDir.value = ac.targetDir
+  }
+
+  // Assemble the live workspace as an inline context block for agents that read inline
+  // instead of via MCP (Pi). Includes the file list, the current doc, and open comments,
+  // plus an instruction to edit files directly with the agent's built-in tools.
+  function buildInlineWorkspaceContext(docPath, docContent) {
+    const parts = []
+    const wsName = workspacePath.value ? (workspacePath.value.split('/').pop() || workspacePath.value) : null
+
+    // Flatten the (possibly nested) file tree to a list of doc paths.
+    const flat = []
+    const walk = (nodes) => {
+      for (const n of nodes || []) {
+        if (n.path && n.type !== 'directory' && !n.children) flat.push(n.path)
+        if (n.children) walk(n.children)
+      }
+    }
+    walk(files.value)
+
+    if (wsName) {
+      const fileList = flat.length ? `\n<files>\n${flat.map(p => '- ' + p).join('\n')}\n</files>` : ''
+      parts.push(`<workspace name="${wsName}">${fileList}\n</workspace>`)
+    }
+    if (docContent) {
+      parts.push(`<current_document path="${docPath || 'untitled'}">\n${docContent}\n</current_document>`)
+    }
+    const open = (comments.value || []).filter(c => !c.resolved)
+    if (open.length) {
+      const lines = open.map(c => {
+        const q = c.anchor?.quotedText || c.quotedText
+        return q ? `- on "${String(q).slice(0, 80)}": ${c.text}` : `- ${c.text}`
+      })
+      parts.push(`<comments doc="${docPath || ''}">\n${lines.join('\n')}\n</comments>`)
+    }
+    parts.push(
+      `<instructions>\n` +
+      `The workspace data above is provided inline and is current — you do NOT need any external/MCP tools to read it.\n\n` +
+      `EDITING A DOCUMENT: only when the user explicitly asks you to change a document's content, edit the markdown file directly in your working directory with your built-in write/edit tools.\n\n` +
+      `LEAVING A COMMENT: a comment is feedback ABOUT the document — it is NOT a document edit. ` +
+      `NEVER write comment text into the document itself. ` +
+      `To leave a comment, append exactly one JSON object per line to the file \`.canonic/comments.inbox.jsonl\` in your working directory (create the file/folder if missing). Each line must be:\n` +
+      `{"path":"<relative doc path>","quotedText":"<exact snippet from the doc you are commenting on, or empty>","text":"<your comment>"}\n` +
+      `Do not modify the document when asked to comment. Canonic ingests this file and attaches the comments after you finish.\n` +
+      `</instructions>`
+    )
+    return parts.join('\n\n')
+  }
+
+  // ── AI Control: Session actions ─────────────────────────────────────────
+  async function startControlSession({ prompt, contextDoc, contextSelection } = {}) {
+    if (controlStatus.value === 'running') {
+      // Already running — send prompt to existing session instead
+      return sendControlMessage(prompt)
+    }
+    if (!activeAgentId.value) return
+
+    const agent = configuredAgents.value.find(a => a.id === activeAgentId.value)
+    if (!agent) return
+
+    const sessionId = crypto.randomUUID()
+    const cwd = targetDir.value || workspacePath.value
+
+    controlStatus.value = 'starting'
+    controlMessages.value = []
+    controlTokenCount.value = 0
+    controlHasRealTokens.value = false
+    controlStreamBuffer.value = ''
+    controlLineBuffer.value = ''
+
+    // Auto-inject current doc context if available and not explicitly provided
+    const docPath = contextDoc || currentFile.value
+    const docContent = contextSelection || (currentFile.value && !contextDoc ? currentContent.value : null)
+    
+    // Workspace name (last dir segment)
+    if (workspacePath.value) {
+      const wsName = workspacePath.value.split('/').pop() || workspacePath.value
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'context',
+        content: `workspace: ${wsName}`,
+        type: 'context-injection',
+        timestamp: Date.now()
+      })
+    }
+    if (docPath) {
+      const docName = docPath.split('/').pop()?.replace(/\.md$/, '') || docPath
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'context',
+        content: `doc: ${docName}`,
+        type: 'context-injection',
+        timestamp: Date.now()
+      })
+    }
+
+    // Add user message
+    if (prompt) {
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: prompt,
+        type: 'user',
+        timestamp: Date.now()
+      })
+    }
+
+    // Build full prompt. Two strategies:
+    //  • injectContext agents (e.g. Pi): the live workspace is embedded inline so the agent
+    //    never has to make permission-gated tool calls just to read; it edits files directly.
+    //  • everyone else: a hint pointing at the Canonic MCP server.
+    let fullPrompt = prompt || ''
+    if (agent.injectContext) {
+      fullPrompt = buildInlineWorkspaceContext(docPath, docContent) + '\n\n' + fullPrompt
+    } else {
+      let toolHint = ''
+      if (mcpPort.value) {
+        const tools = ['read_doc', 'write_doc', 'create_doc', 'list_docs', 'post_comment', 'read_comments', 'start_session', 'get_workspace_info']
+        toolHint = `\n\n<available_tools>\nYou have access to Canonic MCP tools. Use them to interact with the workspace:\n${tools.map(t => '- ' + t).join('\n')}\n\nTo post a comment on a doc, use post_comment with path, text, and optional anchor (quotedText).\nTo read a doc, use read_doc with the relative path.\n</available_tools>`
+      }
+      if (docContent) {
+        fullPrompt = `<current_document path="${docPath || 'untitled'}">\n${docContent}\n</current_document>${toolHint}\n\n${fullPrompt}`
+      } else if (toolHint) {
+        fullPrompt = toolHint + '\n\n' + fullPrompt
+      }
+    }
+
+    try {
+      const mcpP = mcpPort.value || 0
+
+      // Auto-register MCP for preset agents (first session only). Skipped for injectContext
+      // agents — they get data inline and don't use the MCP server.
+      if (agent.type === 'preset' && agent.presetId && mcpP && !agent.injectContext) {
+        const mcp = await checkMcpRegistration(agent.presetId)
+        if (!mcp.registered && !mcp.optedOut && !mcpOptOuts.value[agent.presetId]) {
+          await registerMcp(agent.presetId)
+        }
+      }
+
+      const result = await api.agentControl.startSession({
+        sessionId,
+        agentId: agent.type === 'preset' ? agent.presetId : 'custom',
+        customBinary: agent.type === 'custom' ? agent.binary : undefined,
+        customArgs: agent.type === 'custom' ? agent.args : undefined,
+        cwd,
+        prompt: fullPrompt,
+        model: activeModel.value,
+        effort: activeEffort.value,
+        mcpPort: mcpP
+      })
+
+      if (result.error) {
+        controlStatus.value = 'error'
+        const hint = result.notInstalled && result.installHint
+          ? `\nInstall it with: ${result.installHint}`
+          : ''
+        controlMessages.value.push({
+          id: crypto.randomUUID(),
+          role: 'agent',
+          content: `Error: ${result.error}${hint}`,
+          type: 'error',
+          notInstalled: result.notInstalled || false,
+          installHint: result.installHint || null,
+          timestamp: Date.now()
+        })
+        return
+      }
+
+      controlSession.value = {
+        id: sessionId,
+        agentId: activeAgentId.value,
+        agentName: agent.name,
+        model: activeModel.value,
+        effort: activeEffort.value,
+        flavor: activeFlavor.value,
+        outputFormat: agent.outputFormat,
+        cwd,
+        status: 'running',
+        startedAt: Date.now(),
+        pid: result.pid
+      }
+      controlStatus.value = 'running'
+    } catch (err) {
+      controlStatus.value = 'error'
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'agent',
+        content: `Failed to start agent: ${err.message}`,
+        type: 'error',
+        timestamp: Date.now()
+      })
+    }
+  }
+
+  function handleControlStdout({ sessionId, text }) {
+    if (!controlSession.value || controlSession.value.id !== sessionId) return
+    
+    // Try to parse JSON-mode output (Pi --mode json, etc.)
+    controlStreamBuffer.value += text
+
+    // Single-object 'json' agents (Gemini) emit ONE pretty-printed JSON object at completion.
+    // Its lines are not individually valid JSON, so the JSONL path below would dump each line
+    // as a raw text bubble. Accumulate silently and parse the whole buffer once at exit.
+    if (controlSession.value.outputFormat === 'json') {
+      if (!controlHasRealTokens.value) {
+        controlTokenCount.value = Math.ceil(controlStreamBuffer.value.length / 4)
+      }
+      return
+    }
+
+    // JSONL: each event is one line, but a stdout chunk can split a line mid-way.
+    // Carry the incomplete trailing line over to the next chunk so it parses whole.
+    const buffered = controlLineBuffer.value + text
+    const lines = buffered.split('\n')
+    let remainder = lines.pop() || ''  // last element: may be a complete line w/o trailing \n
+    // If the remainder is itself valid JSON, the line was complete (agent emitted no
+    // trailing newline) — consume it now; otherwise hold it for the next chunk.
+    if (remainder.trim()) {
+      try { handleJsonEvent(JSON.parse(remainder.trim())); remainder = '' } catch { /* incomplete — keep */ }
+    }
+    controlLineBuffer.value = remainder
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        handleJsonEvent(JSON.parse(line.trim()))
+      } catch {
+        // Not JSON — raw text mode (opencode etc.); show as-is.
+        pushAgentText(line)
+      }
+    }
+
+    // Char-estimate fallback — only until the agent reports real usage tokens.
+    if (!controlHasRealTokens.value) {
+      controlTokenCount.value = Math.ceil(controlStreamBuffer.value.length / 4)
+    }
+  }
+
+  // ── Canonical message pushers (shared by all agent schemas) ──────────────
+  // Guard against an identical message landing back-to-back (e.g. an agent that re-emits
+  // its final text, or a duplicated stdout delivery). A genuine repeat is rare in chat;
+  // a doubled bubble is the common failure, so suppress consecutive exact matches.
+  function isDuplicateOfLast(type, content, toolName) {
+    const last = controlMessages.value[controlMessages.value.length - 1]
+    return !!last && last.type === type && last.content === content && last.toolName === toolName
+  }
+  function pushAgentText(text) {
+    if (!text || !text.trim()) return
+    if (isDuplicateOfLast('agent', text, undefined)) return
+    controlMessages.value.push({
+      id: crypto.randomUUID(), role: 'agent', content: text, type: 'agent', timestamp: Date.now()
+    })
+  }
+  function pushToolCall(toolName, toolArgs) {
+    const content = JSON.stringify(toolArgs || {}, null, 2)
+    if (isDuplicateOfLast('tool-call', content, toolName || 'unknown')) return
+    controlMessages.value.push({
+      id: crypto.randomUUID(), role: 'agent',
+      content,
+      type: 'tool-call',
+      toolName: toolName || 'unknown',
+      toolSummary: Object.keys(toolArgs || {}).slice(0, 2).join(', '),
+      timestamp: Date.now()
+    })
+  }
+  function pushToolResult(result) {
+    if (result == null) return
+    const text = typeof result === 'string' ? result : JSON.stringify(result)
+    controlMessages.value.push({
+      id: crypto.randomUUID(), role: 'context',
+      content: `result: ${text.slice(0, 200)}`, type: 'context-injection', timestamp: Date.now()
+    })
+  }
+  function pushAgentError(msg) {
+    controlMessages.value.push({
+      id: crypto.randomUUID(), role: 'agent', content: `Error: ${msg || 'Unknown error'}`,
+      type: 'error', timestamp: Date.now()
+    })
+  }
+  // Real token usage from an agent's usage object. Once seen we trust it and stop estimating.
+  function setRealTokens(usage) {
+    if (!usage) return
+    const input = usage.input_tokens ?? usage.inputTokens ?? usage.prompt_tokens ?? usage.input ?? 0
+    const output = usage.output_tokens ?? usage.outputTokens ?? usage.completion_tokens ?? usage.output ?? 0
+    // New tokens only. Some agents (Pi) fold cached-context reads into `totalTokens`
+    // (e.g. input 27 + output 29 + cacheRead 5504 = 5560) — counting cache reads makes a
+    // "say hi" look like thousands of tokens. Prefer input+output; only fall back to a
+    // reported total when neither is present.
+    const total = (input + output) > 0
+      ? (input + output)
+      : (usage.totalTokens ?? usage.total_tokens ?? usage.total ?? 0)
+    if (total > 0) {
+      controlTokenCount.value = total
+      controlHasRealTokens.value = true
+    }
+  }
+
+  function handleJsonEvent(event) {
+    if (!event || typeof event !== 'object') return
+
+    // Capture the agent's own session/thread id from any event that carries one, so
+    // "Open in terminal" can hand off the exact session (claude --resume <id>, etc.).
+    if (controlSession.value && !controlSession.value.agentSessionId) {
+      const sid = event.session_id || event.thread_id || event.sessionId || event.threadId || event.sessionID
+      if (sid) controlSession.value.agentSessionId = sid
+    }
+    // Capture the real model the session is running once the agent reports it, so the UI
+    // can show the concrete model instead of "default".
+    const reportedModel = event.model || event.message?.model
+    if (reportedModel && controlSession.value) {
+      controlSession.value.model = reportedModel
+      if (!activeModel.value) activeModel.value = reportedModel
+    }
+
+    // ── Claude Code stream-json schema ──────────────────────────────────────
+    // {type:'system',subtype:'init',session_id}, {type:'assistant',message:{content[],usage}},
+    // {type:'user',message:{content[tool_result]}}, {type:'result',result,usage}
+    if (event.type === 'system' && event.subtype === 'init') {
+      if (event.session_id && controlSession.value) controlSession.value.agentSessionId = event.session_id
+      return
+    }
+    if (event.type === 'assistant' && event.message) {
+      const blocks = Array.isArray(event.message.content) ? event.message.content : []
+      for (const b of blocks) {
+        if (b.type === 'text') pushAgentText(b.text)
+        else if (b.type === 'tool_use') pushToolCall(b.name, b.input)
+      }
+      setRealTokens(event.message.usage)
+      return
+    }
+    if (event.type === 'user' && event.message) {
+      const blocks = Array.isArray(event.message.content) ? event.message.content : []
+      for (const b of blocks) {
+        if (b.type === 'tool_result') {
+          const c = Array.isArray(b.content) ? b.content.map(x => x.text || '').join('') : b.content
+          pushToolResult(c)
+        }
+      }
+      return
+    }
+    if (event.type === 'result') {
+      // Final summary event. Show result text only if nothing streamed already.
+      const streamed = controlMessages.value.some(m => m.role === 'agent' && m.type === 'agent')
+      if (!streamed && event.result) pushAgentText(event.result)
+      if (event.subtype && event.subtype !== 'success') pushAgentError(event.error || event.subtype)
+      setRealTokens(event.usage)
+      return
+    }
+
+    // ── Codex JSONL schema (exec --json) ────────────────────────────────────
+    // {type:'item.completed',item:{type:'agent_message',text}} | item.type 'command_execution'
+    // {type:'token_count',info:{total_token_usage:{input_tokens,output_tokens}}}
+    if (event.type === 'item.completed' && event.item) {
+      const it = event.item
+      if (it.type === 'agent_message') pushAgentText(it.text || it.message)
+      else if (it.type === 'reasoning') pushToolResult(it.text)
+      else if (it.type === 'command_execution' || it.type === 'tool_call') pushToolCall(it.command || it.name, it.arguments || { command: it.command })
+      return
+    }
+    if (event.type === 'token_count') {
+      setRealTokens(event.info?.total_token_usage || event.info || event)
+      return
+    }
+    // Legacy Codex: {msg:{type:'agent_message',message}}
+    if (event.msg && typeof event.msg === 'object') {
+      if (event.msg.type === 'agent_message') pushAgentText(event.msg.message || event.msg.text)
+      return
+    }
+
+    // ── Pi schema (--mode json) ─────────────────────────────────────────────
+    // message_update = streaming text/thinking deltas (skip — they flood, full text
+    // arrives in message_end). message_end {message:{content[thinking|text],usage,model}}.
+    // turn_end/agent_end = final wrap-up; trust their usage totals.
+    if (event.type === 'message_update' || event.type === 'tool_execution_update') return
+    if (event.type === 'tool_execution_start') {
+      pushToolCall(event.toolName, event.args)
+      return
+    }
+    if (event.type === 'tool_execution_end') {
+      const text = Array.isArray(event.result?.content)
+        ? event.result.content.map(c => c.text || '').join('')
+        : event.result
+      if (event.isError) pushAgentError(typeof text === 'string' ? text : 'tool error')
+      else pushToolResult(text)
+      return
+    }
+    if (event.type === 'message_end' && event.message) {
+      // Pi emits message_end for BOTH the echoed user prompt and the assistant reply —
+      // only surface the assistant's, else the user's text repeats back as an agent bubble.
+      if (event.message.role === 'assistant') {
+        // Surface ONLY text here. Tool calls arrive separately via tool_execution_start
+        // and are also embedded in this content array — pushing them here too would
+        // double every tool bubble. Skip thinking/toolCall blocks.
+        const blocks = Array.isArray(event.message.content) ? event.message.content : []
+        for (const b of blocks) {
+          if (b.type === 'text') pushAgentText(b.text)
+        }
+        setRealTokens(event.message.usage)
+      }
+      return
+    }
+    if ((event.type === 'turn_end' || event.type === 'agent_end') && event.message) {
+      if (event.message.role === 'assistant') setRealTokens(event.message.usage)
+      return
+    }
+
+    // ── Gemini CLI schema (--output-format json) ────────────────────────────
+    // One object at completion: {session_id, response, stats:{models:{<name>:{tokens:{...}}}}}.
+    if (typeof event.response === 'string' && event.stats) {
+      pushAgentText(event.response)
+      const models = event.stats.models || {}
+      const names = Object.keys(models)
+      if (names.length && controlSession.value) {
+        controlSession.value.model = names[names.length - 1]  // main model (last) over router
+        if (!activeModel.value) activeModel.value = controlSession.value.model
+      }
+      // New tokens across every model used (prompt + generated). Skip cached reads.
+      let input = 0, output = 0
+      for (const n of names) {
+        const t = models[n].tokens || {}
+        input += t.prompt ?? t.input ?? 0
+        output += (t.candidates ?? 0) + (t.thoughts ?? 0)
+      }
+      setRealTokens({ input, output })
+      return
+    }
+
+    // ── OpenCode schema (--format json) ─────────────────────────────────────
+    // Every event carries top-level sessionID + a `part`. text parts = assistant
+    // text (complete, not deltas — distinct part ids). tool_use = a tool call with
+    // part.state.input. step_finish carries token usage (input/output exclude cache).
+    if (event.part && typeof event.sessionID === 'string') {
+      const p = event.part
+      if (event.type === 'text' || p.type === 'text') {
+        pushAgentText(p.text)
+      } else if (event.type === 'tool_use' || p.type === 'tool') {
+        pushToolCall(p.tool || p.name, p.state?.input || p.input)
+        if (p.state?.output != null) pushToolResult(p.state.output)
+      } else if (event.type === 'step_finish' || p.type === 'step-finish') {
+        setRealTokens(p.tokens)
+      }
+      return
+    }
+
+    // ── Generic schema ──────────────────────────────────────────────────────
+    switch (event.type) {
+      case 'session':
+        if (event.id && controlSession.value) controlSession.value.agentSessionId = event.id
+        break
+      case 'assistant':
+        pushAgentText(event.content)
+        setRealTokens(event.usage)
+        break
+      case 'tool_call':
+      case 'tool_use':
+        pushToolCall(event.tool || event.name, event.input || event.arguments)
+        break
+      case 'tool_result':
+        pushToolResult(event.content || event.output)
+        break
+      case 'error':
+        pushAgentError(event.message || event.error)
+        break
+      case 'usage':
+        setRealTokens(event.usage || event)
+        break
+      case 'done':
+      case 'complete':
+        setRealTokens(event.usage)
+        break
+      default:
+        break
+    }
+  }
+
+  function handleControlStderr({ sessionId, text }) {
+    if (!controlSession.value || controlSession.value.id !== sessionId) return
+    // Show stderr as de-emphasis context — crucial for debugging agent errors
+    if (text.trim()) {
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'context',
+        content: `stderr: ${text.trim()}`,
+        type: 'context-injection',
+        timestamp: Date.now()
+      })
+    }
+    controlStreamBuffer.value += text
+    if (!controlHasRealTokens.value) {
+      controlTokenCount.value = Math.ceil(controlStreamBuffer.value.length / 4)
+    }
+  }
+
+  function handleControlExit({ sessionId, code, signal }) {
+    if (!controlSession.value || controlSession.value.id !== sessionId) return
+
+    // For -p/print mode agents, exit is normal — finalize response from stream buffer.
+    const buf = controlStreamBuffer.value
+    // First try the WHOLE buffer as one JSON object (Gemini --output-format json and any
+    // other single-object agent). If that parses, it's the complete result.
+    let parsedWhole = false
+    if (buf.trim().startsWith('{')) {
+      try { handleJsonEvent(JSON.parse(buf.trim())); parsedWhole = true } catch {}
+    }
+    // Otherwise treat as JSONL and parse any remaining lines.
+    if (!parsedWhole) {
+      const lines = buf.split('\n')
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          const event = JSON.parse(line.trim())
+          handleJsonEvent(event)
+        } catch {}
+      }
+    }
+
+    // If no assistant message was parsed, show raw output
+    const hasResponse = controlMessages.value.some(m => m.role === 'agent' && m.type === 'agent')
+    if (!hasResponse && buf.trim()) {
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'agent',
+        content: buf.trim(),
+        type: 'agent',
+        timestamp: Date.now()
+      })
+    }
+
+    if (code !== 0 && code !== null) {
+      controlSession.value.status = 'error'
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'agent',
+        content: `Agent exited with code ${code}`,
+        type: 'error',
+        timestamp: Date.now()
+      })
+    } else {
+      controlSession.value.status = 'ended'
+    }
+    controlStatus.value = controlSession.value.status
+    controlStreamBuffer.value = ''
+    controlLineBuffer.value = ''
+
+    saveControlSessionToHistory()
+  }
+
+  function handleControlError({ sessionId, error }) {
+    if (!controlSession.value || controlSession.value.id !== sessionId) return
+    controlSession.value.status = 'error'
+    controlStatus.value = 'error'
+    controlMessages.value.push({
+      id: crypto.randomUUID(),
+      role: 'agent',
+      content: `Error: ${error}`,
+      type: 'error',
+      timestamp: Date.now()
+    })
+    saveControlSessionToHistory()
+  }
+
+  async function stopControlSession() {
+    if (!controlSession.value) return
+    await api.agentControl.stopSession({ sessionId: controlSession.value.id })
+    controlSession.value.status = 'ended'
+    controlStatus.value = 'ended'
+    saveControlSessionToHistory()
+  }
+
+  async function sendControlMessage(prompt) {
+    if (!controlSession.value || !prompt) return
+    // Add user message to chat (keep the existing thread visible across turns)
+    controlMessages.value.push({
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: prompt,
+      type: 'user',
+      timestamp: Date.now()
+    })
+
+    // A still-running agent (long-lived stdin loop) takes the prompt over stdin.
+    if (controlStatus.value === 'running' && api.agentControl?.sendMessage) {
+      await api.agentControl.sendMessage({
+        sessionId: controlSession.value.id,
+        prompt
+      })
+      return
+    }
+
+    // Otherwise the single-shot agent has already exited (print mode). Resume its session
+    // so the conversation continues server-side instead of spawning a fresh thread.
+    await resumeControlSession(prompt)
+  }
+
+  // Re-spawn an exited single-shot agent against its own session id, preserving the chat
+  // thread. Relies on agentSessionId having been captured from the agent's structured output.
+  async function resumeControlSession(prompt) {
+    const sess = controlSession.value
+    if (!sess) return
+
+    const agent = configuredAgents.value.find(a => a.id === sess.agentId)
+    const previousSessionId = sess.agentSessionId
+
+    if (!api.agentControl?.resume || !previousSessionId) {
+      sess.status = 'error'
+      controlStatus.value = 'error'
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'agent',
+        content: 'Cannot continue this conversation — no resumable session id was captured. Start a new session.',
+        type: 'error',
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    // Reset per-turn streaming state but KEEP controlMessages (the thread).
+    controlStreamBuffer.value = ''
+    controlLineBuffer.value = ''
+    sess.status = 'running'
+    controlStatus.value = 'running'
+
+    const result = await api.agentControl.resume({
+      sessionId: sess.id,
+      agentId: agent?.type === 'custom' ? 'custom' : (agent?.presetId || sess.agentId),
+      previousSessionId,
+      cwd: sess.cwd,
+      prompt,
+      model: sess.model,
+      effort: sess.effort,
+      mcpPort: mcpPort.value || 0
+    })
+
+    if (result?.error) {
+      sess.status = 'error'
+      controlStatus.value = 'error'
+      controlMessages.value.push({
+        id: crypto.randomUUID(),
+        role: 'agent',
+        content: `Error: ${result.error}`,
+        type: 'error',
+        timestamp: Date.now()
+      })
+    }
+  }
+
+  async function openInTerminal() {
+    if (!controlSession.value) return
+    await api.agentControl.openInTerminal({
+      sessionId: controlSession.value.id,
+      agentId: controlSession.value.agentId,
+      resumeId: controlSession.value.id,
+      agentSessionId: controlSession.value.agentSessionId || null
+    })
+  }
+
+  function saveControlSessionToHistory() {
+    if (!controlSession.value || controlMessages.value.length === 0) return
+    const firstUserMsg = controlMessages.value.find(m => m.role === 'user')
+    const title = firstUserMsg?.content?.slice(0, 40) || 'Empty session'
+    const entry = {
+      id: controlSession.value.id,
+      title: title + (firstUserMsg?.content?.length > 40 ? '...' : ''),
+      agentId: controlSession.value.agentId,
+      agentName: controlSession.value.agentName,
+      model: controlSession.value.model,
+      effort: controlSession.value.effort,
+      flavor: controlSession.value.flavor,
+      cwd: controlSession.value.cwd,
+      status: controlSession.value.status,
+      startedAt: controlSession.value.startedAt,
+      endedAt: Date.now(),
+      messageCount: controlMessages.value.length
+    }
+    // Update if already exists, else add
+    const idx = controlHistory.value.findIndex(h => h.id === entry.id)
+    if (idx >= 0) {
+      controlHistory.value[idx] = entry
+    } else {
+      controlHistory.value.unshift(entry)
+    }
+    // Persist
+    if (api.agentControl?.saveHistory) {
+      api.agentControl.saveHistory({ session: entry })
+    }
+  }
+
+  async function loadControlHistory() {
+    if (api.agentControl?.getHistory) {
+      controlHistory.value = await api.agentControl.getHistory()
+    }
+  }
+
+  async function deleteControlHistoryEntry(sessionId) {
+    if (api.agentControl?.deleteHistory) {
+      await api.agentControl.deleteHistory({ sessionId })
+    }
+    controlHistory.value = controlHistory.value.filter(h => h.id !== sessionId)
+  }
+
+  // ── AI Control: MCP actions ─────────────────────────────────────────────
+  async function loadMcpPort() {
+    if (api.agentControl?.getMcpPort) {
+      const result = await api.agentControl.getMcpPort()
+      if (result.port) mcpPort.value = result.port
+    }
+  }
+
+  async function checkMcpRegistration(agentId) {
+    if (api.agentControl?.checkMcp) {
+      return await api.agentControl.checkMcp({ agentId })
+    }
+    return { registered: false }
+  }
+
+  async function registerMcp(agentId) {
+    if (api.agentControl?.registerMcp) {
+      return await api.agentControl.registerMcp({ agentId, port: mcpPort.value })
+    }
+    return { ok: false }
+  }
+
+  async function optOutMcp(agentId) {
+    if (api.agentControl?.optOutMcp) {
+      await api.agentControl.optOutMcp({ agentId })
+    }
+    mcpOptOuts.value[agentId] = true
+  }
+
   async function favoritePeer(id) {
     await api.peers.favorite(id);
     favoritedPeerIds.add(id);
@@ -2002,5 +2938,54 @@ export const useAppStore = defineStore("app", () => {
     newAiChat,
     loadAiChatSession,
     deleteAiChat,
+
+    // ── AI Control exports ──
+    agentPresets,
+    configuredAgents,
+    activeAgentId,
+    activeModel,
+    activeEffort,
+    activeFlavor,
+    targetDir,
+    controlSession,
+    controlMessages,
+    controlStatus,
+    controlTokenCount,
+    controlHasRealTokens,
+    controlStreamBuffer,
+    controlLineBuffer,
+    controlHistory,
+    mcpPort,
+    mcpOptOuts,
+    availableModels,
+    modelsLoading,
+    defaultModelHint,
+    openModelSelector,
+    loadAgentPresets,
+    loadConfiguredAgents,
+    addCustomAgent,
+    removeCustomAgent,
+    setActiveAgent,
+    setAgentModel,
+    setAgentEffort,
+    setActiveFlavor,
+    setTargetDir,
+    pickTargetDirectory,
+    hydrateAgentControlPrefs,
+    discoverAgentModels,
+    startControlSession,
+    sendControlMessage,
+    handleControlStdout,
+    handleControlStderr,
+    handleControlExit,
+    handleControlError,
+    stopControlSession,
+    openInTerminal,
+    loadControlHistory,
+    deleteControlHistoryEntry,
+    checkMcpRegistration,
+    loadMcpPort,
+    registerMcp,
+    optOutMcp,
   };
 });

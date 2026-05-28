@@ -268,4 +268,58 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.removeAllListeners('agent:session-done')
     },
   },
+
+  // AI Control — agent management, sessions, MCP registration
+  agentControl: {
+    // Presets
+    getPresets: () => ipcRenderer.invoke('agent-control:get-presets'),
+    getModels: (agentId) => ipcRenderer.invoke('agent-control:get-models', agentId),
+    checkInstalled: (agentId) => ipcRenderer.invoke('agent-control:check-installed', agentId),
+
+    // Custom agents
+    getCustomAgents: () => ipcRenderer.invoke('agent-control:get-custom-agents'),
+    addCustomAgent: (config) => ipcRenderer.invoke('agent-control:add-custom-agent', config),
+    removeCustomAgent: (id) => ipcRenderer.invoke('agent-control:remove-custom-agent', id),
+
+    // Sessions
+    startSession: (params) => ipcRenderer.invoke('agent-control:start-session', params),
+    sendMessage: (params) => ipcRenderer.invoke('agent-control:send-message', params),
+    resume: (params) => ipcRenderer.invoke('agent-control:resume', params),
+    stopSession: (sessionId) => ipcRenderer.invoke('agent-control:stop-session', sessionId),
+    openInTerminal: (params) => ipcRenderer.invoke('agent-control:open-terminal', params),
+
+    // Session events (main → renderer). Each registration replaces any prior listener
+    // on the same channel — otherwise a re-run of the renderer setup (HMR in dev, store
+    // re-init) stacks listeners and every stdout chunk gets handled N times = dup output.
+    onStdout: (cb) => { ipcRenderer.removeAllListeners('agent-control:stdout'); ipcRenderer.on('agent-control:stdout', (_, data) => cb(data)) },
+    onStderr: (cb) => { ipcRenderer.removeAllListeners('agent-control:stderr'); ipcRenderer.on('agent-control:stderr', (_, data) => cb(data)) },
+    onExit: (cb) => { ipcRenderer.removeAllListeners('agent-control:exit'); ipcRenderer.on('agent-control:exit', (_, data) => cb(data)) },
+    onError: (cb) => { ipcRenderer.removeAllListeners('agent-control:error'); ipcRenderer.on('agent-control:error', (_, data) => cb(data)) },
+    onCopyToClipboard: (cb) => { ipcRenderer.removeAllListeners('agent-control:copy-to-clipboard'); ipcRenderer.on('agent-control:copy-to-clipboard', (_, data) => cb(data)) },
+    onTerminalCommand: (cb) => { ipcRenderer.removeAllListeners('agent-control:terminal-command'); ipcRenderer.on('agent-control:terminal-command', (_, data) => cb(data)) },
+    onCommentsIngested: (cb) => { ipcRenderer.removeAllListeners('agent-control:comments-ingested'); ipcRenderer.on('agent-control:comments-ingested', (_, data) => cb(data)) },
+    removeListeners: () => {
+      ipcRenderer.removeAllListeners('agent-control:stdout')
+      ipcRenderer.removeAllListeners('agent-control:stderr')
+      ipcRenderer.removeAllListeners('agent-control:exit')
+      ipcRenderer.removeAllListeners('agent-control:error')
+      ipcRenderer.removeAllListeners('agent-control:copy-to-clipboard')
+      ipcRenderer.removeAllListeners('agent-control:terminal-command')
+      ipcRenderer.removeAllListeners('agent-control:comments-ingested')
+    },
+
+    // History
+    getHistory: () => ipcRenderer.invoke('agent-control:get-history'),
+    saveHistory: (session) => ipcRenderer.invoke('agent-control:save-history', session),
+    deleteHistory: (sessionId) => ipcRenderer.invoke('agent-control:delete-history', sessionId),
+
+    // MCP registration
+    getMcpPort: () => ipcRenderer.invoke('agent-control:get-mcp-port'),
+    checkMcp: (agentId) => ipcRenderer.invoke('agent-control:check-mcp', agentId),
+    registerMcp: (params) => ipcRenderer.invoke('agent-control:register-mcp', params),
+    optOutMcp: (agentId) => ipcRenderer.invoke('agent-control:opt-out-mcp', agentId),
+
+    // Folder picker
+    pickDirectory: () => ipcRenderer.invoke('dialog:open-directory'),
+  },
 });

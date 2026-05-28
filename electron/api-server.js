@@ -3,6 +3,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const mcp = require('./mcp-server')
 
 const CANONIC_DIR = path.join(os.homedir(), '.config', 'canonic')
 const LOCKFILE = path.join(CANONIC_DIR, 'api.lock')
@@ -41,6 +42,7 @@ let server = null
 let token = null
 let activeSession = null
 let onEventCallback = null
+let activePort = null  // live listening port, kept in-memory so callers needn't read the lockfile
 
 function generateToken() {
   return crypto.randomBytes(16).toString('hex')
@@ -107,8 +109,17 @@ async function handleRequest(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1')
   const { pathname } = url
 
+  // ── MCP routes (delegated to mcp-server.js) ──
+  if (pathname === '/mcp') {
+    return await mcp.handleMcpRequest(req, res)
+  }
+
+  if (pathname === '/mcp/sse' || pathname === '/sse') {
+    return mcp.handleSseRequest(req, res)
+  }
+
   if (req.method === 'GET' && pathname === '/ping') {
-    return sendJson(res, 200, { ok: true, version: getAppVersion() })
+    return sendJson(res, 200, { ok: true, version: getAppVersion(), mcp: true })
   }
 
   const knownRoutes = ['/session/start', '/session/cancel', '/comments', '/activity']
@@ -215,11 +226,14 @@ function start(onEvent) {
   return new Promise((resolve, reject) => {
     onEventCallback = onEvent
     token = generateToken()
+    mcp.setAuthToken(token)
+    mcp.setEventCallback(onEvent)
     server = http.createServer((req, res) => {
       handleRequest(req, res).catch((err) => sendJson(res, 500, { error: err.message }))
     })
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address()
+      activePort = port
       writeLockfile(port)
       resolve(port)
     })
@@ -230,8 +244,21 @@ function start(onEvent) {
 function stop() {
   deleteLockfile()
   activeSession = null
+  activePort = null
   server?.close()
   server = null
 }
 
-module.exports = { start, stop, submitAction, cancelSession }
+function getPort() {
+  return activePort
+}
+
+function setWorkspacePath(wsPath) {
+  mcp.setWorkspacePath(wsPath)
+}
+
+function getWorkspacePath() {
+  return mcp.getWorkspacePath()
+}
+
+module.exports = { start, stop, getPort, submitAction, cancelSession, setWorkspacePath, getWorkspacePath }

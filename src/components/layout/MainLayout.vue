@@ -218,10 +218,10 @@
                     </button>
                     <button
                         class="dropdown-item"
-                        @click="openMobileTab('right', 'ai')"
+                        @click="openMobileTab('right', 'implement')"
                     >
-                        <Sparkles :size="14" />
-                        <span>AI Assistant</span>
+                        <Bot :size="14" />
+                        <span>Implementation</span>
                     </button>
                     <button
                         class="dropdown-item"
@@ -430,12 +430,12 @@
                     <button
                         :class="[
                             'tab',
-                            store.rightPanelTab === 'ai' && 'active',
+                            store.rightPanelTab === 'implement' && 'active',
                         ]"
-                        @click="handleRightTabClick('ai')"
-                        title="AI"
+                        @click="handleRightTabClick('implement')"
+                        title="Implementation"
                     >
-                        <Sparkles :size="15" />
+                        <Bot :size="15" />
                     </button>
                     <button
                         :class="[
@@ -466,10 +466,10 @@
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
                 </div>
-                <!-- AIChat kept always-mounted so streaming survives focus/tab toggles -->
-                <AIChat
+                <!-- ImplementationPanel replaces old AI chat. AIChat.vue kept for BYOK inline completion transport. -->
+                <ImplementationPanel
                     v-show="
-                        store.rightPanelTab === 'ai' &&
+                        store.rightPanelTab === 'implement' &&
                         !store.rightPanelCollapsed
                     "
                 />
@@ -566,7 +566,7 @@ import {
     Type,
     Palette,
     MessageSquare,
-    Sparkles,
+    Bot,
     History,
     Share2,
     ArrowUpCircle,
@@ -586,6 +586,7 @@ import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
 import AIChat from "../panels/AIChat.vue";
+import ImplementationPanel from "../panels/ImplementationPanel.vue";
 import HistoryPanel from "../panels/HistoryPanel.vue";
 import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";

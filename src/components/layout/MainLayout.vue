@@ -725,6 +725,39 @@ function registerConfigThemes(themes) {
     }
 }
 
+function getSystemScheme() {
+    if (typeof window === "undefined") return "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+}
+
+function applyAutoTheme() {
+    const cfg = store.config;
+    if (!cfg?.theme?.auto) return;
+    const scheme = getSystemScheme();
+    const themeName = scheme === "dark" ? cfg.theme.dark : cfg.theme.light;
+    if (themeName) {
+        activeTheme.value = themeName;
+        storage.setItem(THEME_KEY, themeName);
+        applyTheme(themeName);
+    }
+}
+
+// Watch system color scheme changes
+let systemSchemeQuery = null;
+function watchSystemScheme() {
+    if (typeof window === "undefined") return;
+    if (systemSchemeQuery) systemSchemeQuery.removeEventListener("change", applyAutoTheme);
+    systemSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    systemSchemeQuery.addEventListener("change", applyAutoTheme);
+}
+
+// Re-apply auto-theme when config changes (e.g. user updates theme settings)
+watch(() => store.config?.theme, () => {
+    applyAutoTheme();
+}, { deep: true });
+
 // Close theme popover on outside click
 function onDocClick(e) {
     if (themePickerRef.value && !themePickerRef.value.contains(e.target)) {
@@ -823,6 +856,10 @@ onMounted(async () => {
         registerConfigThemes(store.config.themes);
     }
 
+    // Start watching system color scheme for auto-theme switching
+    watchSystemScheme();
+    applyAutoTheme();
+
     document.addEventListener("click", onDocClick, true);
     document.addEventListener("mouseup", handleGlobalMouseUp);
     document.addEventListener("mousedown", handleGlobalMouseDown);
@@ -884,6 +921,7 @@ onMounted(async () => {
                     if (store.config?.themes) {
                         registerConfigThemes(store.config.themes);
                     }
+                    applyAutoTheme();
                 } catch (err) {
                     console.error("Failed to reload config from menu:", err);
                 }

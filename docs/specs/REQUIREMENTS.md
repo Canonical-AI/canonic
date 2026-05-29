@@ -1467,10 +1467,54 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: a session spawns with a prompt
   then: a one-line workspace context is prepended to the typed prompt
 
+* scenario: curl-only agents get a deterministic REST playbook
+  given: the selected agent cannot use MCP natively (Pi)
+  when: a session spawns
+  then: the injected system prompt is a curl playbook with the live API base URL, instructing the agent to first GET /workspace and GET /doc, then read/write docs and post comments via curl
+
 * scenario: editor state pushed to the MCP server
   given: a workspace is open
   when: the user focuses a doc or changes the open tray
   then: the renderer pushes the focused doc and open-tray paths to the MCP server
+
+### REST API (curl agents)
+
+Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (same posture as /mcp), so agents that can't speak MCP can act with curl.
+
+* scenario: GET /workspace returns workspace state
+  given: a workspace is open
+  when: an agent sends GET /workspace
+  then: workspace name, path, branch, focused doc, open tray, and the doc file list are returned
+
+* scenario: GET /doc returns the focused doc when no path is given
+  given: the user has a focused doc
+  when: an agent sends GET /doc with no path
+  then: the focused doc path and content are returned
+
+* scenario: GET /doc returns a doc by path
+  given: a workspace is open with an existing doc
+  when: an agent sends GET /doc?path=<rel>
+  then: the doc path and content are returned
+
+* scenario: GET /doc with no path and no focused doc
+  given: no doc is focused
+  when: an agent sends GET /doc with no path
+  then: a 404 with an explanatory error is returned
+
+* scenario: POST /doc writes a doc
+  given: a workspace is open
+  when: an agent sends POST /doc with path and content
+  then: the file is written and the editor repaints via the file watcher
+
+* scenario: POST /comment posts a comment
+  given: a workspace is open
+  when: an agent sends POST /comment with path, text, and optional anchor
+  then: the comment is persisted and emitted to the renderer
+
+* scenario: GET /comment reads comments for a doc
+  given: a doc has open comments
+  when: an agent sends GET /comment?path=<rel>
+  then: the open comments for that doc are returned
 
 ### MCP Server
 

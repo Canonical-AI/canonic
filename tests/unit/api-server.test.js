@@ -3,9 +3,14 @@ import http from 'http'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { createRequire } from 'module'
 
 const LOCKFILE = path.join(os.homedir(), '.config', 'canonic', 'api.lock')
 const apiServer = await import('../../electron/api-server.js')
+// Use require (not import) so we share the SAME mcp-server instance api-server's
+// internal require() holds — vitest ESM import would give a separate copy whose
+// state (workspace path, editor focus) the server never sees.
+const mcp = createRequire(import.meta.url)('../../electron/mcp-server.js')
 
 let port, token
 const capturedEvents = []
@@ -232,5 +237,85 @@ describe('api-server', () => {
     const result = await apiServer.submitAction(sessionId, 'Implement this', '# content')
     expect(typeof result.error).toBe('string')
     expect(result.error.length).toBeGreaterThan(0)
+  })
+})
+
+// Token-free REST routes that back curl-only agents (Pi). Bound to localhost, no auth.
+describe('api-server REST (curl) routes', () => {
+  let ws
+  beforeAll(() => {
+    ws = fs.mkdtempSync(path.join(os.tmpdir(), 'canonic-rest-'))
+    fs.mkdirSync(path.join(ws, 'Specs'), { recursive: true })
+    fs.writeFileSync(path.join(ws, 'Specs', 'plan.md'), '# Plan\n\nfirst draft', 'utf-8')
+    mcp.setWorkspacePath(ws)
+    mcp.setEditorState({ focusedDoc: 'Specs/plan.md', openDocs: ['Specs/plan.md'] })
+  })
+  afterAll(() => {
+    mcp.setEditorState({ focusedDoc: null, openDocs: [] })
+    fs.rmSync(ws, { recursive: true, force: true })
+  })
+
+  it('GET /workspace returns name, focus, open tray and files without auth', async () => {
+    const res = await request('GET', '/workspace', null, false)
+    expect(res.status).toBe(200)
+    expect(res.body.focusedDoc).toBe('Specs/plan.md')
+    expect(res.body.openDocs).toEqual(['Specs/plan.md'])
+    expect(res.body.files.some(f => f.path === 'Specs/plan.md')).toBe(true)
+  })
+
+  it('GET /doc with no path returns the focused doc', async () => {
+    const res = await request('GET', '/doc', null, false)
+    expect(res.status).toBe(200)
+    expect(res.body.path).toBe('Specs/plan.md')
+    expect(res.body.content).toContain('first draft')
+  })
+
+  it('GET /doc?path returns that doc', async () => {
+    const res = await request('GET', '/doc?path=Specs/plan.md', null, false)
+    expect(res.status).toBe(200)
+    expect(res.body.content).toContain('# Plan')
+  })
+
+  it('GET /doc with no path and no focus returns 404', async () => {
+    mcp.setEditorState({ focusedDoc: null, openDocs: [] })
+    const res = await request('GET', '/doc', null, false)
+    expect(res.status).toBe(404)
+    mcp.setEditorState({ focusedDoc: 'Specs/plan.md', openDocs: ['Specs/plan.md'] })
+  })
+
+  it('POST /doc writes the doc', async () => {
+    const res = await request('POST', '/doc', { path: 'Specs/plan.md', content: '# Plan\n\nrewritten' }, false)
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+    expect(fs.readFileSync(path.join(ws, 'Specs', 'plan.md'), 'utf-8')).toContain('rewritten')
+  })
+
+  it('POST /doc requires path and content', async () => {
+    const res = await request('POST', '/doc', { path: 'Specs/plan.md' }, false)
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /comment posts a comment and fires onEvent; GET /comment reads it back', async () => {
+    capturedEvents.length = 0
+    const post = await request('POST', '/comment', {
+      path: 'Specs/plan.md', text: 'tighten this', anchor: { quotedText: 'first draft' },
+    }, false)
+    expect(post.status).toBe(200)
+    expect(typeof post.body.commentId).toBe('string')
+    expect(capturedEvents[0].type).toBe('comment')
+
+    const get = await request('GET', '/comment?path=Specs/plan.md', null, false)
+    expect(get.status).toBe(200)
+    expect(get.body.comments.some(c => c.text === 'tighten this')).toBe(true)
+
+    // cleanup the comment file this test created
+    const cdir = path.join(os.homedir(), '.config', 'canonic', 'comments')
+    const cfile = path.join(cdir, 'Specs_plan.md.json')
+    if (fs.existsSync(cfile)) fs.unlinkSync(cfile)
+  })
+
+  it('POST /comment requires path and text', async () => {
+    const res = await request('POST', '/comment', { path: 'Specs/plan.md' }, false)
+    expect(res.status).toBe(400)
   })
 })

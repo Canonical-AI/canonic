@@ -27,6 +27,9 @@ function setEditorState({ focusedDoc, openDocs } = {}) {
   _focusedDoc = focusedDoc || null
   _openDocs = Array.isArray(openDocs) ? openDocs : []
 }
+function getEditorState() {
+  return { focusedDoc: _focusedDoc, openDocs: _openDocs }
+}
 
 // Standing guidance returned in the MCP `initialize` result. Compliant clients (Claude, Codex,
 // Gemini, OpenCode) inject this into the agent's context once at connect — protocol-native, no
@@ -499,6 +502,8 @@ module.exports = {
   getWorkspacePath,
   setEventCallback,
   setEditorState,
+  getEditorState,
   buildInstructions,
-  setIpcSend
+  setIpcSend,
+  tools   // exposed so api-server can back token-free REST routes (curl-only agents like Pi)
 }

@@ -1486,6 +1486,11 @@ const emit = defineEmits(["close"]);
 const router = useRouter();
 const store = useAppStore();
 
+// Window transparency/blur only apply on macOS — hide those controls elsewhere.
+const isMac =
+    typeof navigator !== "undefined" &&
+    /Mac|iPhone|iPad/.test(navigator.platform || "");
+
 const buildInfo = `build ${__BUILD_COMMIT__} · ${__BUILD_BRANCH__}`;
 const activeTab = ref(props.initialTab);
 const { enabled: hintsEnabled } = useHints();
@@ -1728,18 +1733,21 @@ const allSettingsMetadata = [
         label: "Window transparency",
         desc: "Semi-transparent backgrounds for the main window.",
         tab: "appearance",
+        macOnly: true,
     },
     {
         id: "transparencyOpacity",
         label: "Transparency opacity",
         desc: "Control how see-through the window is.",
         tab: "appearance",
+        macOnly: true,
     },
     {
         id: "blur",
         label: "Window blur",
         desc: "Native frosted-glass blur (macOS).",
         tab: "appearance",
+        macOnly: true,
     },
     {
         id: "grain",
@@ -1864,12 +1872,13 @@ const allSettingsMetadata = [
 ];
 
 function shouldShow(id, tab) {
+    const item = allSettingsMetadata.find((i) => i.id === id);
+    if (item?.macOnly && !isMac) return false;
     if (activeTab.value !== "all") {
         return activeTab.value === tab;
     }
     const query = searchQuery.value.toLowerCase().trim();
     if (!query) return true;
-    const item = allSettingsMetadata.find((i) => i.id === id);
     if (!item) return false;
     return (
         item.label.toLowerCase().includes(query) ||
@@ -1884,6 +1893,7 @@ function anyVisibleInTab(tabKey) {
     return allSettingsMetadata.some(
         (i) =>
             i.tab === tabKey &&
+            !(i.macOnly && !isMac) &&
             (i.label.toLowerCase().includes(query) ||
                 i.desc.toLowerCase().includes(query)),
     );

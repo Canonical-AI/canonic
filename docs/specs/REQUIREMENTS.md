@@ -1246,6 +1246,38 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user opens workspace W2
   then: the tab strip is empty in W2
 
+## Window Chrome — Transparency & Blur (CHROME)
+
+* scenario: macOS shows transparency and blur controls
+  given: the app runs on macOS
+  when: the user opens Settings → Appearance
+  then: both "Window transparency" (with opacity slider) and "Window blur" controls are shown
+
+* scenario: Linux and Windows hide transparency and blur controls
+  given: the app runs on Linux or Windows
+  when: the user opens Settings → Appearance
+  then: the "Window transparency", "Transparency opacity", and "Window blur" controls are not shown, and searching settings for "blur" or "transparency" returns no result
+
+* scenario: macOS vibrancy blur frosts the desktop behind the window
+  given: the app runs on macOS and "Window blur" is on
+  when: the window is displayed
+  then: the OS vibrancy material ("under-window") renders a frosted-glass blur of the desktop behind the panels
+
+* scenario: macOS transparency tints panels over the blur
+  given: the app runs on macOS and "Window transparency" is on at opacity X
+  when: the window is displayed
+  then: panel backgrounds are semi-transparent at opacity X so the vibrancy/desktop shows through
+
+* scenario: Linux and Windows windows stay fully opaque
+  given: the app runs on Linux or Windows
+  when: the window is displayed
+  then: the window is created non-transparent with a solid background color, the `window-transparency` class is not applied, and no blur is attempted regardless of stored config
+
+* scenario: changing blur or transparency applies without restart on macOS
+  given: the app runs on macOS
+  when: the user toggles "Window blur" or "Window transparency" in Settings
+  then: the window vibrancy and background update immediately and the choice persists across restarts
+
 ## External File Sync (EXT)
 
 * scenario: file added outside the app appears in the sidebar

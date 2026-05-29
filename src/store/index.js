@@ -539,7 +539,13 @@ export const useAppStore = defineStore("app", () => {
   // ── PREFERENCES & APP CONFIGURATION ──
   // ==========================================
   function applyAppearanceSettings(cfg) {
-    const transparencyOn = cfg?.windowTransparency !== false;
+    // Transparency only renders correctly on macOS (vibrancy). On
+    // Linux/Windows the semi-transparent panels would show the raw desktop
+    // or the window's solid backgroundColor, so keep panels opaque there.
+    const isMac =
+      typeof navigator !== "undefined" &&
+      /Mac|iPhone|iPad/.test(navigator.platform || "");
+    const transparencyOn = isMac && cfg?.windowTransparency !== false;
     document.documentElement.classList.toggle(
       "window-transparency",
       transparencyOn,

@@ -263,7 +263,10 @@ function createWindow() {
   const isMac = process.platform === "darwin";
   const isWin = process.platform === "win32";
   const blurEnabled = isMac && cfg.windowBlur === true;
-  const transparencyEnabled = cfg.windowTransparency !== false;
+  // Transparency/vibrancy only on macOS. Linux/Windows have no reliable
+  // compositor blur, so a transparent window just shows the raw desktop —
+  // keep them fully opaque.
+  const transparencyEnabled = isMac && cfg.windowTransparency !== false;
   const needsTransparent = blurEnabled || transparencyEnabled;
 
   mainWindow = new BrowserWindow({
@@ -1838,7 +1841,8 @@ function setupIpcHandlers() {
     // Apply window effects at runtime
     applyWindowEffects(mainWindow, {
       blur: process.platform === "darwin" && saved.windowBlur === true,
-      transparency: saved.windowTransparency !== false,
+      transparency:
+        process.platform === "darwin" && saved.windowTransparency !== false,
     });
 
     // Re-announce any active shares so peers see the new name

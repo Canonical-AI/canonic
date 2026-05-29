@@ -61,7 +61,7 @@ describe('ai-agent IPC bridge', () => {
   })
 
   it('chat() is invoked with messages, system prompt, model, and apiKey', async () => {
-    // Simulate what AIChat.vue does before calling chat()
+    // Simulate the agent flow before calling chat()
     const messages = [{ role: 'user', content: 'What is missing?' }]
     const system = 'You are a thinking partner...'
 
@@ -104,7 +104,7 @@ describe('ai-agent IPC bridge', () => {
   })
 
   it('removeListeners() is called before each new chat request', async () => {
-    // Simulate the AIChat.vue pattern: removeListeners → register → chat
+    // Simulate the agent pattern: removeListeners → register → chat
     mockApi.ai.removeListeners()
     mockApi.ai.onChunk(vi.fn())
     mockApi.ai.onDone(vi.fn())

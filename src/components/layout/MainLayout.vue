@@ -466,7 +466,7 @@
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
                 </div>
-                <!-- AgentPanel replaces old AI chat. AIChat.vue kept for BYOK inline completion transport. -->
+                <!-- AgentPanel replaces old AI chat. -->
                 <AgentPanel
                     v-show="
                         store.rightPanelTab === 'agent' &&
@@ -585,7 +585,6 @@ import EditorTabs from "../editor/EditorTabs.vue";
 import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
-import AIChat from "../panels/AIChat.vue";
 import AgentPanel from "../panels/AgentPanel.vue";
 import HistoryPanel from "../panels/HistoryPanel.vue";
 import SharePanel from "../panels/SharePanel.vue";

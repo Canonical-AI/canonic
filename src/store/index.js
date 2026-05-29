@@ -350,95 +350,6 @@ export const useAppStore = defineStore("app", () => {
     });
   }
 
-  // ==========================================
-  // ── AI CHAT STATE & HISTORY ──
-  // ==========================================
-  const aiChatSessionId = ref(null);
-  const aiChatMessages = ref([]);
-  const aiChatsList = ref([]);
-
-  async function loadAiChats() {
-    if (!workspacePath.value) return;
-    try {
-      const content = await api.files.read(
-        workspacePath.value,
-        ".canonic/ai-chats.json",
-      );
-      aiChatsList.value = content ? JSON.parse(content) : [];
-    } catch (e) {
-      aiChatsList.value = [];
-    }
-    aiChatSessionId.value = crypto.randomUUID();
-    aiChatMessages.value = [];
-  }
-
-  async function saveAiChatsToDisk() {
-    if (!workspacePath.value) return;
-    try {
-      await api.files.write(
-        workspacePath.value,
-        ".canonic/ai-chats.json",
-        JSON.stringify(aiChatsList.value, null, 2),
-      );
-    } catch (e) {
-      console.warn("[Store] Failed to save AI chats", e);
-    }
-  }
-
-  function saveCurrentAiChat() {
-    if (aiChatMessages.value.length === 0) return;
-
-    const id = aiChatSessionId.value || crypto.randomUUID();
-    const existingIdx = aiChatsList.value.findIndex((c) => c.id === id);
-
-    const firstUserMsg =
-      aiChatMessages.value.find((m) => m.role === "user")?.content ||
-      "Empty chat";
-    const title =
-      firstUserMsg.slice(0, 40) + (firstUserMsg.length > 40 ? "..." : "");
-
-    const chatObj = {
-      id,
-      title,
-      date:
-        existingIdx >= 0
-          ? aiChatsList.value[existingIdx].date
-          : new Date().toISOString(),
-      messages: JSON.parse(JSON.stringify(aiChatMessages.value)),
-    };
-
-    if (existingIdx >= 0) {
-      aiChatsList.value[existingIdx] = chatObj;
-    } else {
-      aiChatsList.value.unshift(chatObj);
-      aiChatSessionId.value = id;
-    }
-    saveAiChatsToDisk();
-  }
-
-  function newAiChat() {
-    saveCurrentAiChat();
-    aiChatSessionId.value = crypto.randomUUID();
-    aiChatMessages.value = [];
-  }
-
-  function loadAiChatSession(id) {
-    saveCurrentAiChat();
-    const chat = aiChatsList.value.find((c) => c.id === id);
-    if (chat) {
-      aiChatSessionId.value = chat.id;
-      aiChatMessages.value = JSON.parse(JSON.stringify(chat.messages));
-    }
-  }
-
-  function deleteAiChat(id) {
-    aiChatsList.value = aiChatsList.value.filter((c) => c.id !== id);
-    if (aiChatSessionId.value === id) {
-      newAiChat();
-    } else {
-      saveAiChatsToDisk();
-    }
-  }
 
   function downloadUpdate() {
     updateAvailable.value = false;
@@ -739,7 +650,6 @@ export const useAppStore = defineStore("app", () => {
       comments.value = [];
       await refreshFiles();
       await refreshBranches();
-      await loadAiChats();
       // Restore last used branch if it exists in the workspace
       const cfg = await loadConfig();
 
@@ -2579,11 +2489,41 @@ export const useAppStore = defineStore("app", () => {
   // One short line priming the agent: where it is, what's open, and that the canonic MCP tools
   // are available for comments/edits. Injected silently as a system prompt where the CLI
   // supports it; otherwise prepended to the typed first message (still one line, not a wall).
-  function buildTerminalContext() {
+  function buildTerminalContext(agent) {
+    // injectContext agents (Pi) can't speak MCP by default. Give them direct, deterministic
+    // curl instructions against the local REST API so they don't have to spin figuring it out.
+    if (agent?.injectContext) {
+      return buildCurlContext()
+    }
     const parts = []
     if (workspaceName.value) parts.push(`workspace "${workspaceName.value}"`)
     if (currentFile.value) parts.push(`open doc: ${currentFile.value}`)
     return `Canonic ${parts.join(', ')}. Use the canonic MCP tools to read, comment on, and edit docs here.`
+  }
+
+  // Deterministic curl playbook for agents without MCP (Pi). The live port is baked in.
+  function buildCurlContext() {
+    const port = mcpPort.value
+    const base = port ? `http://127.0.0.1:${port}` : 'http://127.0.0.1:<canonic-port>'
+    return [
+      `You are connected to Canonic, the user's local Markdown doc workspace, through a REST API at ${base}.`,
+      `You do NOT have MCP tools — use curl. (If you happen to have an MCP extension, the server is also at ${base}/mcp, but curl is the reliable path.)`,
+      ``,
+      `FIRST, before anything else, run these two commands and read the output so you know the workspace and what the user is looking at:`,
+      `  curl -s ${base}/workspace`,
+      `  curl -s ${base}/doc`,
+      ``,
+      `/workspace returns {name, path, branch, focusedDoc, openDocs, files}. focusedDoc is the doc the user has open right now.`,
+      `/doc with no args returns the focused doc as {path, content}.`,
+      ``,
+      `Then act on docs with these exact commands (paths are relative to the workspace root):`,
+      `  Read a doc:      curl -s '${base}/doc?path=Folder/file.md'`,
+      `  Write a doc:     curl -s -X POST ${base}/doc -H 'Content-Type: application/json' -d '{"path":"Folder/file.md","content":"...full new markdown..."}'`,
+      `  Comment:         curl -s -X POST ${base}/comment -H 'Content-Type: application/json' -d '{"path":"Folder/file.md","text":"your note","anchor":{"quotedText":"exact passage from the doc"}}'`,
+      `  Read comments:   curl -s '${base}/comment?path=Folder/file.md'`,
+      ``,
+      `When the user says "this doc" or gives no path, act on focusedDoc. Writing a doc replaces its entire contents, so read it first and send the full updated markdown.`
+    ].join('\n')
   }
 
   async function startTerminalSession({ prompt } = {}) {
@@ -2615,7 +2555,7 @@ export const useAppStore = defineStore("app", () => {
       args: agent.type === 'custom' ? agent.args : undefined,
       cwd,
       mcpPort: mcpP,
-      systemPrompt: buildTerminalContext(),   // one-line context, injected silently if the CLI allows
+      systemPrompt: buildTerminalContext(agent),   // context injected silently if the CLI allows (curl playbook for Pi)
       userPrompt: trimmed,                     // raw prompt typed into the TUI
       prompt: trimmed,                         // alias kept for history + resume
       startedAt: Date.now()
@@ -3055,14 +2995,6 @@ export const useAppStore = defineStore("app", () => {
     refreshDiscoveredPeers,
     sharesByFile,
     shareStatsByFile,
-    aiChatSessionId,
-    aiChatMessages,
-    aiChatsList,
-    loadAiChats,
-    saveCurrentAiChat,
-    newAiChat,
-    loadAiChatSession,
-    deleteAiChat,
 
     // ── AI Control exports ──
     agentPresets,

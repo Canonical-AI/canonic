@@ -203,7 +203,7 @@ Run `npm test` before committing — all unit tests must pass. E2e is opt-in and
 
 ### Contributing
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for branching conventions, commit message style, the spec-driven development rule, and the demo-mode rule.
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for branching conventions, commit message style, the spec-driven development rule, the demo-mode rule, and how the CI / release pipeline works (PR test matrix, build-then-commit releases, version-bump labels, and the `no-release` skip label).
 
 Quick rules:
 

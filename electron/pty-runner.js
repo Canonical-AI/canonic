@@ -26,7 +26,7 @@ const sessions = new Map()
  *   when the context went in silently as args (caller should NOT also type it into the TUI).
  */
 function spawn(opts, callbacks) {
-  const { sessionId, agentId, binary, args, cwd, cols, rows, mcpPort, systemPrompt } = opts
+  const { sessionId, agentId, binary, args, cwd, cols, rows, mcpPort, systemPrompt, colorScheme } = opts
 
   let execBin, execArgs
   let systemPromptInjected = false
@@ -50,7 +50,12 @@ function spawn(opts, callbacks) {
     CANONIC_MCP_URL: `http://127.0.0.1:${mcpPort}/mcp`,
     CANONIC_MCP_SSE: `http://127.0.0.1:${mcpPort}/sse`,
     GEMINI_CLI_TRUST_WORKSPACE: 'true',
-    TERM: 'xterm-256color'
+    TERM: 'xterm-256color',
+    // Tell the agent's TUI the terminal's background so it picks readable text. "fg;bg" palette
+    // indices: dark term = light text on black (15;0), light term = dark text on white (0;15).
+    // Without this, termenv-based CLIs (OpenCode) can't detect a light bg over our IPC-bridged
+    // PTY and assume dark, rendering near-white text that vanishes on a light Canonic theme.
+    COLORFGBG: colorScheme === 'light' ? '0;15' : '15;0'
   }
 
   const proc = pty.spawn(execBin, execArgs, {

@@ -2421,7 +2421,7 @@ function setupIpcHandlers() {
   // port first so the agent's own tool calls hit our server. The renderer (xterm) handles all
   // I/O — we parse nothing.
   ipcMain.handle("pty:spawn", async (_, params) => {
-    const { sessionId, agentId, customBinary, customArgs, cwd, cols, rows, mcpPort, systemPrompt } = params;
+    const { sessionId, agentId, customBinary, customArgs, cwd, cols, rows, mcpPort, systemPrompt, colorScheme } = params;
 
     if (agentId === 'custom') {
       const fs = require('fs');
@@ -2439,7 +2439,7 @@ function setupIpcHandlers() {
     const livePort = apiServer.getPort() || mcpPort;
     try {
       return ptyRunner.spawn(
-        { sessionId, agentId, binary: customBinary, args: customArgs, cwd, cols, rows, mcpPort: livePort, systemPrompt },
+        { sessionId, agentId, binary: customBinary, args: customArgs, cwd, cols, rows, mcpPort: livePort, systemPrompt, colorScheme },
         {
           onData: (sid, data) => {
             mainWindow?.webContents.send('pty:data', { sessionId: sid, data });

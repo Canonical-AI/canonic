@@ -78,6 +78,13 @@ function luminance(rgb) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
+// Is the active theme's terminal background light? Drives both the xterm auto-contrast below and
+// the COLORFGBG hint we hand the spawned agent — TUIs (OpenCode et al.) read COLORFGBG to choose
+// readable text and otherwise assume a dark terminal, painting near-white text on our light bg.
+function isLightTheme() {
+  return luminance(parseColor(cssVar('--bg-sidebar', '#0c0e12'))) > 0.5
+}
+
 function buildTheme() {
   // Match the surrounding AI Control panel (which uses --bg-sidebar) so the terminal blends in
   // rather than reading as a separate boxed window.
@@ -180,7 +187,8 @@ onMounted(async () => {
     cols: term.cols,
     rows: term.rows,
     mcpPort: props.session.mcpPort,
-    systemPrompt: props.session.systemPrompt
+    systemPrompt: props.session.systemPrompt,
+    colorScheme: isLightTheme() ? 'light' : 'dark'
   })
 
   if (result?.error) {

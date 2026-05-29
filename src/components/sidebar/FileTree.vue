@@ -2,7 +2,7 @@
     <div class="file-tree">
         <DocNavigation />
         <div class="tree-header">
-            <span class="section-label">Documents</span>
+            <span class="section-label">{{ sidebarTitle }}</span>
             <div class="header-actions">
                 <button
                     class="add-btn"
@@ -74,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, inject, watch } from "vue";
+import { computed, ref, nextTick, inject, watch } from "vue";
 import { useAppStore } from "../../store";
 import TreeNode from "./TreeNode.vue";
 import DocNavigation from "./DocNavigation.vue";
@@ -90,6 +90,7 @@ const folderName = ref("");
 const folderInput = ref(null);
 const isDragOver = ref(false);
 const branchOpen = ref(false);
+const sidebarTitle = computed(() => store.workspaceName || "Documents");
 
 async function selectBranch(branch) {
   if (branch === store.currentBranch) { branchOpen.value = false; return; }

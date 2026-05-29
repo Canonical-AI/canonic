@@ -116,6 +116,12 @@ jobs:
         run: npm run build:mac -- --publish never
         env:
           DEBUG: "electron-builder"
+          # This workflow triggers on a merged pull_request, so electron-builder
+          # treats it as a PR build and skips code signing by default (a guard
+          # against fork PRs touching the cert). Forks never receive secrets, so
+          # CSC_LINK is only present on trusted same-repo merges — force signing
+          # here so release DMGs are Developer-ID signed + notarized, not ad-hoc.
+          CSC_FOR_PULL_REQUEST: "true"
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -372,6 +378,9 @@ jobs:
           formula-name: canonic
           formula-path: Casks/canonic.rb
           homebrew-tap: Canonical-AI/homebrew-tap
+          # This workflow runs on a PR-merge (not a tag push), so the action
+          # can't infer the tag from the ref — pass it explicitly.
+          tag-name: v${{ needs.compute-version.outputs.version }}
           download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic-arm64.dmg
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

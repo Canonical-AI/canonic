@@ -15,7 +15,14 @@ jobs:
   validate:
     # Run on pull_request events or when a review is submitted and approved
     if: github.event_name == 'pull_request' || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved')
-    runs-on: macos-latest
+    # Tests are cheap and catch cross-platform bugs (path separators, races,
+    # lockfile contention) that a single host can't. The expensive packaging
+    # build stays in the release workflow, where the version number exists.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -31,9 +38,3 @@ jobs:
 
       - name: Run tests
         run: npm test
-
-      - name: Dry Run Build
-        # We set CSC_IDENTITY_AUTO_DISCOVERY=false to skip signing/notarization during validation
-        run: npm run build
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false

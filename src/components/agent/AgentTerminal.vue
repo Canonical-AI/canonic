@@ -55,9 +55,7 @@ function parseColor(c) {
   return null
 }
 
-// Pack [r,g,b] back into an opaque #rrggbb. xterm's color parser only understands hex/named
-// colors — it rejects rgb()/rgba() strings and silently falls back to black — so every var we
-// feed it must be flattened first. Alpha is intentionally dropped (terminal bg must be opaque).
+// Pack [r,g,b] back into an opaque #rrggbb for xterm fields that should stay solid.
 function rgbToHex(rgb) {
   if (!rgb) return null
   return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')
@@ -66,6 +64,17 @@ function rgbToHex(rgb) {
 // Resolve a CSS var straight to an opaque hex for xterm.
 function cssHex(name, fallback) {
   return rgbToHex(parseColor(cssVar(name, fallback))) || fallback
+}
+
+function rgbToRgbaCss(rgb, alpha) {
+  if (!rgb) return null
+  const [r, g, b] = rgb.map(v => Math.max(0, Math.min(255, Math.round(v))))
+  const a = Math.max(0, Math.min(1, Number(alpha) || 1))
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+
+function isWindowTransparencyEnabled() {
+  return document.documentElement.classList.contains('window-transparency')
 }
 
 // WCAG relative luminance (0 dark … 1 light).
@@ -89,7 +98,9 @@ function buildTheme() {
   // Match the surrounding AI Control panel (which uses --bg-sidebar) so the terminal blends in
   // rather than reading as a separate boxed window.
   const bgRgb = parseColor(cssVar('--bg-sidebar', '#0c0e12'))
-  const bg = rgbToHex(bgRgb) || '#0c0e12'
+  const bg = isWindowTransparencyEnabled()
+    ? (rgbToRgbaCss(bgRgb, cssVar('--blur-opacity', '0.88')) || 'rgba(12, 14, 18, 0.88)')
+    : (rgbToHex(bgRgb) || '#0c0e12')
   // Auto-contrast: light text on dark bg, dark text on light bg. Overrides --text-primary so a
   // mismatched theme can't render unreadable terminal text.
   const isLightBg = luminance(bgRgb) > 0.5
@@ -145,6 +156,7 @@ onMounted(async () => {
     // Track the app's mono font (terminal must stay monospace — TUIs break with proportional).
     fontFamily: cssVar('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace'),
     fontSize: 12,
+    allowTransparency: true,
     cursorBlink: true,
     convertEol: false,
     theme: buildTheme()
@@ -154,9 +166,9 @@ onMounted(async () => {
   term.open(elRef.value)
   fit.fit()
 
-  // Re-theme live when the user switches Canonic themes ([data-theme] on <html>).
+  // Re-theme live when the user switches themes or toggles transparency/opacity on <html>.
   themeObserver = new MutationObserver(() => { if (term) term.options.theme = buildTheme() })
-  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] })
 
   // Keystrokes → PTY
   term.onData((data) => api?.agentControl?.ptyInput({ sessionId: props.session.id, data }))
@@ -239,5 +251,11 @@ onBeforeUnmount(() => {
 .agent-terminal-surface {
   flex: 1;
   min-height: 0;
+}
+
+.agent-terminal-surface :deep(.xterm),
+.agent-terminal-surface :deep(.xterm .xterm-viewport),
+.agent-terminal-surface :deep(.xterm .xterm-screen) {
+  background: transparent !important;
 }
 </style>

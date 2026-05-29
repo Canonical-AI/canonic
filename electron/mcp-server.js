@@ -167,7 +167,9 @@ const tools = {
         for (const e of entries) {
           if (e.name.startsWith('.') && e.name !== '.canonic') continue
           const full = path.join(dir, e.name)
-          const rel = path.relative(cwd, full)
+          // Normalize to forward slashes so paths are stable across OSes (Windows
+          // path.relative yields backslashes, which break glob filtering + clients).
+          const rel = path.relative(cwd, full).split(path.sep).join('/')
           if (e.isDirectory()) {
             walk(full, base)
           } else if (e.isFile() && e.name.endsWith('.md')) {

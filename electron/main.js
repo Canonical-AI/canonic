@@ -2282,9 +2282,12 @@ function setupIpcHandlers() {
         if (fs.existsSync(file)) { try { list = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { list = []; } }
         list.push({
           id: crypto.randomUUID(),
+          anchor: obj.quotedText ? { quotedText: String(obj.quotedText) } : {},
           text: String(obj.text),
-          anchor: obj.quotedText ? { quotedText: String(obj.quotedText) } : undefined,
           author: 'AI Agent',
+          isAgent: true,
+          agentName: 'AI Agent',
+          resolved: false,
           createdAt: new Date().toISOString()
         });
         fs.writeFileSync(file, JSON.stringify(list, null, 2), 'utf-8');
@@ -2516,7 +2519,7 @@ function setupIpcHandlers() {
       const { clipboard } = require("electron");
       const fallback = `cd ${JSON.stringify(dir)} && ${bin}`;
       clipboard.writeText(fallback);
-      return { ok: true, copied: true, command: fallback, error: e.message };
+      return { ok: false, copied: true, command: fallback, error: e.message };
     }
   });
 

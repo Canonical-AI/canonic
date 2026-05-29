@@ -68,19 +68,8 @@ function start(opts, callbacks) {
     shell: false  // Use exact binary
   })
 
-  // Buffer for stdout line parsing
-  let stdoutBuf = ''
-
   child.stdout.on('data', (chunk) => {
-    stdoutBuf += chunk.toString()
-    // Emit chunks for streaming display
     callbacks.onStdout?.(sessionId, chunk.toString())
-
-    // Flush buffer periodically for tool call detection
-    const lines = stdoutBuf.split('\n')
-    if (lines.length > 1) {
-      stdoutBuf = lines.pop() || ''  // Keep incomplete last line in buffer
-    }
   })
 
   child.stderr.on('data', (chunk) => {

@@ -13,7 +13,7 @@
 
 const os = require('os')
 const path = require('path')
-const { execSync } = require('child_process')
+const { execFileSync } = require('child_process')
 
 const HOME = os.homedir()
 
@@ -227,9 +227,12 @@ function getPreset(id) {
 
 // ── Check if a binary is installed (available on PATH) ──
 function isInstalled(binary) {
+  if (!binary) return false
   try {
-    const checkCmd = process.platform === 'win32' ? `where ${binary}` : `which ${binary}`
-    execSync(checkCmd, { stdio: 'ignore', timeout: 3000 })
+    // execFile (no shell) — the binary name is passed as an argv element, so a name with spaces
+    // or shell metacharacters can't be interpolated into a command string.
+    const lookup = process.platform === 'win32' ? 'where' : 'which'
+    execFileSync(lookup, [binary], { stdio: 'ignore', timeout: 3000 })
     return true
   } catch {
     return false

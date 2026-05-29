@@ -124,7 +124,13 @@ async function handleRequest(req, res) {
 
   // ── Plain REST routes (token-free, localhost-only) ───────────────────────────
   // Mirror the MCP tools for agents that can't speak MCP and just curl (e.g. Pi).
-  // Same security posture as /mcp: bound to 127.0.0.1, no token required.
+  // Same security posture as /mcp: bound to 127.0.0.1, no token required — so we must reject
+  // browser-originated requests (a visited page could otherwise POST /doc to write arbitrary
+  // files, since JSON bodies sent as text/plain are CORS "simple" requests with no preflight).
+  // Agents and curl send no Origin header and pass through.
+  if (['/workspace', '/doc', '/comment'].includes(pathname) && mcp.hasForeignOrigin(req)) {
+    return sendJson(res, 403, { error: 'forbidden' })
+  }
   if (pathname === '/workspace' && req.method === 'GET') {
     const info = await mcp.tools.get_workspace_info.handler({})
     let files = []
@@ -273,7 +279,6 @@ function start(onEvent) {
   return new Promise((resolve, reject) => {
     onEventCallback = onEvent
     token = generateToken()
-    mcp.setAuthToken(token)
     mcp.setEventCallback(onEvent)
     server = http.createServer((req, res) => {
       handleRequest(req, res).catch((err) => sendJson(res, 500, { error: err.message }))

@@ -318,4 +318,38 @@ describe('api-server REST (curl) routes', () => {
     const res = await request('POST', '/comment', { path: 'Specs/plan.md' }, false)
     expect(res.status).toBe(400)
   })
+
+  // Raw request that lets us set arbitrary headers (the shared `request` helper can't).
+  function rawRequest(method, pathname, body, headers) {
+    return new Promise((resolve) => {
+      const data = body ? JSON.stringify(body) : null
+      const req = http.request({
+        hostname: '127.0.0.1', port, path: pathname, method,
+        headers: { 'Content-Type': 'application/json', ...(data && { 'Content-Length': Buffer.byteLength(data) }), ...headers },
+      }, (res) => {
+        let raw = ''
+        res.on('data', (c) => (raw += c))
+        res.on('end', () => { try { resolve({ status: res.statusCode, body: JSON.parse(raw) }) } catch { resolve({ status: res.statusCode, body: raw }) } })
+      })
+      if (data) req.write(data)
+      req.end()
+    })
+  }
+
+  it('rejects a REST request from a foreign web Origin with 403', async () => {
+    const res = await rawRequest('GET', '/workspace', null, { Origin: 'https://evil.example.com' })
+    expect(res.status).toBe(403)
+  })
+
+  it('allows a REST request from a localhost Origin', async () => {
+    const res = await rawRequest('GET', '/workspace', null, { Origin: 'http://localhost:5173' })
+    expect(res.status).toBe(200)
+  })
+
+  it('POST /doc rejects traversal and writes nothing outside the workspace', async () => {
+    const outside = path.join(ws, '..', 'canonic-rest-escape-' + Date.now() + '.md')
+    const res = await rawRequest('POST', '/doc', { path: '../' + path.basename(outside), content: 'pwned' }, {})
+    expect(res.status).not.toBe(200)
+    expect(fs.existsSync(outside)).toBe(false)
+  })
 })

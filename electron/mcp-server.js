@@ -7,7 +7,6 @@ const path = require('path')
 const os = require('os')
 
 // ── Shared state (set by api-server.js on start) ──────────────────────────────
-let _authToken = null
 let _workspacePath = null
 let _eventCallback = null   // (event) => void — forwarded to renderer
 
@@ -19,7 +18,6 @@ let _openDocs = []          // relative paths of all docs open in the tray (focu
 // SSE clients currently connected
 const sseClients = new Set()
 
-function setAuthToken(token) { _authToken = token }
 function setWorkspacePath(wsPath) { _workspacePath = wsPath }
 function getWorkspacePath() { return _workspacePath }
 function setEventCallback(cb) { _eventCallback = cb }
@@ -83,8 +81,16 @@ function writeComment(relPath, comment) {
 function resolvePath(docPath) {
   if (!_workspacePath) throw new Error('No workspace open')
   // Normalize: strip leading / if present (MCP may send absolute-ish paths)
-  const clean = docPath.replace(/^\/+/, '')
-  return path.join(_workspacePath, clean)
+  const clean = String(docPath).replace(/^\/+/, '')
+  // Containment: resolve against the workspace root and reject anything that escapes it
+  // (e.g. `../../etc/passwd`). Without this an agent — or any process that reaches the
+  // unauthenticated local server — could read/write arbitrary files outside the workspace.
+  const root = path.resolve(_workspacePath)
+  const full = path.resolve(root, clean)
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error(`Path escapes workspace: ${docPath}`)
+  }
+  return full
 }
 
 const tools = {
@@ -172,10 +178,19 @@ const tools = {
 
       walk(cwd, cwd)
 
-      // Simple glob filtering
+      // Simple glob filtering. Escape regex specials FIRST so a glob like "a+b(" or "[x" can't
+      // throw or trigger ReDoS, then translate the glob wildcards (** before *).
       if (args.glob) {
-        const pattern = args.glob.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*')
-        const regex = new RegExp('^' + pattern + '(?:/.*)?$', 'i')
+        const pattern = String(args.glob)
+          .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+          .replace(/\*\*/g, '.*')
+          .replace(/\*/g, '[^/]*')
+        let regex
+        try {
+          regex = new RegExp('^' + pattern + '(?:/.*)?$', 'i')
+        } catch {
+          return { files }  // unparseable pattern → don't filter rather than error
+        }
         return { files: files.filter(f => regex.test(f.path) || regex.test(f.name)) }
       }
 
@@ -205,9 +220,9 @@ const tools = {
         id: commentId,
         anchor: args.anchor || {},
         text: args.text,
-        author: 'Agent',
+        author: 'AI Agent',
         isAgent: true,
-        agentName: 'Agent',
+        agentName: 'AI Agent',
         resolved: false,
         createdAt: new Date().toISOString()
       }
@@ -222,7 +237,7 @@ const tools = {
             file: args.path,
             anchor: args.anchor || {},
             text: args.text,
-            agentName: 'Agent'
+            agentName: 'AI Agent'
           }
         })
       }
@@ -342,22 +357,41 @@ function rpcResult(id, result) {
   return { jsonrpc: '2.0', id, result }
 }
 
-function checkMcpAuth(req) {
-  const header = req.headers['authorization']
-  if (!_authToken) return true  // MCP auth is optional if token not set
-  if (header !== `Bearer ${_authToken}`) return false
-  return true
+// Agents (Claude/Codex/etc.) and curl send NO Origin header. Browsers always set Origin on
+// cross-origin requests. The local server is the only auth boundary the agent CLIs can clear
+// (they connect with a bare URL — no token), so we gate on Origin instead: a request carrying a
+// non-localhost Origin is a web page reaching in, and is rejected. Requests with no Origin pass.
+function hasForeignOrigin(req) {
+  const o = req.headers['origin']
+  if (!o) return false
+  try {
+    const h = new URL(o).hostname
+    return h !== 'localhost' && h !== '127.0.0.1'
+  } catch {
+    return true
+  }
 }
 
 async function handleMcpRequest(req, res) {
-  // CORS for localhost MCP connections
-  res.setHeader('Access-Control-Allow-Origin', '*')
+  // CORS: only echo the Origin back when it is localhost. Never reflect `*` — that would let any
+  // site read tool responses (incl. doc contents). Agents/curl send no Origin and are unaffected.
+  const origin = req.headers['origin']
+  if (origin && !hasForeignOrigin(req)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
     res.end()
+    return
+  }
+
+  // Block browser-originated requests outright (CSRF / data exfil from a visited page).
+  if (hasForeignOrigin(req)) {
+    res.writeHead(403, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: 'forbidden' }))
     return
   }
 
@@ -497,7 +531,7 @@ module.exports = {
   handleSseRequest,
   sseBroadcast,
   sseGetEndpoint,
-  setAuthToken,
+  hasForeignOrigin,
   setWorkspacePath,
   getWorkspacePath,
   setEventCallback,

@@ -263,6 +263,37 @@ describe('MCP server tools with workspace set', () => {
     expect(parsed.files.every(f => f.path.startsWith('subdir'))).toBe(true)
   })
 
+  it('list_docs does not throw on a glob with regex specials', async () => {
+    const res = await mcpRequest('tools/call', {
+      name: 'list_docs',
+      arguments: { glob: '(' }
+    })
+    expect(res.status).toBe(200)
+    const parsed = JSON.parse(res.body.result.content[0].text)
+    expect(Array.isArray(parsed.files)).toBe(true)
+  })
+
+  it('read_doc rejects a path that escapes the workspace', async () => {
+    const res = await mcpRequest('tools/call', {
+      name: 'read_doc',
+      arguments: { path: '../../../../../../etc/passwd' }
+    })
+    expect(res.status).toBe(200)
+    const text = res.body.result.content[0].text
+    expect(text).toContain('Error')
+    expect(text).toContain('escapes workspace')
+  })
+
+  it('write_doc rejects traversal and writes nothing outside the workspace', async () => {
+    const outside = path.join(tmpDir, '..', 'canonic-escape-' + Date.now() + '.md')
+    const res = await mcpRequest('tools/call', {
+      name: 'write_doc',
+      arguments: { path: '../' + path.basename(outside), content: 'pwned' }
+    })
+    expect(res.body.result.content[0].text).toContain('escapes workspace')
+    expect(fs.existsSync(outside)).toBe(false)
+  })
+
   it('post_comment creates comment and returns id', async () => {
     const res = await mcpRequest('tools/call', {
       name: 'post_comment',
@@ -309,5 +340,38 @@ describe('MCP server tools with workspace set', () => {
     const info = JSON.parse(text)
     expect(info.name).toBeTruthy()
     expect(info.path).toBe(tmpDir)
+  })
+})
+
+describe('MCP server Origin guard', () => {
+  function postMcp(headers) {
+    return new Promise((resolve) => {
+      const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })
+      const req = http.request({
+        hostname: '127.0.0.1', port, path: '/mcp', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers }
+      }, (res) => {
+        let raw = ''
+        res.on('data', (c) => (raw += c))
+        res.on('end', () => resolve({ status: res.statusCode }))
+      })
+      req.write(body)
+      req.end()
+    })
+  }
+
+  it('rejects a request from a foreign web Origin with 403', async () => {
+    const res = await postMcp({ Origin: 'https://evil.example.com' })
+    expect(res.status).toBe(403)
+  })
+
+  it('allows a request with no Origin (agents / curl)', async () => {
+    const res = await postMcp({})
+    expect(res.status).toBe(200)
+  })
+
+  it('allows a localhost Origin', async () => {
+    const res = await postMcp({ Origin: 'http://localhost:5173' })
+    expect(res.status).toBe(200)
   })
 })

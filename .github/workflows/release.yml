@@ -1,46 +1,96 @@
 name: Release
 
+# Build-then-commit: a merged PR computes the next version, builds + tests every
+# platform with that version (no publish), and only if ALL builds pass does
+# `finalize` commit the version bump, tag, and publish the release. A failed
+# build never bumps main or creates a tag. Add the `no-release` label to a PR to
+# merge without triggering a build/release at all (CI-only, docs, etc.).
+
 on:
-  push:
-    tags:
-      - "v*"
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version bump type"
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# Never run two releases at once — they race on the version bump + tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  create-draft:
-    permissions:
-      contents: write
+  compute-version:
+    # Run on manual dispatch, or on a merged PR that is NOT labeled `no-release`.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       !contains(github.event.pull_request.labels.*.name, 'no-release'))
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get-version.outputs.version }}
+      version: ${{ steps.compute.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Get version
-        id: get-version
-        run: |
-          VERSION=$(jq -r .version package.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
 
-      - name: Create or Verify draft release
+      - name: Identify bump type
+        id: bump-type
+        # Label names are untrusted input — pass via env so they're data, not code.
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_TYPE: ${{ github.event.inputs.bump_type }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          VERSION=${{ steps.get-version.outputs.version }}
-          if ! gh release view "v$VERSION" > /dev/null 2>&1; then
-            echo "Creating new draft release (manual tag push?)..."
-            gh release create "v$VERSION" --draft --title "v$VERSION" --notes "Release v$VERSION"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "type=$DISPATCH_TYPE" >> "$GITHUB_OUTPUT"
+          elif [[ ",$LABELS," == *",major,"* ]]; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif [[ ",$LABELS," == *",minor,"* ]]; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
           else
-            echo "Release v$VERSION already exists (created by version-bump workflow)."
+            echo "type=patch" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Compute next version
+        id: compute
+        env:
+          BUMP_TYPE: ${{ steps.bump-type.outputs.type }}
+          PRERELEASE_TAG: ${{ vars.PRERELEASE_TAG }}
+        run: |
+          # Strip any prerelease suffix before bumping so e.g. 0.0.5-alpha + patch = 0.0.6.
+          CURRENT=$(jq -r .version package.json)
+          BASE=$(echo "$CURRENT" | sed 's/-.*//')
+          if [ "$CURRENT" != "$BASE" ]; then
+            npm pkg set version="$BASE"
+          fi
+          # Compute only — do not tag or commit here.
+          npm version "$BUMP_TYPE" --no-git-tag-version >/dev/null
+          if [ -n "$PRERELEASE_TAG" ]; then
+            NEXT=$(jq -r .version package.json)
+            npm pkg set version="${NEXT}-${PRERELEASE_TAG}"
+          fi
+          VERSION=$(jq -r .version package.json)
+          echo "Next version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
   release-mac:
-    needs: create-draft
-    permissions:
-      contents: write
+    needs: compute-version
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
@@ -53,17 +103,19 @@ jobs:
           node-version: 24
           cache: "npm"
 
+      - name: Set release version
+        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
+
       - name: Install dependencies
         run: npm install
 
       - name: Run tests
         run: npm test
 
-      - name: Build and Publish (mac)
-        run: npm run build:mac -- --publish always
+      - name: Build (mac, no publish)
+        run: npm run build:mac -- --publish never
         env:
           DEBUG: "electron-builder"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -71,10 +123,19 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-mac
+          if-no-files-found: error
+          path: |
+            dist-electron/*.dmg
+            dist-electron/*.zip
+            dist-electron/*.blockmap
+            dist-electron/latest*.yml
+
   release-win:
-    needs: create-draft
-    permissions:
-      contents: write
+    needs: compute-version
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -87,22 +148,32 @@ jobs:
           node-version: 24
           cache: "npm"
 
+      - name: Set release version
+        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
+
       - name: Install dependencies
         run: npm install
 
       - name: Run tests
         run: npm test
 
-      - name: Build and Publish (win)
-        run: npm run build:win -- --publish always
+      - name: Build (win, no publish)
+        run: npm run build:win -- --publish never
         env:
           DEBUG: "electron-builder"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-win
+          if-no-files-found: error
+          path: |
+            dist-electron/*.exe
+            dist-electron/*.blockmap
+            dist-electron/latest*.yml
 
   release-linux-x64:
-    needs: create-draft
-    permissions:
-      contents: write
+    needs: compute-version
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -134,22 +205,34 @@ jobs:
               org.electronjs.Electron2.BaseApp//24.08
           fi
 
+      - name: Set release version
+        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
+
       - name: Install dependencies
         run: npm install
 
       - name: Run tests
         run: npm test
 
-      - name: Build and Publish (linux x64)
-        run: npm run build:linux -- --x64 --publish always
+      - name: Build (linux x64, no publish)
+        run: npm run build:linux -- --x64 --publish never
         env:
           DEBUG: "electron-builder"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-x64
+          if-no-files-found: error
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.flatpak
+            dist-electron/*.pacman
+            dist-electron/*.tar.gz
+            dist-electron/latest*.yml
 
   release-linux-arm64:
-    needs: create-draft
-    permissions:
-      contents: write
+    needs: compute-version
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -182,37 +265,103 @@ jobs:
               org.electronjs.Electron2.BaseApp//24.08
           fi
 
+      - name: Set release version
+        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
+
       - name: Install dependencies
         run: npm install
 
       - name: Run tests
         run: npm test
 
-      - name: Build and Publish (linux arm64)
-        run: npm run build:linux -- --arm64 --publish always
+      - name: Build (linux arm64, no publish)
+        run: npm run build:linux -- --arm64 --publish never
         env:
           DEBUG: "electron-builder"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           USE_SYSTEM_FPM: "true"
 
-  publish-release:
-    needs: [create-draft, release-mac, release-win, release-linux-x64, release-linux-arm64]
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-arm64
+          if-no-files-found: error
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.flatpak
+            dist-electron/*.pacman
+            dist-electron/*.tar.gz
+            dist-electron/latest*.yml
+
+  finalize:
+    # Only reached if every build job succeeded. This is the single point that
+    # mutates main: commit the bump, tag, and publish — so a failed build leaves
+    # main untouched (no bump, no tag, no release).
+    needs:
+      - compute-version
+      - release-mac
+      - release-win
+      - release-linux-x64
+      - release-linux-arm64
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Commit version bump and tag
         run: |
-          gh release edit "v${{ needs.create-draft.outputs.version }}" \
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm pkg set version="$VERSION"
+          git add package.json package-lock.json
+          git commit -m "chore(release): bump version to $VERSION"
+          # Clear any stale tag from a prior failed run.
+          git push origin ":refs/tags/v$VERSION" 2>/dev/null || true
+          git tag -d "v$VERSION" 2>/dev/null || true
+          git tag -a "v$VERSION" -m "v$VERSION"
+          git push origin main
+          git push origin "refs/tags/v$VERSION"
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Write release notes
+        # PR body is untrusted (free-form, fork-controllable). Pass via env so the
+        # shell treats it as data, never as code — no heredoc/command injection.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          VERSION: ${{ needs.compute-version.outputs.version }}
+        run: |
+          if [ -n "$PR_BODY" ]; then
+            printf '%s\n' "$PR_BODY" > release_notes.md
+          else
+            echo "Release v$VERSION" > release_notes.md
+          fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.compute-version.outputs.version }}"
+          gh release create "v$VERSION" \
             --repo Canonical-AI/canonic \
-            --draft=false
+            --title "v$VERSION" \
+            --notes-file release_notes.md \
+            --target main \
+            release-artifacts/*
 
   update-brew:
-    needs: [create-draft, release-mac, publish-release]
+    needs: [compute-version, finalize]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -223,6 +372,6 @@ jobs:
           formula-name: canonic
           formula-path: Casks/canonic.rb
           homebrew-tap: Canonical-AI/homebrew-tap
-          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.create-draft.outputs.version }}/canonic-arm64.dmg
+          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic-arm64.dmg
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

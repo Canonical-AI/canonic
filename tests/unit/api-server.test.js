@@ -5,7 +5,9 @@ import os from 'os'
 import path from 'path'
 import { createRequire } from 'module'
 
-const LOCKFILE = path.join(os.homedir(), '.config', 'canonic', 'api.lock')
+// Isolate config dir per test file so parallel workers don't share one lockfile.
+process.env.CANONIC_CONFIG_DIR = path.join(os.tmpdir(), `canonic-test-api-${process.pid}`)
+const LOCKFILE = path.join(process.env.CANONIC_CONFIG_DIR, 'api.lock')
 const apiServer = await import('../../electron/api-server.js')
 // Use require (not import) so we share the SAME mcp-server instance api-server's
 // internal require() holds — vitest ESM import would give a separate copy whose
@@ -160,7 +162,7 @@ describe('api-server', () => {
   })
 
   it('GET /comments without file returns map of all comments', async () => {
-    const commentsDir = path.join(os.homedir(), '.config', 'canonic', 'comments')
+    const commentsDir = path.join(process.env.CANONIC_CONFIG_DIR, 'comments')
     fs.mkdirSync(commentsDir, { recursive: true })
     const fixture = [{ id: 'c1', text: 'Looks good', author: 'john' }]
     const fixtureFile = path.join(commentsDir, '__api_test_doc.json')
@@ -180,7 +182,7 @@ describe('api-server', () => {
   })
 
   it('GET /comments?file=<relPath> returns comments for that doc', async () => {
-    const commentsDir = path.join(os.homedir(), '.config', 'canonic', 'comments')
+    const commentsDir = path.join(process.env.CANONIC_CONFIG_DIR, 'comments')
     fs.mkdirSync(commentsDir, { recursive: true })
     const fixture = [{ id: 'c2', text: 'review me', author: 'priya' }]
     const fixtureFile = path.join(commentsDir, 'apitestVisionDoc.md.json')

@@ -5,7 +5,7 @@ const path = require('path')
 const os = require('os')
 const mcp = require('./mcp-server')
 
-const CANONIC_DIR = path.join(os.homedir(), '.config', 'canonic')
+const CANONIC_DIR = process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), '.config', 'canonic')
 const LOCKFILE = path.join(CANONIC_DIR, 'api.lock')
 const COMMENTS_DIR = path.join(CANONIC_DIR, 'comments')
 

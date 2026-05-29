@@ -185,57 +185,58 @@ When the AI annotates a document via the chat, its comments are tagged as agent-
 
 ***
 
-## AI Assistant
+## AI Autocomplete
 
-The AI panel (right side, **AI** tab) is a thinking partner — it challenges assumptions and asks questions, but won't write your documents for you.
+Canonic offers ghost-text completions as you type — an inline suggestion appears ahead of your cursor; accept it or keep typing to ignore it.
 
 ### Setup
 
-Configure the AI in **Settings**:
+Enable it in **Settings → AI**:
 
-* **Base URL** — any OpenAI-compatible endpoint (default: OpenRouter at `https://openrouter.ai/api/v1`)
+* **Enable inline completions** — toggle on
+* **Provider** — pick a configured provider
+* **Model** — the completion model (e.g. `codestral-latest`)
 
-* **API key** — your key for that provider
+A Codestral (Mistral) key works well for this; any configured provider/model can be used.
 
-* **Model** — the model to use (e.g. `anthropic/claude-sonnet-4-6`)
+### Using it
 
-Works with OpenRouter, OpenAI, Mistral, DeepSeek, Groq, Ollama, or any OpenAI-compatible API.
+* **`Tab`** — accept the full suggestion
+* **`Cmd/Ctrl+→`** — accept just the next word
+* **`Esc`** — dismiss the current suggestion
 
-### Using the AI
+Suggestions are debounced as you type and won't fire when completions are disabled or no provider/model is set.
 
-Type a message in the AI panel. The current document is always included as context. The AI will respond with questions and challenges — not rewrites.
+***
 
-**Input behaviour**:
+## Coding Agents (AI Control)
 
-* **Enter** or **`Cmd/Ctrl+Enter`** — send
-* **`Shift+Enter`** — newline inside the message
-* **`Esc`** — cancel an in-flight response. Partial text already streamed in is retained so you don't lose context.
+The **Implementation** panel (right side) runs an external coding agent's own CLI inside an embedded terminal, so you can kick off and steer engineering work without leaving Canonic. This is the agent's real interactive session — it owns its own turns, permissions, and memory.
 
-**Tools the assistant can call** (each gated by a capability toggle in Settings → AI):
+Supported agents: **Claude Code, Codex, Gemini CLI, OpenCode, Pi** (or any custom CLI you point it at).
 
-* `read_doc` — read another document in the workspace
-* `list_workspace` — list files and folders
-* `web_search` — fetch a snippet from the web
-* `post_comment` — drop an inline comment anchored to a quoted span in the current document
-* `suggest_edits` — propose a ghost-text edit you can accept or reject
+### What you need
 
-The assistant's tool calls show up as a single-line log row inside its message so you can see what it actually did.
+* **Install the agent's CLI yourself** — e.g. `claude`, `codex`, `gemini`, `opencode`, or `pi`. Canonic detects what's installed; an uninstalled agent shows a "Not installed" badge with an install hint.
+* **Nothing else.** Canonic runs a local MCP server automatically (loopback only, token-authed) and registers itself into the agent's MCP config on the first session. You do **not** edit `AGENTS.md` / `GEMINI.md` or install any skill for this.
 
-### Slash Commands (in AI Chat)
+### Starting a session
 
-Type `/` in the chat input to open a small picker:
+1. Pick an agent in the panel header.
+2. Type a prompt and press **`Cmd/Ctrl+Enter`**.
+3. The agent's CLI spawns in the embedded terminal and your prompt is sent once it finishes loading. From there it's the normal interactive CLI.
 
-* `/model` — switch the model used for the assistant
-* `/effort` — switch the effort/quality level (Low / Medium / High)
-* `/tools` — toggle individual capabilities on or off; `Space` toggles, `Enter` closes the menu
+The agent sees what you're working on: the focused doc and your open tray are pushed to the MCP server, and the agent can call `get_open_docs` (or read the context injected at startup) to act on "this doc" without you pasting a path. It can also read, edit, comment on, and create docs in the workspace through the Canonic MCP tools.
 
-Preferences (model, effort, tools, system prompt) are persisted to your `config.json` so they survive restarts.
+> Pi is the exception — it doesn't use MCP. It receives the same workspace context inline via its system prompt instead.
 
-### Compact Mode
+### History, resume, and pop-out
 
-On narrow windows, the AI panel docks as a centered floating modal instead of squeezing into the side panel. Streaming, tools, and history all keep working the same way.
+* **History** — every session you start is recorded (agent, prompt, time, status). Expand the History toggle at the bottom of the panel.
+* **Resume** — click a history entry to re-open it in a fresh terminal seeded with that prompt.
+* **Pop out** — the pop-out button launches the session in your real OS terminal (Terminal / cmd / your configured emulator) if you'd rather drive it there.
 
-Chat history is session-only and resets on app restart unless you explicitly save it.
+Switching to a different agent automatically ends the live session (it's saved to history first).
 
 ***
 

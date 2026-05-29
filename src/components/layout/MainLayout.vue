@@ -218,10 +218,10 @@
                     </button>
                     <button
                         class="dropdown-item"
-                        @click="openMobileTab('right', 'ai')"
+                        @click="openMobileTab('right', 'agent')"
                     >
-                        <Sparkles :size="14" />
-                        <span>AI Assistant</span>
+                        <Bot :size="14" />
+                        <span>Agent</span>
                     </button>
                     <button
                         class="dropdown-item"
@@ -430,12 +430,12 @@
                     <button
                         :class="[
                             'tab',
-                            store.rightPanelTab === 'ai' && 'active',
+                            store.rightPanelTab === 'agent' && 'active',
                         ]"
-                        @click="handleRightTabClick('ai')"
-                        title="AI"
+                        @click="handleRightTabClick('agent')"
+                        title="Agent"
                     >
-                        <Sparkles :size="15" />
+                        <Bot :size="15" />
                     </button>
                     <button
                         :class="[
@@ -466,10 +466,10 @@
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
                 </div>
-                <!-- AIChat kept always-mounted so streaming survives focus/tab toggles -->
-                <AIChat
+                <!-- AgentPanel replaces old AI chat. -->
+                <AgentPanel
                     v-show="
-                        store.rightPanelTab === 'ai' &&
+                        store.rightPanelTab === 'agent' &&
                         !store.rightPanelCollapsed
                     "
                 />
@@ -566,7 +566,7 @@ import {
     Type,
     Palette,
     MessageSquare,
-    Sparkles,
+    Bot,
     History,
     Share2,
     ArrowUpCircle,
@@ -585,7 +585,7 @@ import EditorTabs from "../editor/EditorTabs.vue";
 import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
-import AIChat from "../panels/AIChat.vue";
+import AgentPanel from "../panels/AgentPanel.vue";
 import HistoryPanel from "../panels/HistoryPanel.vue";
 import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";
@@ -748,15 +748,20 @@ function applyAutoTheme() {
 let systemSchemeQuery = null;
 function watchSystemScheme() {
     if (typeof window === "undefined") return;
-    if (systemSchemeQuery) systemSchemeQuery.removeEventListener("change", applyAutoTheme);
+    if (systemSchemeQuery)
+        systemSchemeQuery.removeEventListener("change", applyAutoTheme);
     systemSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
     systemSchemeQuery.addEventListener("change", applyAutoTheme);
 }
 
 // Re-apply auto-theme when config changes (e.g. user updates theme settings)
-watch(() => store.config?.theme, () => {
-    applyAutoTheme();
-}, { deep: true });
+watch(
+    () => store.config?.theme,
+    () => {
+        applyAutoTheme();
+    },
+    { deep: true },
+);
 
 // Close theme popover on outside click
 function onDocClick(e) {
@@ -1324,6 +1329,14 @@ function toggleDistractionFree() {
 
 .right-panel--collapsed {
     width: 40px;
+}
+
+.panel-content-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .panel-tabs {

@@ -3,6 +3,7 @@ const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const mcp = require('./mcp-server')
 
 const CANONIC_DIR = path.join(os.homedir(), '.config', 'canonic')
 const LOCKFILE = path.join(CANONIC_DIR, 'api.lock')
@@ -41,6 +42,7 @@ let server = null
 let token = null
 let activeSession = null
 let onEventCallback = null
+let activePort = null  // live listening port, kept in-memory so callers needn't read the lockfile
 
 function generateToken() {
   return crypto.randomBytes(16).toString('hex')
@@ -107,8 +109,70 @@ async function handleRequest(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1')
   const { pathname } = url
 
+  // ── MCP routes (delegated to mcp-server.js) ──
+  if (pathname === '/mcp') {
+    return await mcp.handleMcpRequest(req, res)
+  }
+
+  if (pathname === '/mcp/sse' || pathname === '/sse') {
+    return mcp.handleSseRequest(req, res)
+  }
+
   if (req.method === 'GET' && pathname === '/ping') {
-    return sendJson(res, 200, { ok: true, version: getAppVersion() })
+    return sendJson(res, 200, { ok: true, version: getAppVersion(), mcp: true })
+  }
+
+  // ── Plain REST routes (token-free, localhost-only) ───────────────────────────
+  // Mirror the MCP tools for agents that can't speak MCP and just curl (e.g. Pi).
+  // Same security posture as /mcp: bound to 127.0.0.1, no token required — so we must reject
+  // browser-originated requests (a visited page could otherwise POST /doc to write arbitrary
+  // files, since JSON bodies sent as text/plain are CORS "simple" requests with no preflight).
+  // Agents and curl send no Origin header and pass through.
+  if (['/workspace', '/doc', '/comment'].includes(pathname) && mcp.hasForeignOrigin(req)) {
+    return sendJson(res, 403, { error: 'forbidden' })
+  }
+  if (pathname === '/workspace' && req.method === 'GET') {
+    const info = await mcp.tools.get_workspace_info.handler({})
+    let files = []
+    try { files = (await mcp.tools.list_docs.handler({})).files || [] } catch {}
+    return sendJson(res, 200, { ...info, files })
+  }
+
+  if (pathname === '/doc') {
+    if (req.method === 'GET') {
+      let p = url.searchParams.get('path')
+      if (!p) p = mcp.getEditorState().focusedDoc   // no path → the doc the user is focused on
+      if (!p) return sendJson(res, 404, { error: 'no path given and no focused doc' })
+      const result = await mcp.tools.read_doc.handler({ path: p })
+      if (result.error) return sendJson(res, 404, result)
+      return sendJson(res, 200, { path: p, content: result.content })
+    }
+    if (req.method === 'POST') {
+      const body = await readBody(req)
+      if (!body.path || typeof body.content !== 'string') {
+        return sendJson(res, 400, { error: 'path and content are required' })
+      }
+      const result = await mcp.tools.write_doc.handler({ path: body.path, content: body.content })
+      return sendJson(res, 200, result)
+    }
+    return sendJson(res, 405, { error: 'method not allowed' })
+  }
+
+  if (pathname === '/comment') {
+    if (req.method === 'GET') {
+      const p = url.searchParams.get('path') || url.searchParams.get('file')
+      if (!p) return sendJson(res, 400, { error: 'path is required' })
+      const result = await mcp.tools.read_comments.handler({ path: p })
+      return sendJson(res, 200, result)
+    }
+    if (req.method === 'POST') {
+      const body = await readBody(req)
+      const p = body.path || body.file
+      if (!p || !body.text) return sendJson(res, 400, { error: 'path and text are required' })
+      const result = await mcp.tools.post_comment.handler({ path: p, text: body.text, anchor: body.anchor || {} })
+      return sendJson(res, 200, result)
+    }
+    return sendJson(res, 405, { error: 'method not allowed' })
   }
 
   const knownRoutes = ['/session/start', '/session/cancel', '/comments', '/activity']
@@ -215,11 +279,13 @@ function start(onEvent) {
   return new Promise((resolve, reject) => {
     onEventCallback = onEvent
     token = generateToken()
+    mcp.setEventCallback(onEvent)
     server = http.createServer((req, res) => {
       handleRequest(req, res).catch((err) => sendJson(res, 500, { error: err.message }))
     })
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address()
+      activePort = port
       writeLockfile(port)
       resolve(port)
     })
@@ -230,8 +296,21 @@ function start(onEvent) {
 function stop() {
   deleteLockfile()
   activeSession = null
+  activePort = null
   server?.close()
   server = null
 }
 
-module.exports = { start, stop, submitAction, cancelSession }
+function getPort() {
+  return activePort
+}
+
+function setWorkspacePath(wsPath) {
+  mcp.setWorkspacePath(wsPath)
+}
+
+function getWorkspacePath() {
+  return mcp.getWorkspacePath()
+}
+
+module.exports = { start, stop, getPort, submitAction, cancelSession, setWorkspacePath, getWorkspacePath }

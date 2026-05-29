@@ -1319,4 +1319,250 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: an agent session starts and ends
   then: the caller-refocus step is skipped without error
 
-*Last updated: 2026-05-26*
+***
+
+## AI Control (AIC)
+
+> Agent-driven implementation surface in Canonic's right panel. PMs start coding-agent sessions from inside the app to kick off and steer engineering work without leaving the planning context.
+
+### Agent Configuration
+
+* scenario: no agents configured
+  given: no agents have been configured
+  when: the user opens the Agent panel
+  then: an empty state is shown with a "Configure an agent" button
+
+* scenario: load preset agents
+  given: the Agent panel mounts
+  when: presets are loaded from main process
+  then: Claude Code, Gemini CLI, Codex, OpenCode, and Pi are listed with install status
+
+* scenario: select preset agent
+  given: at least one preset agent is configured
+  when: the user clicks the agent selector and picks an agent
+  then: that agent becomes active, name appears in header
+
+* scenario: add custom agent
+  given: the agent selector popup is open
+  when: the user clicks "Add agent" then "Custom" and fills name and binary path
+  then: the custom agent appears in configured agents list
+
+* scenario: reject uninstalled agent
+  given: a preset agent binary is not installed on system
+  when: the user tries to select it
+  then: the agent is not selected and a "Not installed" badge is shown
+
+### Flavor and Model
+
+* scenario: toggle reviewer/implementer flavor
+  given: the Agent panel is open
+  when: the user clicks the Reviewer or Implementer pill
+  then: only one pill is active at a time, flavor switches accordingly
+
+* scenario: implementer shows target directory
+  given: flavor is set to Implementer
+  when: the user views the panel
+  then: a target directory path is shown, clickable to open a folder picker
+
+* scenario: model and effort selected in the CLI, not in-app
+  given: an agent is selected
+  when: the user views the Agent panel
+  then: no in-app model or effort picker is shown — model/effort are chosen inside each agent's own CLI
+
+### Session Management
+
+* scenario: start session runs the agent's native TUI in an embedded terminal
+  given: an agent is selected and Agent panel is open
+  when: the user types a prompt and presses Cmd+Enter
+  then: the agent's interactive CLI spawns in an embedded PTY terminal and status changes to running
+
+* scenario: initial prompt auto-sends once the CLI settles
+  given: a session starts with a non-empty prompt
+  when: the agent's startup render goes idle (or a hard cap elapses)
+  then: the prompt is typed into the TUI and submitted automatically
+
+* scenario: session persists across doc switches
+  given: a session is running in the Agent panel
+  when: the user switches to a different document
+  then: the PTY session keeps running and terminal output is preserved
+
+* scenario: stop session
+  given: a session is running
+  when: the user clicks the stop button
+  then: the agent PTY process is terminated and status changes to ended
+
+* scenario: auto-end session on agent switch
+  given: a session is running for one agent
+  when: the user selects a different agent
+  then: the live session is ended (history saved) before the new agent becomes active
+
+* scenario: pop out to the OS terminal
+  given: a session is running
+  when: the user clicks the pop-out button
+  then: a launch script is written and opened in the user's real terminal (Terminal/cmd/configured emulator), not a copied command string
+
+* scenario: error handling
+  given: an agent binary is not found or crashes
+  when: a session is started
+  then: an error message (with install hint when available) is printed in the terminal
+
+### Session History
+
+* scenario: history panel collapsed by default
+  given: the Agent panel is open
+  when: the user views the bottom of the panel
+  then: a History toggle is shown, collapsed
+
+* scenario: expand history shows recent sessions
+  given: at least one previous session exists
+  when: the user clicks the History toggle
+  then: up to 5 recent sessions are shown with title, agent, date, and status
+
+* scenario: filter history by title
+  given: the history panel is expanded
+  when: the user types in the filter input
+  then: only sessions whose title matches the filter are shown
+
+* scenario: delete history entry
+  given: the history panel is expanded with entries
+  when: the user clicks the delete button on an entry
+  then: that entry is removed from history
+
+* scenario: save session on end
+  given: a session ends
+  when: the session finalizes
+  then: an entry is added to session history
+
+* scenario: resume a past session from history
+  given: the history panel is expanded with entries
+  when: the user clicks a history entry
+  then: its agent is re-selected and a new terminal session opens seeded with that entry's prompt
+
+### Embedded Terminal Appearance
+
+* scenario: terminal matches the Canonic theme
+  given: a terminal session is open
+  when: the terminal renders
+  then: it uses the app's mono font and the surrounding panel background so it blends in rather than reading as a separate boxed window
+
+* scenario: terminal auto-contrasts text to background
+  given: the active Canonic theme has a dark or light panel background
+  when: the terminal builds its theme
+  then: dark backgrounds get light text and light backgrounds get dark text
+
+* scenario: terminal re-themes on theme switch
+  given: a terminal session is open
+  when: the user switches the Canonic theme
+  then: the terminal palette updates to the new theme
+
+### Context Injection
+
+* scenario: silent system-prompt injection where supported
+  given: the selected agent supports a silent system-prompt flag (Claude Code, Pi)
+  when: a session spawns
+  then: the workspace context is passed via --append-system-prompt and only the user's prompt is typed into the visible terminal
+
+* scenario: typed context fallback
+  given: the selected agent has no silent system-prompt flag and no MCP context
+  when: a session spawns with a prompt
+  then: a one-line workspace context is prepended to the typed prompt
+
+* scenario: curl-only agents get a deterministic REST playbook
+  given: the selected agent cannot use MCP natively (Pi)
+  when: a session spawns
+  then: the injected system prompt is a curl playbook with the live API base URL, instructing the agent to first GET /workspace and GET /doc, then read/write docs and post comments via curl
+
+* scenario: editor state pushed to the MCP server
+  given: a workspace is open
+  when: the user focuses a doc or changes the open tray
+  then: the renderer pushes the focused doc and open-tray paths to the MCP server
+
+### REST API (curl agents)
+
+Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (same posture as /mcp), so agents that can't speak MCP can act with curl.
+
+* scenario: GET /workspace returns workspace state
+  given: a workspace is open
+  when: an agent sends GET /workspace
+  then: workspace name, path, branch, focused doc, open tray, and the doc file list are returned
+
+* scenario: GET /doc returns the focused doc when no path is given
+  given: the user has a focused doc
+  when: an agent sends GET /doc with no path
+  then: the focused doc path and content are returned
+
+* scenario: GET /doc returns a doc by path
+  given: a workspace is open with an existing doc
+  when: an agent sends GET /doc?path=<rel>
+  then: the doc path and content are returned
+
+* scenario: GET /doc with no path and no focused doc
+  given: no doc is focused
+  when: an agent sends GET /doc with no path
+  then: a 404 with an explanatory error is returned
+
+* scenario: POST /doc writes a doc
+  given: a workspace is open
+  when: an agent sends POST /doc with path and content
+  then: the file is written and the editor repaints via the file watcher
+
+* scenario: POST /comment posts a comment
+  given: a workspace is open
+  when: an agent sends POST /comment with path, text, and optional anchor
+  then: the comment is persisted and emitted to the renderer
+
+* scenario: GET /comment reads comments for a doc
+  given: a doc has open comments
+  when: an agent sends GET /comment?path=<rel>
+  then: the open comments for that doc are returned
+
+### MCP Server
+
+* scenario: MCP initialize returns capabilities and standing instructions
+  given: the MCP server is running
+  when: an agent sends an initialize request
+  then: protocol version, tools capability, server info, and an instructions string naming the canonic tools are returned
+
+* scenario: initialize instructions carry the live focused doc and open tray
+  given: the user has a focused doc and open tray
+  when: an agent sends an initialize request
+  then: the instructions string includes the focused doc path and the open-tray paths as a snapshot
+
+* scenario: MCP tools/list returns all tools
+  given: the MCP server is running
+  when: an agent sends a tools/list request
+  then: all 9 tools are listed with descriptions and input schemas
+
+* scenario: get_open_docs returns the live editor view
+  given: a workspace is open
+  when: an agent calls get_open_docs
+  then: the focused doc and the open-tray paths are returned for mid-session refresh
+
+* scenario: read_doc returns file content
+  given: a workspace is open with an existing doc
+  when: an agent calls read_doc with a valid path
+  then: the markdown content is returned
+
+* scenario: write_doc overwrites file
+  given: a workspace is open
+  when: an agent calls write_doc with path and content
+  then: the file is written and editor repaints via file watcher
+
+* scenario: post_comment writes comment
+  given: a workspace is open
+  when: an agent calls post_comment with path, text, and optional anchor
+  then: a comment is persisted and emitted to the renderer
+
+* scenario: get_workspace_info returns state
+  given: a workspace is open
+  when: an agent calls get_workspace_info
+  then: workspace name, path, current branch, focused doc, and open-tray paths are returned
+
+### Demo Mode
+
+* scenario: demo mode shows configured agents
+  given: demo mode is active
+  when: the Agent panel mounts
+  then: Claude Code appears as a configured agent with resumable terminal-kind session history entries
+
+*Last updated: 2026-05-28*

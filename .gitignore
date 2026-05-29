@@ -13,3 +13,6 @@ CLAUDE/
 # Playwright artifacts
 test-results/
 playwright-report/
+
+# Local agent-session runtime data (history written at runtime, not source)
+.canonic/

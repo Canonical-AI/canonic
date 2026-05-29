@@ -154,8 +154,18 @@ function resolveProvider(config, providerId) {
 
 const isDev = process.env.NODE_ENV !== "production";
 
+function safeLog(...args) {
+  if (!isDev) return
+  try { console.log(...args) } catch {}
+}
+
+function safeErr(...args) {
+  if (!isDev) return
+  try { console.error(...args) } catch {}
+}
+
 function read() {
-  if (isDev) console.log("[Config] Reading config from:", CONFIG_PATH);
+  safeLog("[Config] Reading config from:", CONFIG_PATH);
   if (!fs.existsSync(CONFIG_PATH)) return null;
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
@@ -180,7 +190,7 @@ function read() {
       theme: { ...DEFAULTS.theme, ...(migrated.theme || {}) },
     };
   } catch (err) {
-    if (isDev) console.error("[Config] Error reading config:", err);
+    if (isDev) safeErr("[Config] Error reading config:", err);
     return null;
   }
 }
@@ -212,7 +222,7 @@ function write(config) {
   };
 
   if (isDev)
-    console.log(
+    safeLog(
       "[Config] Writing config:",
       JSON.stringify(
         {

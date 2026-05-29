@@ -21,6 +21,20 @@ const configService = require("./config");
 const versionsService = require("./versions");
 const apiServer = require("./api-server");
 const { startWatcher, stopWatcher, getIndex } = require("./fileIndex");
+const agentPresets = require("./agent-presets");
+const agentRunner = require("./agent-runner");
+const ptyRunner = require("./pty-runner");
+const sessionStore = require("./session-store");
+const mcpServer = require("./mcp-server");
+
+// Suppress EPIPE errors when stdout/stderr pipes break (backgrounded Electron).
+// Without this, every console.log/error during dev can crash the process.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (err) => {
+    if (err.code === 'EPIPE') return
+    throw err
+  })
+}
 
 // Tracks the OS app that was frontmost when each agent session started, so we
 // can return focus to it when the session ends (submit/cancel). macOS only.
@@ -146,7 +160,7 @@ function log(...args) {
       fs.mkdirSync(CANONIC_DIR, { recursive: true });
     fs.appendFileSync(LOG_FILE, line);
   } catch {}
-  console.log(...args);
+  try { console.log(...args) } catch {}
 }
 
 function logError(...args) {
@@ -168,7 +182,7 @@ function logError(...args) {
       fs.mkdirSync(CANONIC_DIR, { recursive: true });
     fs.appendFileSync(LOG_FILE, line);
   } catch {}
-  console.error(...args);
+  try { console.error(...args) } catch {}
 }
 
 const PEERS_FILE = path.join(CANONIC_DIR, "peers.json");
@@ -836,6 +850,66 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// ── MCP config sync ───────────────────────────────────────────────────────────
+// The api/MCP server listens on a fresh random port each launch, but agent CLIs
+// store the canonic endpoint in their own config (e.g. ~/.claude.json). If we only
+// refreshed that on Agent-panel interaction, an externally-launched agent would hit
+// last run's dead port. So we re-point every already-registered agent at the live
+// port as soon as the server is up. We only touch agents that already have a canonic
+// entry (never auto-register) and respect opt-outs.
+// Presets differ on the config key: most use `mcpServers.canonic`, OpenCode uses
+// `mcp.canonic`. Honoring the preset's own key avoids writing a key that fails the
+// agent's schema.
+function getDeep(obj, dottedKey) {
+  return dottedKey.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+}
+function setDeep(obj, dottedKey, value) {
+  const keys = dottedKey.split('.');
+  const last = keys.pop();
+  let cur = obj;
+  for (const k of keys) { if (typeof cur[k] !== 'object' || cur[k] == null) cur[k] = {}; cur = cur[k]; }
+  cur[last] = value;
+}
+
+function syncMcpConfig(agentId, port) {
+  const preset = agentPresets.getPreset(agentId);
+  if (!preset || !preset.mcpConfigPath || !port) return;
+  const cfg = configService.read() || {};
+  if ((cfg.mcpOptOuts || {})[agentId]) return;
+  try {
+    const fs = require('fs');
+    const file = preset.mcpConfigPath;
+    if (!fs.existsSync(file)) return;  // not registered → leave to the UI flow
+    const entry = preset.mcpEntryTemplate(port);
+    if (preset.mcpConfigFormat === 'json') {
+      let json = {};
+      try { json = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { return; }
+      const key = preset.mcpConfigKey || 'mcpServers.canonic';
+      if (getDeep(json, key) == null) return;  // only refresh if present
+      setDeep(json, key, entry);
+      fs.writeFileSync(file, JSON.stringify(json, null, 2), { mode: 0o600 });
+    } else if (preset.mcpConfigFormat === 'toml') {
+      let content = fs.readFileSync(file, 'utf-8');
+      if (!content.includes('[mcp_servers.canonic]')) return;
+      // Drop the stale canonic block, then append a fresh one with the live port.
+      content = content.replace(/\n*\[mcp_servers\.canonic\][\s\S]*?(?=\n\[|\s*$)/, '');
+      content = content.trimEnd() + '\n\n' + entry + '\n';
+      fs.writeFileSync(file, content, { mode: 0o600 });
+    }
+  } catch (err) {
+    logError("[mcp] syncMcpConfig failed:", err.message);
+  }
+}
+
+// Re-point every already-registered preset agent at the live MCP port.
+function syncAllMcpConfigs(port) {
+  if (!port) return;
+  // agent-presets exports the preset array as module.exports directly.
+  for (const preset of agentPresets) {
+    if (preset.mcpConfigPath) syncMcpConfig(preset.id, port);
+  }
+}
+
 app.whenReady().then(async () => {
   log("[main] app ready");
   try {
@@ -932,6 +1006,11 @@ app.whenReady().then(async () => {
         if (caller) refocusApp(caller);
       }
       mainWindow?.webContents.send(`agent:${event.type}`, event.data);
+    })
+    .then((port) => {
+      // Server is up on a fresh random port — re-point any already-registered
+      // agents (e.g. ~/.claude.json) so externally-launched CLIs hit the live port.
+      syncAllMcpConfigs(port || apiServer.getPort());
     })
     .catch((err) => {
       logError("[api-server] failed to start:", err);
@@ -1070,6 +1149,7 @@ function setupIpcHandlers() {
     async (_, workspacePath, template = "blank") => {
       try {
         activeWorkspacePath = workspacePath
+        apiServer.setWorkspacePath(workspacePath)
         const result = await gitService.initWorkspace(workspacePath, template);
         startWatcher(workspacePath, (index, gitChanged) => {
           if (gitChanged) {
@@ -2107,13 +2187,476 @@ function setupIpcHandlers() {
     },
   );
 
-  // --- Agent session ---
+  // --- Agent session (legacy, CLI → doc → CLI flow) ---
   ipcMain.handle("agent:submit", async (_, { sessionId, prompt, content }) => {
     return await apiServer.submitAction(sessionId, prompt, content);
   });
 
   ipcMain.handle("agent:cancel", async (_, sessionId) => {
     return apiServer.cancelSession(sessionId);
+  });
+
+  // --- AI Control: Agent management ---
+  ipcMain.handle("agent-control:get-presets", async () => {
+    return agentPresets.map(p => ({
+      id: p.id,
+      name: p.name,
+      binary: p.binary,
+      installHint: p.installHint,
+      injectContext: !!p.injectContext,   // true → feed workspace data inline instead of via MCP
+      outputFormat: p.outputFormat,       // 'stream-json' | 'jsonl' | 'json' | 'text' — drives parsing
+      installed: agentPresets.isInstalled(p.binary)
+    }));
+  });
+
+  ipcMain.handle("agent-control:get-models", async (_, { agentId }) => {
+    const preset = agentPresets.getPreset(agentId);
+    if (!preset) return { models: [], connected: false };
+    // listModels fetches live from the CLI when supported (opencode, pi), else curated.
+    const result = await agentRunner.listModels(agentId);
+    return {
+      models: result.models,
+      defaultModel: result.defaultModel,
+      source: result.source,                       // 'cli' | 'known'
+      connected: agentPresets.isInstalled(preset.binary)
+    };
+  });
+
+  ipcMain.handle("agent-control:check-installed", async (_, agentId) => {
+    return agentRunner.checkInstalled(agentId);
+  });
+
+  ipcMain.handle("agent-control:get-custom-agents", async () => {
+    const cfg = configService.read();
+    return cfg?.customAgents || [];
+  });
+
+  ipcMain.handle("agent-control:add-custom-agent", async (_, agentConfig) => {
+    const cfg = configService.read() || {};
+    if (!cfg.customAgents) cfg.customAgents = [];
+    // Ensure unique ID
+    const id = 'custom-' + require('crypto').randomUUID().slice(0, 8);
+    const entry = { id, ...agentConfig, type: 'custom' };
+    cfg.customAgents.push(entry);
+    configService.write(cfg);
+    return { ok: true, agent: entry };
+  });
+
+  ipcMain.handle("agent-control:remove-custom-agent", async (_, agentId) => {
+    const cfg = configService.read() || {};
+    if (!cfg.customAgents) cfg.customAgents = [];
+    cfg.customAgents = cfg.customAgents.filter(a => a.id !== agentId);
+    configService.write(cfg);
+    return { ok: true };
+  });
+
+  // --- AI Control: Session management ---
+  // Rewrite an agent's existing canonic MCP entry to point at `port`. Only touches configs
+  // that ALREADY have a canonic entry (respects the explicit register/opt-out flow — never
+  // auto-adds). Used to heal stale ports when the server is relaunched on a new port.
+  // Read/write a dotted key path (e.g. "mcpServers.canonic" or "mcp.canonic") in a JSON object.
+  // Inject-context agents (Pi) can't post comments via MCP — instead they append JSON lines to
+  // `<cwd>/.canonic/comments.inbox.jsonl`. Drain that file into the real per-doc comment store.
+  // Returns the number of comments created.
+  function ingestCommentInbox(cwd) {
+    if (!cwd) return 0;
+    const fs = require('fs');
+    const path = require('path');
+    const crypto = require('crypto');
+    const inbox = path.join(cwd, '.canonic', 'comments.inbox.jsonl');
+    if (!fs.existsSync(inbox)) return 0;
+    let created = 0;
+    try {
+      const raw = fs.readFileSync(inbox, 'utf-8');
+      const commentsDir = path.join(CANONIC_DIR, 'comments');
+      fs.mkdirSync(commentsDir, { recursive: true });
+      for (const line of raw.split('\n')) {
+        const t = line.trim();
+        if (!t) continue;
+        let obj;
+        try { obj = JSON.parse(t); } catch { continue; }
+        if (!obj || !obj.path || !obj.text) continue;
+        const docId = String(obj.path).replace(/[\\/]/g, '_');
+        const file = path.join(commentsDir, `${docId}.json`);
+        let list = [];
+        if (fs.existsSync(file)) { try { list = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { list = []; } }
+        list.push({
+          id: crypto.randomUUID(),
+          anchor: obj.quotedText ? { quotedText: String(obj.quotedText) } : {},
+          text: String(obj.text),
+          author: 'AI Agent',
+          isAgent: true,
+          agentName: 'AI Agent',
+          resolved: false,
+          createdAt: new Date().toISOString()
+        });
+        fs.writeFileSync(file, JSON.stringify(list, null, 2), 'utf-8');
+        created++;
+      }
+      fs.unlinkSync(inbox);
+    } catch (err) {
+      logError("[comments] inbox ingest failed:", err.message);
+    }
+    return created;
+  }
+
+  // Shared stdout/stderr/exit/error callbacks for a spawned agent process. Reused by both
+  // start-session and resume so the renderer sees the same event stream either way.
+  function agentControlCallbacks(cwd) {
+    return {
+      onStdout: (sid, text) => {
+        mainWindow?.webContents.send('agent-control:stdout', { sessionId: sid, text });
+      },
+      onStderr: (sid, text) => {
+        mainWindow?.webContents.send('agent-control:stderr', { sessionId: sid, text });
+      },
+      onExit: (sid, code, signal) => {
+        // Drain any comments the agent queued to the inbox file, then tell the renderer
+        // to reload so they appear in the comments panel.
+        const created = ingestCommentInbox(cwd);
+        if (created > 0) {
+          mainWindow?.webContents.send('agent-control:comments-ingested', { sessionId: sid, count: created });
+        }
+        mainWindow?.webContents.send('agent-control:exit', { sessionId: sid, code, signal });
+      },
+      onError: (sid, error) => {
+        mainWindow?.webContents.send('agent-control:error', { sessionId: sid, error });
+      }
+    };
+  }
+
+  ipcMain.handle("agent-control:start-session", async (_, params) => {
+    const { sessionId, agentId, customBinary, customArgs, cwd, prompt, model, effort, mcpPort } = params;
+
+    // Auto-check the CLI is installed before spawning — gives a clean error + install hint
+    // instead of a raw ENOENT.
+    if (agentId === 'custom') {
+      const fs = require('fs');
+      const ok = customBinary && (fs.existsSync(customBinary) || agentPresets.isInstalled(customBinary));
+      if (!ok) {
+        return { error: `Binary not found: ${customBinary || '(none)'}`, notInstalled: true };
+      }
+    } else {
+      const preset = agentPresets.getPreset(agentId);
+      if (!preset) return { error: `Unknown agent: ${agentId}`, notInstalled: true };
+      if (!agentPresets.isInstalled(preset.binary)) {
+        return {
+          error: `${preset.name} is not installed`,
+          notInstalled: true,
+          binary: preset.binary,
+          installHint: preset.installHint
+        };
+      }
+      // Refresh the agent's MCP config to the LIVE port if it's already registered. The
+      // server port rotates each launch, so a previously-registered entry goes stale and the
+      // agent silently connects to a dead endpoint (tools/comments stop working).
+      syncMcpConfig(agentId, apiServer.getPort() || mcpPort);
+    }
+
+    // Always inject the live port (authoritative) into the spawned process env.
+    const livePort = apiServer.getPort() || mcpPort;
+
+    try {
+      const result = agentRunner.start(
+        {
+          sessionId,
+          agentId,
+          binary: customBinary,
+          args: customArgs,
+          cwd,
+          prompt,
+          model,
+          effort,
+          mcpPort: livePort
+        },
+        agentControlCallbacks(cwd)
+      );
+      return result;
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  // Resume a prior session by re-spawning with the agent's own session id. Single-shot
+  // print-mode agents (claude -p, codex exec, opencode run, gemini -p, pi -p) exit after
+  // each turn, so a follow-up message can't be written to stdin — we relaunch with the
+  // agent's resume flag so the conversation thread continues server-side.
+  ipcMain.handle("agent-control:resume", async (_, params) => {
+    const { sessionId, agentId, previousSessionId, cwd, prompt, model, effort, mcpPort } = params;
+
+    if (agentId !== 'custom') {
+      const preset = agentPresets.getPreset(agentId);
+      if (!preset) return { error: `Unknown agent: ${agentId}` };
+      if (!agentPresets.isInstalled(preset.binary)) {
+        return { error: `${preset.name} is not installed`, notInstalled: true, installHint: preset.installHint };
+      }
+      syncMcpConfig(agentId, apiServer.getPort() || mcpPort);
+    }
+
+    const livePort = apiServer.getPort() || mcpPort;
+
+    try {
+      return agentRunner.resume(
+        sessionId,
+        previousSessionId,
+        prompt,
+        { agentId, cwd, model, effort, mcpPort: livePort },
+        agentControlCallbacks(cwd)
+      );
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle("agent-control:send-message", async (_, { sessionId, prompt }) => {
+    return agentRunner.send(sessionId, prompt);
+  });
+
+  ipcMain.handle("agent-control:stop-session", async (_, { sessionId }) => {
+    return agentRunner.stop(sessionId);
+  });
+
+  // ── Embedded PTY terminal: run the agent's native interactive TUI inside Canonic ──────────
+  // Spawn a bare interactive agent in a pseudo-terminal. Canonic MCP is synced to the live
+  // port first so the agent's own tool calls hit our server. The renderer (xterm) handles all
+  // I/O — we parse nothing.
+  ipcMain.handle("pty:spawn", async (_, params) => {
+    const { sessionId, agentId, customBinary, customArgs, cwd, cols, rows, mcpPort, systemPrompt, colorScheme } = params;
+
+    if (agentId === 'custom') {
+      const fs = require('fs');
+      const ok = customBinary && (fs.existsSync(customBinary) || agentPresets.isInstalled(customBinary));
+      if (!ok) return { error: `Binary not found: ${customBinary || '(none)'}`, notInstalled: true };
+    } else {
+      const preset = agentPresets.getPreset(agentId);
+      if (!preset) return { error: `Unknown agent: ${agentId}`, notInstalled: true };
+      if (!agentPresets.isInstalled(preset.binary)) {
+        return { error: `${preset.name} is not installed`, notInstalled: true, binary: preset.binary, installHint: preset.installHint };
+      }
+      syncMcpConfig(agentId, apiServer.getPort() || mcpPort);
+    }
+
+    const livePort = apiServer.getPort() || mcpPort;
+    try {
+      return ptyRunner.spawn(
+        { sessionId, agentId, binary: customBinary, args: customArgs, cwd, cols, rows, mcpPort: livePort, systemPrompt, colorScheme },
+        {
+          onData: (sid, data) => {
+            mainWindow?.webContents.send('pty:data', { sessionId: sid, data });
+          },
+          onExit: (sid, code, signal) => {
+            const created = ingestCommentInbox(cwd);
+            if (created > 0) {
+              mainWindow?.webContents.send('agent-control:comments-ingested', { sessionId: sid, count: created });
+            }
+            mainWindow?.webContents.send('pty:exit', { sessionId: sid, code, signal });
+          }
+        }
+      );
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle("pty:input", async (_, { sessionId, data }) => ptyRunner.write(sessionId, data));
+  ipcMain.handle("pty:resize", async (_, { sessionId, cols, rows }) => ptyRunner.resize(sessionId, cols, rows));
+  ipcMain.handle("pty:kill", async (_, { sessionId }) => ptyRunner.kill(sessionId));
+
+  // Renderer pushes the live editor state (focused doc + open tray) so MCP tools can report
+  // what the user is actually looking at.
+  ipcMain.handle("mcp:set-editor-state", async (_, state) => {
+    mcpServer.setEditorState(state || {});
+    return { ok: true };
+  });
+
+  // Pop out: launch the agent in the user's REAL system terminal, opened in the session cwd.
+  // PTY sessions are opaque (no captured agent session id), so this starts the agent fresh —
+  // it's a handoff, not a reattach.
+  //
+  // We never build a cross-shell command string and hand-escape it (fragile, 3 different
+  // escaping rules). Instead we write a launch script to a private temp file (mode 0700) and
+  // tell the terminal to RUN that file. The only escaping is POSIX single-quote, applied once.
+  // dir/bin are local-only (our preset paths, the user's own custom binary, their own
+  // workspace path) — there is no remote or peer-supplied input on this path.
+  ipcMain.handle("pty:popout", async (_, { agentId, binary, cwd }) => {
+    let bin = binary;
+    if (agentId !== "custom") {
+      const preset = agentPresets.getPreset(agentId);
+      if (!preset) return { error: `Unknown agent: ${agentId}` };
+      bin = preset.binary;
+    }
+    if (!bin) return { error: "No binary for this agent" };
+
+    const dir = cwd || activeWorkspacePath || process.cwd();
+    const isWin = process.platform === "win32";
+    // POSIX single-quote escape: wrap in '…', and replace any ' with '\'' .
+    const sq = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+
+    try {
+      const tmpDir = os.tmpdir();
+      let scriptPath, body;
+      if (isWin) {
+        scriptPath = path.join(tmpDir, `canonic-popout-${Date.now()}.bat`);
+        // %~dp0-relative; cmd quoting via double-quotes. cd /d handles drive change.
+        body = `@echo off\r\ncd /d "${dir.replace(/"/g, '')}"\r\n${bin}\r\n`;
+      } else {
+        scriptPath = path.join(tmpDir, `canonic-popout-${Date.now()}.command`);
+        body = `#!/bin/bash\ncd ${sq(dir)} || exit 1\nexec ${sq(bin)}\n`;
+      }
+      fs.writeFileSync(scriptPath, body, { mode: 0o700 });
+
+      if (process.platform === "darwin") {
+        // `open` a .command launches it in Terminal; no shell, args passed as an array.
+        execFile("open", [scriptPath]);
+      } else if (isWin) {
+        execFile("cmd", ["/c", "start", "", scriptPath]);
+      } else {
+        const term = process.env.TERMINAL || "x-terminal-emulator";
+        execFile(term, ["-e", "bash", scriptPath]);
+      }
+      return { ok: true, command: `cd ${dir} && ${bin}` };
+    } catch (e) {
+      const { clipboard } = require("electron");
+      const fallback = `cd ${JSON.stringify(dir)} && ${bin}`;
+      clipboard.writeText(fallback);
+      return { ok: false, copied: true, command: fallback, error: e.message };
+    }
+  });
+
+  ipcMain.handle("agent-control:open-terminal", async (_, { sessionId, agentId, resumeId, agentSessionId }) => {
+    const preset = agentPresets.getPreset(agentId);
+    let cmd;
+    // Prefer the agent's REAL session id (captured from its output) so the user resumes the
+    // exact conversation. terminalResumeArgs is interactive (no -p/json) for a TUI handoff.
+    const realId = agentSessionId || resumeId;
+    if (preset) {
+      if (realId && preset.terminalResumeArgs) {
+        cmd = `${preset.binary} ${preset.terminalResumeArgs(realId).join(' ')}`;
+      } else if (preset.continueArgs) {
+        // No captured id — fall back to resuming the most recent session.
+        cmd = `${preset.binary} ${preset.continueArgs.join(' ')}`;
+      } else {
+        cmd = preset.binary;
+      }
+    } else {
+      cmd = `# Custom agent — no resume command configured`;
+    }
+
+    // Prefix `cd <workspace>` so the terminal opens in the session's working dir. Prefer the
+    // live session's cwd; fall back to the active workspace. Skipped for the custom-no-command
+    // placeholder (starts with '#').
+    const sessionCwd = agentRunner.getSession(sessionId)?.cwd || activeWorkspacePath;
+    if (sessionCwd && !cmd.startsWith('#')) {
+      cmd = `cd ${JSON.stringify(sessionCwd)} && ${cmd}`;
+    }
+
+    // Copy to clipboard
+    const { clipboard } = require('electron');
+    clipboard.writeText(cmd);
+
+    // Notify renderer
+    if (mainWindow) {
+      mainWindow.webContents.send('agent-control:terminal-command', { command: cmd });
+    }
+
+    return { ok: true, command: cmd };
+  });
+
+  // --- AI Control: Session history ---
+  ipcMain.handle("agent-control:get-history", async () => {
+    return sessionStore.read(activeWorkspacePath);
+  });
+
+  ipcMain.handle("agent-control:save-history", async (_, { session }) => {
+    sessionStore.add(activeWorkspacePath, session);
+    return { ok: true };
+  });
+
+  ipcMain.handle("agent-control:delete-history", async (_, { sessionId }) => {
+    sessionStore.remove(activeWorkspacePath, sessionId);
+    return { ok: true };
+  });
+
+  // --- AI Control: MCP registration ---
+  ipcMain.handle("agent-control:get-mcp-port", async () => {
+    // The api-server (which also serves MCP) knows its live port in-memory. Prefer that —
+    // the lockfile can be empty or stale (it rotates each launch). Fall back to the lock.
+    const live = apiServer.getPort();
+    if (live) return { port: live };
+    const lockPath = require('path').join(require('os').homedir(), '.config', 'canonic', 'api.lock')
+    try {
+      const lock = JSON.parse(require('fs').readFileSync(lockPath, 'utf-8'))
+      return { port: lock.port }
+    } catch {
+      return { port: null }
+    }
+  });
+
+  ipcMain.handle("agent-control:check-mcp", async (_, { agentId }) => {
+    const preset = agentPresets.getPreset(agentId);
+    if (!preset) return { registered: false, error: 'unknown agent' };
+    const cfg = configService.read() || {};
+    const mcpOptOuts = cfg.mcpOptOuts || {};
+    if (mcpOptOuts[agentId]) return { registered: false, optedOut: true };
+    // Check if config file exists with canonic server entry
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(preset.mcpConfigPath)) {
+        const content = fs.readFileSync(preset.mcpConfigPath, 'utf-8');
+        if (preset.mcpConfigFormat === 'json') {
+          const json = JSON.parse(content);
+          return { registered: getDeep(json, preset.mcpConfigKey || 'mcpServers.canonic') != null };
+        } else if (preset.mcpConfigFormat === 'toml') {
+          return { registered: content.includes('[mcp_servers.canonic]') };
+        }
+      }
+    } catch {}
+    return { registered: false };
+  });
+
+  ipcMain.handle("agent-control:register-mcp", async (_, { agentId, port }) => {
+    const preset = agentPresets.getPreset(agentId);
+    if (!preset) return { ok: false, error: 'unknown agent' };
+    try {
+      const fs = require('fs');
+      const entry = preset.mcpEntryTemplate(port);
+      
+      if (preset.mcpConfigFormat === 'json') {
+        let json = {};
+        const file = preset.mcpConfigPath;
+        if (fs.existsSync(file)) {
+          try { json = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch {}
+        }
+        fs.mkdirSync(require('path').dirname(file), { recursive: true });
+        setDeep(json, preset.mcpConfigKey || 'mcpServers.canonic', entry);
+        fs.writeFileSync(file, JSON.stringify(json, null, 2), { mode: 0o600 });
+        return { ok: true };
+      } else if (preset.mcpConfigFormat === 'toml') {
+        let content = '';
+        const file = preset.mcpConfigPath;
+        if (fs.existsSync(file)) {
+          content = fs.readFileSync(file, 'utf-8');
+        }
+        fs.mkdirSync(require('path').dirname(file), { recursive: true });
+        // Add entry if not already present
+        if (!content.includes('[mcp_servers.canonic]')) {
+          content += '\n' + entry + '\n';
+        }
+        fs.writeFileSync(file, content, { mode: 0o600 });
+        return { ok: true };
+      }
+      return { ok: false, error: 'unsupported config format: ' + preset.mcpConfigFormat };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("agent-control:opt-out-mcp", async (_, { agentId }) => {
+    const cfg = configService.read() || {};
+    if (!cfg.mcpOptOuts) cfg.mcpOptOuts = {};
+    cfg.mcpOptOuts[agentId] = true;
+    configService.write(cfg);
+    return { ok: true };
   });
 
   log("[ipc] all handlers registered successfully");

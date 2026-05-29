@@ -243,6 +243,12 @@ export const useAppStore = defineStore("app", () => {
   const controlStreamBuffer = ref('')
   const controlLineBuffer = ref('')    // holds an incomplete trailing JSONL line between stdout chunks
 
+  // ── AI Control: Embedded terminal session ──────────────────────────────
+  // The agent runs its NATIVE interactive TUI inside an xterm panel (see AgentTerminal.vue).
+  // We parse nothing — the agent owns turns, permissions, memory, resume. Consistent across
+  // every CLI because only their headless modes diverge; interactive modes all just work.
+  const terminalSession = ref(null)    // { id, agentId, agentName, type, binary, args, cwd, mcpPort }
+
   // ── AI Control: Session history ─────────────────────────────────────────
   const controlHistory = ref([])       // [{ id, title, agentId, agentName, model, effort, flavor, cwd, status, startedAt, endedAt, messageCount }]
 
@@ -1907,10 +1913,13 @@ export const useAppStore = defineStore("app", () => {
   }
 
   function setActiveAgent(agentId) {
+    if (agentId === activeAgentId.value) return
     if (controlStatus.value === 'running') {
       // Save current session to history before switching
       saveControlSessionToHistory()
     }
+    // End any live embedded terminal — it's bound to the previous agent.
+    if (terminalSession.value) endTerminalSession()
     activeAgentId.value = agentId
     // Reset session state
     controlMessages.value = []
@@ -2564,6 +2573,122 @@ export const useAppStore = defineStore("app", () => {
     saveControlSessionToHistory()
   }
 
+  // Prepare an embedded-terminal session: ensure the agent's MCP config points at the live
+  // port, then stash spawn params. AgentTerminal.vue registers its PTY listeners and calls
+  // ptySpawn once mounted (listener-before-spawn so no initial output is lost).
+  // One short line priming the agent: where it is, what's open, and that the canonic MCP tools
+  // are available for comments/edits. Injected silently as a system prompt where the CLI
+  // supports it; otherwise prepended to the typed first message (still one line, not a wall).
+  function buildTerminalContext() {
+    const parts = []
+    if (workspaceName.value) parts.push(`workspace "${workspaceName.value}"`)
+    if (currentFile.value) parts.push(`open doc: ${currentFile.value}`)
+    return `Canonic ${parts.join(', ')}. Use the canonic MCP tools to read, comment on, and edit docs here.`
+  }
+
+  async function startTerminalSession({ prompt } = {}) {
+    if (!activeAgentId.value) return null
+    const agent = configuredAgents.value.find(a => a.id === activeAgentId.value)
+    if (!agent) return null
+
+    const cwd = targetDir.value || workspacePath.value
+    const mcpP = mcpPort.value || 0
+
+    // First-run MCP registration for preset agents (skip injectContext agents like Pi).
+    if (agent.type === 'preset' && agent.presetId && mcpP && !agent.injectContext) {
+      const mcp = await checkMcpRegistration(agent.presetId)
+      if (!mcp.registered && !mcp.optedOut && !mcpOptOuts.value[agent.presetId]) {
+        await registerMcp(agent.presetId)
+      }
+    }
+
+    // Context goes in as a silent system prompt where supported (AgentTerminal decides whether to
+    // also type it, based on the spawn result). The typed first message is just the user's prompt.
+    const trimmed = (prompt || '').trim()
+
+    terminalSession.value = {
+      id: crypto.randomUUID(),
+      agentId: agent.type === 'custom' ? 'custom' : agent.presetId,
+      agentName: agent.name,
+      type: agent.type,
+      binary: agent.type === 'custom' ? agent.binary : undefined,
+      args: agent.type === 'custom' ? agent.args : undefined,
+      cwd,
+      mcpPort: mcpP,
+      systemPrompt: buildTerminalContext(),   // one-line context, injected silently if the CLI allows
+      userPrompt: trimmed,                     // raw prompt typed into the TUI
+      prompt: trimmed,                         // alias kept for history + resume
+      startedAt: Date.now()
+    }
+    saveTerminalSessionToHistory('running')
+    return terminalSession.value
+  }
+
+  // Record a terminal session in shared controlHistory. Terminal sessions are PTY-opaque
+  // (no captured agent session id), so "resume" = re-launch a fresh terminal with the same
+  // agent + cwd + prompt rather than reattaching to the live process.
+  function saveTerminalSessionToHistory(status) {
+    const s = terminalSession.value
+    if (!s) return
+    const title = (s.prompt && s.prompt.slice(0, 40)) || `${s.agentName} session`
+    const entry = {
+      id: s.id,
+      title: title + (s.prompt && s.prompt.length > 40 ? '...' : ''),
+      agentId: s.agentId,
+      agentName: s.agentName,
+      flavor: activeFlavor.value,
+      cwd: s.cwd,
+      prompt: s.prompt || '',
+      kind: 'terminal',
+      status,
+      startedAt: s.startedAt,
+      endedAt: status === 'running' ? null : Date.now()
+    }
+    const idx = controlHistory.value.findIndex(h => h.id === entry.id)
+    if (idx >= 0) controlHistory.value[idx] = entry
+    else controlHistory.value.unshift(entry)
+    if (api.agentControl?.saveHistory) api.agentControl.saveHistory({ session: entry })
+  }
+
+  function endTerminalSession() {
+    if (terminalSession.value) {
+      saveTerminalSessionToHistory('ended')
+      if (api.agentControl?.ptyKill) {
+        api.agentControl.ptyKill({ sessionId: terminalSession.value.id })
+      }
+    }
+    terminalSession.value = null
+  }
+
+  // Re-open a past session: select its agent, then start a fresh terminal with the same prompt.
+  async function resumeTerminalFromHistory(entry) {
+    if (!entry) return null
+    // Match the agent the session ran with (preset id or custom).
+    const agent = configuredAgents.value.find(a =>
+      (a.type === 'custom' ? 'custom' : a.presetId) === entry.agentId
+    )
+    if (agent && activeAgentId.value !== agent.id) setActiveAgent(agent.id)
+    endTerminalSession()
+    return startTerminalSession({ prompt: entry.prompt || '' })
+  }
+
+  // Hand the session off to the user's real terminal (system Terminal app), opened in its cwd.
+  async function popOutTerminal() {
+    const s = terminalSession.value
+    if (!s || !api.agentControl?.popOutTerminal) return { error: 'no session' }
+    return api.agentControl.popOutTerminal({ agentId: s.agentId, binary: s.binary, cwd: s.cwd })
+  }
+
+  // Push the user's current editor view to the MCP server so agents can answer
+  // "what am I looking at" (get_open_docs / get_workspace_info) without asking for a path.
+  // focusedDoc = the active tab; openDocs = the whole open tray.
+  watch([currentFile, openTabs], () => {
+    api.agentControl?.setEditorState?.({
+      focusedDoc: currentFile.value,
+      openDocs: [...openTabs.value]
+    })
+  }, { deep: true, immediate: true })
+
   async function stopControlSession() {
     if (!controlSession.value) return
     await api.agentControl.stopSession({ sessionId: controlSession.value.id })
@@ -2948,6 +3073,7 @@ export const useAppStore = defineStore("app", () => {
     activeFlavor,
     targetDir,
     controlSession,
+    terminalSession,
     controlMessages,
     controlStatus,
     controlTokenCount,
@@ -2980,6 +3106,10 @@ export const useAppStore = defineStore("app", () => {
     handleControlExit,
     handleControlError,
     stopControlSession,
+    startTerminalSession,
+    endTerminalSession,
+    resumeTerminalFromHistory,
+    popOutTerminal,
     openInTerminal,
     loadControlHistory,
     deleteControlHistoryEntry,

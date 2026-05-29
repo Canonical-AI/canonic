@@ -287,6 +287,15 @@ contextBridge.exposeInMainWorld("canonic", {
     resume: (params) => ipcRenderer.invoke('agent-control:resume', params),
     stopSession: (sessionId) => ipcRenderer.invoke('agent-control:stop-session', sessionId),
     openInTerminal: (params) => ipcRenderer.invoke('agent-control:open-terminal', params),
+    popOutTerminal: (params) => ipcRenderer.invoke('pty:popout', params),
+
+    // Embedded PTY terminal — agent runs its native interactive TUI inside Canonic.
+    ptySpawn: (params) => ipcRenderer.invoke('pty:spawn', params),
+    ptyInput: (params) => ipcRenderer.invoke('pty:input', params),
+    ptyResize: (params) => ipcRenderer.invoke('pty:resize', params),
+    ptyKill: (params) => ipcRenderer.invoke('pty:kill', params),
+    onPtyData: (cb) => { ipcRenderer.removeAllListeners('pty:data'); ipcRenderer.on('pty:data', (_, data) => cb(data)) },
+    onPtyExit: (cb) => { ipcRenderer.removeAllListeners('pty:exit'); ipcRenderer.on('pty:exit', (_, data) => cb(data)) },
 
     // Session events (main → renderer). Each registration replaces any prior listener
     // on the same channel — otherwise a re-run of the renderer setup (HMR in dev, store
@@ -306,12 +315,17 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.removeAllListeners('agent-control:copy-to-clipboard')
       ipcRenderer.removeAllListeners('agent-control:terminal-command')
       ipcRenderer.removeAllListeners('agent-control:comments-ingested')
+      ipcRenderer.removeAllListeners('pty:data')
+      ipcRenderer.removeAllListeners('pty:exit')
     },
 
     // History
     getHistory: () => ipcRenderer.invoke('agent-control:get-history'),
     saveHistory: (session) => ipcRenderer.invoke('agent-control:save-history', session),
     deleteHistory: (sessionId) => ipcRenderer.invoke('agent-control:delete-history', sessionId),
+
+    // Push live editor state (focused doc + open tray) to the MCP server.
+    setEditorState: (state) => ipcRenderer.invoke('mcp:set-editor-state', state),
 
     // MCP registration
     getMcpPort: () => ipcRenderer.invoke('agent-control:get-mcp-port'),

@@ -49,6 +49,10 @@ const PRESETS = [
     continueArgs: ['-c'],  // bare `claude -c` reopens last session in interactive TUI for handoff
     // Interactive resume command for terminal handoff — NO print/json flags, so it opens the TUI.
     terminalResumeArgs: (sessionId) => ['--resume', sessionId],
+    // Silent context injection for the embedded TUI: `--append-system-prompt` adds to the system
+    // prompt without printing anything into the conversation. Lets us prime Canonic context
+    // without a visible wall of text.
+    systemPromptArgs: (text) => ['--append-system-prompt', text],
     mcpConfigPath: path.join(HOME, '.claude.json'),
     mcpConfigKey: 'mcpServers.canonic',
     mcpConfigFormat: 'json',
@@ -188,6 +192,9 @@ const PRESETS = [
     },
     continueArgs: ['--continue'],
     terminalResumeArgs: (sessionId) => ['--session', sessionId],
+    // Pi supports silent injection like Claude: --append-system-prompt keeps the context out of
+    // the visible chat so the terminal only shows the user's prompt.
+    systemPromptArgs: (text) => ['--append-system-prompt', text],
     // Pi prefers inline context over MCP: its tool calls are permission-gated, so instead of
     // wiring the MCP server we inject the live workspace data into the prompt and let Pi use
     // its built-in file tools to edit docs directly in the working dir.

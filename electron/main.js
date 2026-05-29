@@ -23,6 +23,7 @@ const apiServer = require("./api-server");
 const { startWatcher, stopWatcher, getIndex } = require("./fileIndex");
 const agentPresets = require("./agent-presets");
 const agentRunner = require("./agent-runner");
+const ptyRunner = require("./pty-runner");
 const sessionStore = require("./session-store");
 const mcpServer = require("./mcp-server");
 
@@ -2389,6 +2390,113 @@ function setupIpcHandlers() {
 
   ipcMain.handle("agent-control:stop-session", async (_, { sessionId }) => {
     return agentRunner.stop(sessionId);
+  });
+
+  // ── Embedded PTY terminal: run the agent's native interactive TUI inside Canonic ──────────
+  // Spawn a bare interactive agent in a pseudo-terminal. Canonic MCP is synced to the live
+  // port first so the agent's own tool calls hit our server. The renderer (xterm) handles all
+  // I/O — we parse nothing.
+  ipcMain.handle("pty:spawn", async (_, params) => {
+    const { sessionId, agentId, customBinary, customArgs, cwd, cols, rows, mcpPort, systemPrompt } = params;
+
+    if (agentId === 'custom') {
+      const fs = require('fs');
+      const ok = customBinary && (fs.existsSync(customBinary) || agentPresets.isInstalled(customBinary));
+      if (!ok) return { error: `Binary not found: ${customBinary || '(none)'}`, notInstalled: true };
+    } else {
+      const preset = agentPresets.getPreset(agentId);
+      if (!preset) return { error: `Unknown agent: ${agentId}`, notInstalled: true };
+      if (!agentPresets.isInstalled(preset.binary)) {
+        return { error: `${preset.name} is not installed`, notInstalled: true, binary: preset.binary, installHint: preset.installHint };
+      }
+      syncMcpConfig(agentId, apiServer.getPort() || mcpPort);
+    }
+
+    const livePort = apiServer.getPort() || mcpPort;
+    try {
+      return ptyRunner.spawn(
+        { sessionId, agentId, binary: customBinary, args: customArgs, cwd, cols, rows, mcpPort: livePort, systemPrompt },
+        {
+          onData: (sid, data) => {
+            mainWindow?.webContents.send('pty:data', { sessionId: sid, data });
+          },
+          onExit: (sid, code, signal) => {
+            const created = ingestCommentInbox(cwd);
+            if (created > 0) {
+              mainWindow?.webContents.send('agent-control:comments-ingested', { sessionId: sid, count: created });
+            }
+            mainWindow?.webContents.send('pty:exit', { sessionId: sid, code, signal });
+          }
+        }
+      );
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle("pty:input", async (_, { sessionId, data }) => ptyRunner.write(sessionId, data));
+  ipcMain.handle("pty:resize", async (_, { sessionId, cols, rows }) => ptyRunner.resize(sessionId, cols, rows));
+  ipcMain.handle("pty:kill", async (_, { sessionId }) => ptyRunner.kill(sessionId));
+
+  // Renderer pushes the live editor state (focused doc + open tray) so MCP tools can report
+  // what the user is actually looking at.
+  ipcMain.handle("mcp:set-editor-state", async (_, state) => {
+    mcpServer.setEditorState(state || {});
+    return { ok: true };
+  });
+
+  // Pop out: launch the agent in the user's REAL system terminal, opened in the session cwd.
+  // PTY sessions are opaque (no captured agent session id), so this starts the agent fresh —
+  // it's a handoff, not a reattach.
+  //
+  // We never build a cross-shell command string and hand-escape it (fragile, 3 different
+  // escaping rules). Instead we write a launch script to a private temp file (mode 0700) and
+  // tell the terminal to RUN that file. The only escaping is POSIX single-quote, applied once.
+  // dir/bin are local-only (our preset paths, the user's own custom binary, their own
+  // workspace path) — there is no remote or peer-supplied input on this path.
+  ipcMain.handle("pty:popout", async (_, { agentId, binary, cwd }) => {
+    let bin = binary;
+    if (agentId !== "custom") {
+      const preset = agentPresets.getPreset(agentId);
+      if (!preset) return { error: `Unknown agent: ${agentId}` };
+      bin = preset.binary;
+    }
+    if (!bin) return { error: "No binary for this agent" };
+
+    const dir = cwd || activeWorkspacePath || process.cwd();
+    const isWin = process.platform === "win32";
+    // POSIX single-quote escape: wrap in '…', and replace any ' with '\'' .
+    const sq = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+
+    try {
+      const tmpDir = os.tmpdir();
+      let scriptPath, body;
+      if (isWin) {
+        scriptPath = path.join(tmpDir, `canonic-popout-${Date.now()}.bat`);
+        // %~dp0-relative; cmd quoting via double-quotes. cd /d handles drive change.
+        body = `@echo off\r\ncd /d "${dir.replace(/"/g, '')}"\r\n${bin}\r\n`;
+      } else {
+        scriptPath = path.join(tmpDir, `canonic-popout-${Date.now()}.command`);
+        body = `#!/bin/bash\ncd ${sq(dir)} || exit 1\nexec ${sq(bin)}\n`;
+      }
+      fs.writeFileSync(scriptPath, body, { mode: 0o700 });
+
+      if (process.platform === "darwin") {
+        // `open` a .command launches it in Terminal; no shell, args passed as an array.
+        execFile("open", [scriptPath]);
+      } else if (isWin) {
+        execFile("cmd", ["/c", "start", "", scriptPath]);
+      } else {
+        const term = process.env.TERMINAL || "x-terminal-emulator";
+        execFile(term, ["-e", "bash", scriptPath]);
+      }
+      return { ok: true, command: `cd ${dir} && ${bin}` };
+    } catch (e) {
+      const { clipboard } = require("electron");
+      const fallback = `cd ${JSON.stringify(dir)} && ${bin}`;
+      clipboard.writeText(fallback);
+      return { ok: true, copied: true, command: fallback, error: e.message };
+    }
   });
 
   ipcMain.handle("agent-control:open-terminal", async (_, { sessionId, agentId, resumeId, agentSessionId }) => {

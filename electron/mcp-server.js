@@ -11,6 +11,11 @@ let _authToken = null
 let _workspacePath = null
 let _eventCallback = null   // (event) => void — forwarded to renderer
 
+// Live editor state, pushed from the renderer (which owns the UI). Lets agents see what the
+// user is actually looking at — the focused doc and the open tray — instead of guessing.
+let _focusedDoc = null      // relative path of the doc the user currently has focused, or null
+let _openDocs = []          // relative paths of all docs open in the tray (focused last)
+
 // SSE clients currently connected
 const sseClients = new Set()
 
@@ -18,6 +23,30 @@ function setAuthToken(token) { _authToken = token }
 function setWorkspacePath(wsPath) { _workspacePath = wsPath }
 function getWorkspacePath() { return _workspacePath }
 function setEventCallback(cb) { _eventCallback = cb }
+function setEditorState({ focusedDoc, openDocs } = {}) {
+  _focusedDoc = focusedDoc || null
+  _openDocs = Array.isArray(openDocs) ? openDocs : []
+}
+
+// Standing guidance returned in the MCP `initialize` result. Compliant clients (Claude, Codex,
+// Gemini, OpenCode) inject this into the agent's context once at connect — protocol-native, no
+// typed prompt, no per-CLI flag. We fold in a SNAPSHOT of the current focus/tray so the agent
+// starts oriented; for live updates as the user switches docs the agent calls get_open_docs
+// (initialize only fires once per connection).
+function buildInstructions() {
+  const lines = [
+    'You are connected to Canonic, the user\'s local Markdown doc workspace.',
+    'Use the Canonic tools to act on docs: get_open_docs (what the user is viewing right now), read_doc / write_doc / create_doc, and post_comment / read_comments for inline review.',
+    'When the user refers to "this doc" or gives no path, act on the focused doc. Call get_open_docs to refresh — the focus and open tray change as the user works.'
+  ]
+  if (_focusedDoc) {
+    lines.push(`Right now the user is focused on: ${_focusedDoc}`)
+  }
+  if (_openDocs.length) {
+    lines.push(`Open in the tray: ${_openDocs.join(', ')}`)
+  }
+  return lines.join('\n')
+}
 
 // ── IPC bridge to renderer (for post_comment, start_session) ──────────────────
 // Set by main.js via setIpcSend
@@ -245,14 +274,13 @@ const tools = {
   },
 
   get_workspace_info: {
-    description: 'Workspace name, path, current branch, current doc',
+    description: 'Workspace name, path, current branch, the focused doc, and all open docs',
     inputSchema: {
       type: 'object',
       properties: {}
     },
     handler: async () => {
       let branch = 'main'
-      let currentDoc = null
 
       // Try to read git branch
       try {
@@ -271,9 +299,22 @@ const tools = {
         name,
         path: _workspacePath,
         branch,
-        currentDoc: currentDoc
+        focusedDoc: _focusedDoc,    // doc the user currently has open/focused (null if none)
+        openDocs: _openDocs         // all docs open in the tray
       }
     }
+  },
+
+  get_open_docs: {
+    description: 'What the user is looking at right now: the focused doc and the open tray. Use this to work on whatever the user currently has open without asking them for a path.',
+    inputSchema: {
+      type: 'object',
+      properties: {}
+    },
+    handler: async () => ({
+      focusedDoc: _focusedDoc,
+      openDocs: _openDocs
+    })
   }
 }
 
@@ -343,7 +384,8 @@ async function handleMcpRequest(req, res) {
           serverInfo: {
             name: 'Canonic',
             version: '1.0.0'
-          }
+          },
+          instructions: buildInstructions()
         }
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(rpcResult(id, result)))
@@ -456,5 +498,7 @@ module.exports = {
   setWorkspacePath,
   getWorkspacePath,
   setEventCallback,
+  setEditorState,
+  buildInstructions,
   setIpcSend
 }

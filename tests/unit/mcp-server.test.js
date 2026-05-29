@@ -56,17 +56,39 @@ describe('MCP server', () => {
       expect(res.body.result.capabilities.tools).toBeDefined()
       expect(res.body.result.serverInfo.name).toBe('Canonic')
     })
+
+    it('returns standing instructions naming the canonic tools', async () => {
+      mcp.setEditorState({ focusedDoc: null, openDocs: [] })
+      const res = await mcpRequest('initialize', {})
+      const instr = res.body.result.instructions
+      expect(typeof instr).toBe('string')
+      expect(instr).toContain('Canonic')
+      expect(instr).toContain('get_open_docs')
+    })
+
+    it('folds the live focused doc + open tray into instructions', () => {
+      // buildInstructions reads module editor-state directly; tested in-process (the server's
+      // own copy lives in a separate module instance under the test runner).
+      mcp.setEditorState({
+        focusedDoc: 'Vision/product-vision.md',
+        openDocs: ['Vision/product-vision.md', 'Roadmap/q3.md']
+      })
+      const instr = mcp.buildInstructions()
+      expect(instr).toContain('Vision/product-vision.md')
+      expect(instr).toContain('Roadmap/q3.md')
+      mcp.setEditorState({ focusedDoc: null, openDocs: [] })  // reset for other tests
+    })
   })
 
   describe('tools/list', () => {
-    it('returns all 8 tools', async () => {
+    it('returns all 9 tools', async () => {
       const res = await mcpRequest('tools/list')
       expect(res.status).toBe(200)
       const tools = res.body.result.tools
-      expect(tools.length).toBe(8)
+      expect(tools.length).toBe(9)
       const names = tools.map(t => t.name).sort()
       expect(names).toEqual([
-        'create_doc', 'get_workspace_info', 'list_docs',
+        'create_doc', 'get_open_docs', 'get_workspace_info', 'list_docs',
         'post_comment', 'read_comments', 'read_doc',
         'start_session', 'write_doc'
       ])

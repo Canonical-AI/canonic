@@ -221,7 +221,7 @@
                         @click="openMobileTab('right', 'implement')"
                     >
                         <Bot :size="14" />
-                        <span>Implementation</span>
+                        <span>Agent</span>
                     </button>
                     <button
                         class="dropdown-item"
@@ -433,7 +433,7 @@
                             store.rightPanelTab === 'implement' && 'active',
                         ]"
                         @click="handleRightTabClick('implement')"
-                        title="Implementation"
+                        title="Agent"
                     >
                         <Bot :size="15" />
                     </button>
@@ -749,15 +749,20 @@ function applyAutoTheme() {
 let systemSchemeQuery = null;
 function watchSystemScheme() {
     if (typeof window === "undefined") return;
-    if (systemSchemeQuery) systemSchemeQuery.removeEventListener("change", applyAutoTheme);
+    if (systemSchemeQuery)
+        systemSchemeQuery.removeEventListener("change", applyAutoTheme);
     systemSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
     systemSchemeQuery.addEventListener("change", applyAutoTheme);
 }
 
 // Re-apply auto-theme when config changes (e.g. user updates theme settings)
-watch(() => store.config?.theme, () => {
-    applyAutoTheme();
-}, { deep: true });
+watch(
+    () => store.config?.theme,
+    () => {
+        applyAutoTheme();
+    },
+    { deep: true },
+);
 
 // Close theme popover on outside click
 function onDocClick(e) {

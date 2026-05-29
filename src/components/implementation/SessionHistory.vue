@@ -13,7 +13,13 @@
 
       <div v-if="filteredSessions.length === 0" class="history-empty">No sessions yet.</div>
 
-      <div v-for="session in filteredSessions" :key="session.id" class="history-item">
+      <div
+        v-for="session in filteredSessions"
+        :key="session.id"
+        class="history-item"
+        title="Click to re-open in a new terminal"
+        @click="$emit('resume', session)"
+      >
         <div class="history-item-main">
           <div class="history-title">{{ session.title }}</div>
           <div class="history-meta">
@@ -38,7 +44,7 @@ import { ref, computed } from 'vue'
 import { History, ChevronDown } from 'lucide-vue-next'
 
 const props = defineProps({ sessions: { type: Array, default: () => [] } })
-defineEmits(['delete'])
+defineEmits(['delete', 'resume'])
 
 const expanded = ref(false)
 const filter = ref('')
@@ -103,7 +109,7 @@ function formatDate(ts) {
 .history-item {
   display: flex; align-items: flex-start; justify-content: space-between;
   padding: 6px 4px; border-radius: 4px; margin-bottom: 2px;
-  transition: background 0.1s;
+  transition: background 0.1s; cursor: pointer;
 }
 .history-item:hover { background: var(--bg-hover); }
 

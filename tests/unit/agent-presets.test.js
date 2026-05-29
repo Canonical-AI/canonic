@@ -58,6 +58,20 @@ describe('agent-presets invocation map', () => {
     })
   })
 
+  describe('silent system-prompt injection', () => {
+    it('claude-code injects context via --append-system-prompt', () => {
+      expect(get('claude-code').systemPromptArgs('CTX')).toEqual(['--append-system-prompt', 'CTX'])
+    })
+    it('pi injects context via --append-system-prompt', () => {
+      expect(get('pi').systemPromptArgs('CTX')).toEqual(['--append-system-prompt', 'CTX'])
+    })
+    it('CLIs without a silent flag do not define systemPromptArgs', () => {
+      for (const id of ['codex', 'gemini-cli', 'opencode']) {
+        expect(get(id).systemPromptArgs).toBeUndefined()
+      }
+    })
+  })
+
   describe('codex', () => {
     const p = get('codex')
     it('uses exec --json and supports reasoning effort', () => {

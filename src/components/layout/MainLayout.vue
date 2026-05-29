@@ -1331,6 +1331,14 @@ function toggleDistractionFree() {
     width: 40px;
 }
 
+.panel-content-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .panel-tabs {
     display: flex;
     border-bottom: 1px solid var(--border);

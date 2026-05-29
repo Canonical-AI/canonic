@@ -910,8 +910,39 @@ function syncAllMcpConfigs(port) {
   }
 }
 
+// GUI apps launched from Finder/Dock don't inherit the user's shell PATH (they get a bare
+// /usr/bin:/bin), so `which claude` and spawning agent CLIs fail in the packaged app even though
+// they work in `npm run dev` (terminal-launched → full PATH). Resolve the login shell's PATH once
+// at startup and merge it into process.env.PATH so isInstalled() and pty spawns find the CLIs.
+function fixGuiPath() {
+  if (process.platform === "win32") return; // Windows GUI inherits system PATH fine
+  try {
+    const shell = process.env.SHELL || "/bin/zsh";
+    const D = "__CANONIC_PATH__";
+    // login + interactive shell so nvm / homebrew / asdf init in the user's profile runs.
+    // Sentinels isolate PATH from any banner noise the profile prints.
+    const res = spawnSync(shell, ["-ilc", `printf %s "${D}"; printf %s "$PATH"; printf %s "${D}"`], {
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    const out = res.stdout || "";
+    const parts = out.split(D);
+    if (parts.length < 3) return;
+    const resolved = parts[1].replace(/[\x00-\x1f]/g, "").trim();
+    if (!resolved) return;
+    const merged = Array.from(
+      new Set([...resolved.split(":"), ...(process.env.PATH || "").split(":")].filter(Boolean))
+    );
+    process.env.PATH = merged.join(":");
+    log("[main] PATH resolved from login shell:", process.env.PATH);
+  } catch (err) {
+    logError("[main] fixGuiPath failed:", err.message);
+  }
+}
+
 app.whenReady().then(async () => {
   log("[main] app ready");
+  fixGuiPath();
   try {
     setupIpcHandlers();
     log("[main] IPC handlers registered");

@@ -13,6 +13,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.0.20--alpha-orange.svg)](package.json)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)](#install)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00.svg?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/johnjazzi)
 
 </div>
 
@@ -203,7 +204,7 @@ Run `npm test` before committing — all unit tests must pass. E2e is opt-in and
 
 ### Contributing
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for branching conventions, commit message style, the spec-driven development rule, and the demo-mode rule.
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for branching conventions, commit message style, the spec-driven development rule, the demo-mode rule, and how the CI / release pipeline works (PR test matrix, build-then-commit releases, version-bump labels, and the `no-release` skip label).
 
 Quick rules:
 
@@ -228,6 +229,14 @@ Quick rules:
 | State Management | [Pinia](https://pinia.vuejs.org/)                                       |
 | Search           | [FlexSearch](https://github.com/nextapps-de/flexsearch)                 |
 | AI               | Any OpenAI-compatible provider via OpenRouter, OpenAI, Mistral, Groq, … |
+
+***
+
+## Support
+
+Canonic is free and open source. If it's useful to you, you can support development here:
+
+<a href="https://buymeacoffee.com/johnjazzi"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00.svg?logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
 ***
 

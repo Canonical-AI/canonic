@@ -111,6 +111,49 @@ Before building a major feature, familiarize yourself with `docs/REQUIREMENTS.md
 
 * Mark criteria `[DONE]` or `[PARTIAL]` in the document if your PR completes them.
 
+## Releases & CI
+
+Canonic ships through two GitHub Actions workflows. Understanding them helps you know what happens when a PR merges.
+
+### PR validation
+
+Every pull request to `main` or `dev` runs the full test suite across **Linux (x64 + arm64), Windows, and macOS** (`.github/workflows/pr-validate.yml`). Tests are cheap and catch platform-specific bugs — path-separator differences, file-locking races — that a single OS would silently pass. No packaged build runs on PRs; the build happens only at release time, where the version number exists.
+
+### Release pipeline
+
+Releases are driven by `.github/workflows/release.yml`, triggered when a PR is merged into `main` (or manually via **workflow_dispatch**). The pipeline is **build-then-commit**: the version is bumped *only if every platform builds successfully*.
+
+1. **compute-version** — derive the next version from the bump label. Nothing is committed yet.
+2. **build matrix** — mac, win, linux-x64, linux-arm64: set the computed version, run tests, build with `--publish never`, and upload the artifacts.
+3. **finalize** — runs *only if all four builds pass*: commit the version bump, tag it, push to `main`, and create the GitHub release from the built artifacts (autoupdate `latest*.yml` files included).
+4. **update-brew** — bump the Homebrew cask to the new version.
+
+If any build fails, `finalize` never runs — so `main` is never bumped, and no tag or release is created. The build runs **once**; its artifacts are attached to the release, so there's no duplicate build.
+
+### Choosing the version bump
+
+Apply a label to the PR before merging:
+
+| Label | Result |
+|-------|--------|
+| `major` | `x.0.0` |
+| `minor` | `0.x.0` |
+| _(none)_ | patch — `0.0.x` |
+
+If the `PRERELEASE_TAG` repository variable is set (e.g. `alpha`), it's appended as a prerelease suffix (`0.0.6-alpha`).
+
+### Skipping a release
+
+Add the **`no-release`** label to a PR to merge it *without* triggering any build or release — use this for CI changes, docs, or anything that doesn't need a new version. Create the label once with:
+
+```bash
+gh label create no-release --description "Skip version bump + release build"
+```
+
+### Manual release
+
+Trigger **Release** from the Actions tab (workflow_dispatch) and choose the bump type (`patch` / `minor` / `major`).
+
 ## Getting Started Locally
 
 See the [README.md](./README.md) for instructions on setting up your local development environment.

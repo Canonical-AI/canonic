@@ -39,6 +39,8 @@ Product work lives in too many places. strategy in Notion, specs in Confluence, 
 
 * **AI that asks, not writes.** The built-in assistant brainstorms and challenges; it doesn't ghostwrite your docs.
 
+* **Run coding agents in-app.** Drive Claude Code, Codex, Gemini CLI, OpenCode, or Pi from the Implementation panel — they see your open docs and can read, edit, and comment via a local MCP server that wires itself up.
+
 * **Built for product work.** Inline comments, peer sharing, GFM tables, mermaid diagrams, wiki-links, find & replace across the workspace.
 
 * **Works with your repos.** Drop Canonic on an existing `.git` folder and it adapts.
@@ -95,6 +97,22 @@ Grab the latest build for your platform from the [Releases](https://github.com/C
 * **Windows** — `.exe`
 * **Linux x64** — `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz`
 * **Linux arm64** — `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz` (ARM Arch, postmarketOS, PinePhone, Raspberry Pi)
+
+<br />
+
+***
+
+## Coding Agents (AI Control)
+
+The **Implementation** panel runs an external coding agent's own CLI inside an embedded terminal — start and steer engineering work without leaving Canonic. Supported: **Claude Code, Codex, Gemini CLI, OpenCode, Pi**, or any custom CLI.
+
+* **Just install the agent's CLI** (`claude`, `codex`, `gemini`, `opencode`, `pi`). Canonic shows install status per agent.
+* **MCP wires itself up.** Canonic runs a local, loopback-only MCP server and registers itself into the agent's MCP config on first run — no `AGENTS.md` edits, no skills to install. The agent sees your focused doc and open tray and can read, edit, comment on, and create docs.
+* **Sessions are tracked** — history with one-click resume, plus a pop-out to your real OS terminal.
+
+> Pi doesn't use MCP; it gets the same workspace context inline via its system prompt.
+
+See **[docs/HOWTO.md → Coding Agents](docs/HOWTO.md)** for details.
 
 <br />
 

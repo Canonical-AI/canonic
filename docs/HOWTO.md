@@ -239,6 +239,37 @@ Chat history is session-only and resets on app restart unless you explicitly sav
 
 ***
 
+## Coding Agents (AI Control)
+
+The **Implementation** panel (right side) runs an external coding agent's own CLI inside an embedded terminal, so you can kick off and steer engineering work without leaving Canonic. Unlike the AI Assistant, this is the agent's real interactive session — it owns its own turns, permissions, and memory.
+
+Supported agents: **Claude Code, Codex, Gemini CLI, OpenCode, Pi** (or any custom CLI you point it at).
+
+### What you need
+
+* **Install the agent's CLI yourself** — e.g. `claude`, `codex`, `gemini`, `opencode`, or `pi`. Canonic detects what's installed; an uninstalled agent shows a "Not installed" badge with an install hint.
+* **Nothing else.** Canonic runs a local MCP server automatically (loopback only, token-authed) and registers itself into the agent's MCP config on the first session. You do **not** edit `AGENTS.md` / `GEMINI.md` or install any skill for this.
+
+### Starting a session
+
+1. Pick an agent in the panel header.
+2. Type a prompt and press **`Cmd/Ctrl+Enter`**.
+3. The agent's CLI spawns in the embedded terminal and your prompt is sent once it finishes loading. From there it's the normal interactive CLI.
+
+The agent sees what you're working on: the focused doc and your open tray are pushed to the MCP server, and the agent can call `get_open_docs` (or read the context injected at startup) to act on "this doc" without you pasting a path. It can also read, edit, comment on, and create docs in the workspace through the Canonic MCP tools.
+
+> Pi is the exception — it doesn't use MCP. It receives the same workspace context inline via its system prompt instead.
+
+### History, resume, and pop-out
+
+* **History** — every session you start is recorded (agent, prompt, time, status). Expand the History toggle at the bottom of the panel.
+* **Resume** — click a history entry to re-open it in a fresh terminal seeded with that prompt.
+* **Pop out** — the pop-out button launches the session in your real OS terminal (Terminal / cmd / your configured emulator) if you'd rather drive it there.
+
+Switching to a different agent automatically ends the live session (it's saved to history first).
+
+***
+
 ## Sharing
 
 ### Starting a Share Session

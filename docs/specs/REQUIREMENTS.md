@@ -1364,52 +1364,47 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user views the panel
   then: a target directory path is shown, clickable to open a folder picker
 
-* scenario: change model
+* scenario: model and effort selected in the CLI, not in-app
   given: an agent is selected
-  when: the user clicks the model text and types a model name
-  then: the model is updated for the next session
-
-* scenario: cycle effort level
-  given: an agent is selected
-  when: the user clicks the effort text
-  then: effort cycles through low, medium, high
+  when: the user views the Implementation panel
+  then: no in-app model or effort picker is shown — model/effort are chosen inside each agent's own CLI
 
 ### Session Management
 
-* scenario: start session with prompt
+* scenario: start session runs the agent's native TUI in an embedded terminal
   given: an agent is selected and Implementation panel is open
-  when: the user types a prompt and presses Enter
-  then: a session starts, user message appears, status changes to running
+  when: the user types a prompt and presses Cmd+Enter
+  then: the agent's interactive CLI spawns in an embedded PTY terminal and status changes to running
 
-* scenario: context injection shown as de-emphasis
-  given: a session starts with context doc or selection
-  when: the chat renders
-  then: context injection lines appear as low-emphasis italic text outside message containers
-
-* scenario: streaming thinking indicator
-  given: a session is running
-  when: the agent is processing
-  then: a Thinking indicator with animated dots is shown
+* scenario: initial prompt auto-sends once the CLI settles
+  given: a session starts with a non-empty prompt
+  when: the agent's startup render goes idle (or a hard cap elapses)
+  then: the prompt is typed into the TUI and submitted automatically
 
 * scenario: session persists across doc switches
-  given: a session is running in Implementation panel
+  given: a session is running in the Implementation panel
   when: the user switches to a different document
-  then: the session keeps running and chat state is preserved
+  then: the PTY session keeps running and terminal output is preserved
 
 * scenario: stop session
   given: a session is running
   when: the user clicks the stop button
-  then: the agent process is terminated and status changes to ended
+  then: the agent PTY process is terminated and status changes to ended
 
-* scenario: open in terminal
-  given: a session is running or ended
-  when: the user clicks "Open in terminal"
-  then: a resume command is copied to clipboard
+* scenario: auto-end session on agent switch
+  given: a session is running for one agent
+  when: the user selects a different agent
+  then: the live session is ended (history saved) before the new agent becomes active
+
+* scenario: pop out to the OS terminal
+  given: a session is running
+  when: the user clicks the pop-out button
+  then: a launch script is written and opened in the user's real terminal (Terminal/cmd/configured emulator), not a copied command string
 
 * scenario: error handling
   given: an agent binary is not found or crashes
   when: a session is started
-  then: an error message is displayed and status changes to error
+  then: an error message (with install hint when available) is printed in the terminal
 
 ### Session History
 
@@ -1438,17 +1433,66 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the session finalizes
   then: an entry is added to session history
 
+* scenario: resume a past session from history
+  given: the history panel is expanded with entries
+  when: the user clicks a history entry
+  then: its agent is re-selected and a new terminal session opens seeded with that entry's prompt
+
+### Embedded Terminal Appearance
+
+* scenario: terminal matches the Canonic theme
+  given: a terminal session is open
+  when: the terminal renders
+  then: it uses the app's mono font and the surrounding panel background so it blends in rather than reading as a separate boxed window
+
+* scenario: terminal auto-contrasts text to background
+  given: the active Canonic theme has a dark or light panel background
+  when: the terminal builds its theme
+  then: dark backgrounds get light text and light backgrounds get dark text
+
+* scenario: terminal re-themes on theme switch
+  given: a terminal session is open
+  when: the user switches the Canonic theme
+  then: the terminal palette updates to the new theme
+
+### Context Injection
+
+* scenario: silent system-prompt injection where supported
+  given: the selected agent supports a silent system-prompt flag (Claude Code, Pi)
+  when: a session spawns
+  then: the workspace context is passed via --append-system-prompt and only the user's prompt is typed into the visible terminal
+
+* scenario: typed context fallback
+  given: the selected agent has no silent system-prompt flag and no MCP context
+  when: a session spawns with a prompt
+  then: a one-line workspace context is prepended to the typed prompt
+
+* scenario: editor state pushed to the MCP server
+  given: a workspace is open
+  when: the user focuses a doc or changes the open tray
+  then: the renderer pushes the focused doc and open-tray paths to the MCP server
+
 ### MCP Server
 
-* scenario: MCP initialize returns capabilities
+* scenario: MCP initialize returns capabilities and standing instructions
   given: the MCP server is running
   when: an agent sends an initialize request
-  then: protocol version, tools capability, and server info are returned
+  then: protocol version, tools capability, server info, and an instructions string naming the canonic tools are returned
+
+* scenario: initialize instructions carry the live focused doc and open tray
+  given: the user has a focused doc and open tray
+  when: an agent sends an initialize request
+  then: the instructions string includes the focused doc path and the open-tray paths as a snapshot
 
 * scenario: MCP tools/list returns all tools
   given: the MCP server is running
   when: an agent sends a tools/list request
-  then: all 8 tools are listed with descriptions and input schemas
+  then: all 9 tools are listed with descriptions and input schemas
+
+* scenario: get_open_docs returns the live editor view
+  given: a workspace is open
+  when: an agent calls get_open_docs
+  then: the focused doc and the open-tray paths are returned for mid-session refresh
 
 * scenario: read_doc returns file content
   given: a workspace is open with an existing doc
@@ -1468,13 +1512,13 @@ Source of truth for product requirements. When a requirement changes, update thi
 * scenario: get_workspace_info returns state
   given: a workspace is open
   when: an agent calls get_workspace_info
-  then: workspace name, path, and current branch are returned
+  then: workspace name, path, current branch, focused doc, and open-tray paths are returned
 
 ### Demo Mode
 
 * scenario: demo mode shows configured agents
   given: demo mode is active
   when: the Implementation panel mounts
-  then: Claude Code appears as a configured agent with demo session history entries
+  then: Claude Code appears as a configured agent with resumable terminal-kind session history entries
 
 *Last updated: 2026-05-28*

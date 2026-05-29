@@ -65,31 +65,29 @@
   "agentSessions": [
     {
       "id": "demo-session-1",
+      "kind": "terminal",
       "title": "Implement user auth flow from auth-spec",
+      "prompt": "Implement the user auth flow described in Vision/product-vision.md",
       "agentId": "claude-code",
       "agentName": "Claude Code",
-      "model": "claude-sonnet-4-5",
-      "effort": "medium",
       "flavor": "implementer",
       "cwd": "~/Coding/canonic-demo",
       "status": "ended",
       "startedAt": "2026-05-27T10:00:00Z",
-      "endedAt": "2026-05-27T10:12:00Z",
-      "messageCount": 3
+      "endedAt": "2026-05-27T10:12:00Z"
     },
     {
       "id": "demo-session-2",
+      "kind": "terminal",
       "title": "Review the strategy doc for gaps",
+      "prompt": "Review Strategy/strategy.md and leave inline comments on any gaps",
       "agentId": "claude-code",
       "agentName": "Claude Code",
-      "model": "claude-sonnet-4-5",
-      "effort": "low",
       "flavor": "reviewer",
       "cwd": "~/Coding/canonic-demo",
       "status": "ended",
       "startedAt": "2026-05-26T14:30:00Z",
-      "endedAt": "2026-05-26T14:35:00Z",
-      "messageCount": 5
+      "endedAt": "2026-05-26T14:35:00Z"
     }
   ],
   "configuredAgents": [

@@ -1329,11 +1329,11 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 * scenario: no agents configured
   given: no agents have been configured
-  when: the user opens the Implementation panel
+  when: the user opens the Agent panel
   then: an empty state is shown with a "Configure an agent" button
 
 * scenario: load preset agents
-  given: the Implementation panel mounts
+  given: the Agent panel mounts
   when: presets are loaded from main process
   then: Claude Code, Gemini CLI, Codex, OpenCode, and Pi are listed with install status
 
@@ -1355,7 +1355,7 @@ Source of truth for product requirements. When a requirement changes, update thi
 ### Flavor and Model
 
 * scenario: toggle reviewer/implementer flavor
-  given: the Implementation panel is open
+  given: the Agent panel is open
   when: the user clicks the Reviewer or Implementer pill
   then: only one pill is active at a time, flavor switches accordingly
 
@@ -1366,13 +1366,13 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 * scenario: model and effort selected in the CLI, not in-app
   given: an agent is selected
-  when: the user views the Implementation panel
+  when: the user views the Agent panel
   then: no in-app model or effort picker is shown — model/effort are chosen inside each agent's own CLI
 
 ### Session Management
 
 * scenario: start session runs the agent's native TUI in an embedded terminal
-  given: an agent is selected and Implementation panel is open
+  given: an agent is selected and Agent panel is open
   when: the user types a prompt and presses Cmd+Enter
   then: the agent's interactive CLI spawns in an embedded PTY terminal and status changes to running
 
@@ -1382,7 +1382,7 @@ Source of truth for product requirements. When a requirement changes, update thi
   then: the prompt is typed into the TUI and submitted automatically
 
 * scenario: session persists across doc switches
-  given: a session is running in the Implementation panel
+  given: a session is running in the Agent panel
   when: the user switches to a different document
   then: the PTY session keeps running and terminal output is preserved
 
@@ -1409,7 +1409,7 @@ Source of truth for product requirements. When a requirement changes, update thi
 ### Session History
 
 * scenario: history panel collapsed by default
-  given: the Implementation panel is open
+  given: the Agent panel is open
   when: the user views the bottom of the panel
   then: a History toggle is shown, collapsed
 
@@ -1518,7 +1518,7 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 * scenario: demo mode shows configured agents
   given: demo mode is active
-  when: the Implementation panel mounts
+  when: the Agent panel mounts
   then: Claude Code appears as a configured agent with resumable terminal-kind session history entries
 
 *Last updated: 2026-05-28*

@@ -37,9 +37,9 @@ Product work lives in too many places. strategy in Notion, specs in Confluence, 
 
 * **Git under the hood.** Every workspace is a Git repo. Save checkpoints, branch per document, view full history — no terminal required.
 
-* **AI that asks, not writes.** The built-in assistant brainstorms and challenges; it doesn't ghostwrite your docs.
+* **AI autocomplete, not autopilot.** Optional ghost-text completions as you type — `Tab` to accept. No ghostwriting your docs.
 
-* **Run coding agents in-app.** Drive Claude Code, Codex, Gemini CLI, OpenCode, or Pi from the Implementation panel — they see your open docs and can read, edit, and comment via a local MCP server that wires itself up.
+* **Run coding agents in-app.** Drive Claude Code, Codex, Gemini CLI, OpenCode, or Pi from the Agent panel — they see your open docs and can read, edit, and comment via a local MCP server that wires itself up.
 
 * **Built for product work.** Inline comments, peer sharing, GFM tables, mermaid diagrams, wiki-links, find & replace across the workspace.
 

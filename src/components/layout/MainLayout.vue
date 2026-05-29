@@ -218,7 +218,7 @@
                     </button>
                     <button
                         class="dropdown-item"
-                        @click="openMobileTab('right', 'implement')"
+                        @click="openMobileTab('right', 'agent')"
                     >
                         <Bot :size="14" />
                         <span>Agent</span>
@@ -430,9 +430,9 @@
                     <button
                         :class="[
                             'tab',
-                            store.rightPanelTab === 'implement' && 'active',
+                            store.rightPanelTab === 'agent' && 'active',
                         ]"
-                        @click="handleRightTabClick('implement')"
+                        @click="handleRightTabClick('agent')"
                         title="Agent"
                     >
                         <Bot :size="15" />
@@ -466,10 +466,10 @@
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
                 </div>
-                <!-- ImplementationPanel replaces old AI chat. AIChat.vue kept for BYOK inline completion transport. -->
-                <ImplementationPanel
+                <!-- AgentPanel replaces old AI chat. AIChat.vue kept for BYOK inline completion transport. -->
+                <AgentPanel
                     v-show="
-                        store.rightPanelTab === 'implement' &&
+                        store.rightPanelTab === 'agent' &&
                         !store.rightPanelCollapsed
                     "
                 />
@@ -586,7 +586,7 @@ import RefDocPane from "../editor/RefDocPane.vue";
 import PeerFileViewer from "../panels/PeerFileViewer.vue";
 import CommentsPanel from "../panels/CommentsPanel.vue";
 import AIChat from "../panels/AIChat.vue";
-import ImplementationPanel from "../panels/ImplementationPanel.vue";
+import AgentPanel from "../panels/AgentPanel.vue";
 import HistoryPanel from "../panels/HistoryPanel.vue";
 import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";

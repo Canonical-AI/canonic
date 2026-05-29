@@ -185,63 +185,33 @@ When the AI annotates a document via the chat, its comments are tagged as agent-
 
 ***
 
-## AI Assistant
+## AI Autocomplete
 
-The AI panel (right side, **AI** tab) is a thinking partner — it challenges assumptions and asks questions, but won't write your documents for you.
+Canonic offers ghost-text completions as you type — an inline suggestion appears ahead of your cursor; accept it or keep typing to ignore it.
 
 ### Setup
 
-Configure the AI in **Settings**:
+Enable it in **Settings → AI**:
 
-* **Base URL** — any OpenAI-compatible endpoint (default: OpenRouter at `https://openrouter.ai/api/v1`)
+* **Enable inline completions** — toggle on
+* **Provider** — pick a configured provider
+* **Model** — the completion model (e.g. `codestral-latest`)
 
-* **API key** — your key for that provider
+A Codestral (Mistral) key works well for this; any configured provider/model can be used.
 
-* **Model** — the model to use (e.g. `anthropic/claude-sonnet-4-6`)
+### Using it
 
-Works with OpenRouter, OpenAI, Mistral, DeepSeek, Groq, Ollama, or any OpenAI-compatible API.
+* **`Tab`** — accept the full suggestion
+* **`Cmd/Ctrl+→`** — accept just the next word
+* **`Esc`** — dismiss the current suggestion
 
-### Using the AI
-
-Type a message in the AI panel. The current document is always included as context. The AI will respond with questions and challenges — not rewrites.
-
-**Input behaviour**:
-
-* **Enter** or **`Cmd/Ctrl+Enter`** — send
-* **`Shift+Enter`** — newline inside the message
-* **`Esc`** — cancel an in-flight response. Partial text already streamed in is retained so you don't lose context.
-
-**Tools the assistant can call** (each gated by a capability toggle in Settings → AI):
-
-* `read_doc` — read another document in the workspace
-* `list_workspace` — list files and folders
-* `web_search` — fetch a snippet from the web
-* `post_comment` — drop an inline comment anchored to a quoted span in the current document
-* `suggest_edits` — propose a ghost-text edit you can accept or reject
-
-The assistant's tool calls show up as a single-line log row inside its message so you can see what it actually did.
-
-### Slash Commands (in AI Chat)
-
-Type `/` in the chat input to open a small picker:
-
-* `/model` — switch the model used for the assistant
-* `/effort` — switch the effort/quality level (Low / Medium / High)
-* `/tools` — toggle individual capabilities on or off; `Space` toggles, `Enter` closes the menu
-
-Preferences (model, effort, tools, system prompt) are persisted to your `config.json` so they survive restarts.
-
-### Compact Mode
-
-On narrow windows, the AI panel docks as a centered floating modal instead of squeezing into the side panel. Streaming, tools, and history all keep working the same way.
-
-Chat history is session-only and resets on app restart unless you explicitly save it.
+Suggestions are debounced as you type and won't fire when completions are disabled or no provider/model is set.
 
 ***
 
 ## Coding Agents (AI Control)
 
-The **Implementation** panel (right side) runs an external coding agent's own CLI inside an embedded terminal, so you can kick off and steer engineering work without leaving Canonic. Unlike the AI Assistant, this is the agent's real interactive session — it owns its own turns, permissions, and memory.
+The **Implementation** panel (right side) runs an external coding agent's own CLI inside an embedded terminal, so you can kick off and steer engineering work without leaving Canonic. This is the agent's real interactive session — it owns its own turns, permissions, and memory.
 
 Supported agents: **Claude Code, Codex, Gemini CLI, OpenCode, Pi** (or any custom CLI you point it at).
 

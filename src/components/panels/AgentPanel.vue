@@ -106,10 +106,10 @@ import { useAppStore } from '../../store'
 import {
   Bot, Folder, Square, Play, ExternalLink
 } from 'lucide-vue-next'
-import AgentSelector from '../implementation/AgentSelector.vue'
-import FlavorPills from '../implementation/FlavorPills.vue'
-import SessionHistory from '../implementation/SessionHistory.vue'
-import AgentTerminal from '../implementation/AgentTerminal.vue'
+import AgentSelector from '../agent/AgentSelector.vue'
+import FlavorPills from '../agent/FlavorPills.vue'
+import SessionHistory from '../agent/SessionHistory.vue'
+import AgentTerminal from '../agent/AgentTerminal.vue'
 
 const store = useAppStore()
 const terminalExited = ref(false)

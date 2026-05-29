@@ -103,6 +103,25 @@ export const useAppStore = defineStore("app", () => {
 
   const isCompactLayout = computed(() => isSmallScreen.value);
 
+  // Window transparency preference (set from config in applyAppearanceSettings).
+  const _transparencyPref = ref(false);
+  watch(
+    _transparencyPref,
+    (on) => {
+      document.documentElement.classList.toggle("window-transparency", on);
+    },
+    { immediate: true },
+  );
+  // Compact layout floats panels/tooltips over content. CSS uses this class to
+  // re-opaque those surfaces while keeping the main background transparent.
+  watch(
+    isCompactLayout,
+    (compact) => {
+      document.documentElement.classList.toggle("compact-layout", compact);
+    },
+    { immediate: true },
+  );
+
   const sidebarCollapsed = ref(
     storage.getItem("canonic:sidebarCollapsed") === "true",
   );
@@ -546,10 +565,8 @@ export const useAppStore = defineStore("app", () => {
       typeof navigator !== "undefined" &&
       /Mac|iPhone|iPad/.test(navigator.platform || "");
     const transparencyOn = isMac && cfg?.windowTransparency !== false;
-    document.documentElement.classList.toggle(
-      "window-transparency",
-      transparencyOn,
-    );
+    // The watcher applies the actual class (also gated on compact layout).
+    _transparencyPref.value = transparencyOn;
     storage.setItem("canonic:window-transparency", String(transparencyOn));
 
     const transparencyOpacity = cfg?.windowTransparencyOpacity ?? 0.88;

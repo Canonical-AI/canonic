@@ -426,6 +426,88 @@ html.window-transparency[data-theme="tokyo"] :is(.modal, .agent-popup) {
     --bg-base: #1a1b26;
 }
 
+/* Compact layout: panels and tooltips float over content, so re-opaque the
+   surfaces they use (sidebar/titlebar/surface/hover/active). --bg-editor and
+   --bg-container are intentionally left transparent so the main background
+   keeps its vibrancy. Values mirror each theme's solid palette. */
+html.window-transparency.compact-layout {
+    --bg-titlebar: #111519;
+    --bg-sidebar: #1a1e25;
+    --bg-surface: #161a21;
+    --bg-hover: #282f3b;
+    --bg-active: #1e242e;
+}
+html.window-transparency.compact-layout[data-theme="auteur"] {
+    --bg-titlebar: #1f141a;
+    --bg-sidebar: #2a2228;
+    --bg-surface: #24232a;
+    --bg-hover: #4a3b45;
+    --bg-active: #35303a;
+}
+html.window-transparency.compact-layout[data-theme="paper"] {
+    --bg-titlebar: #ede9ef;
+    --bg-sidebar: #dcd5df;
+    --bg-surface: #ffffff;
+    --bg-hover: #e6e1e8;
+    --bg-active: #f0edf2;
+}
+html.window-transparency.compact-layout[data-theme="mocha"] {
+    --bg-titlebar: #11111b;
+    --bg-sidebar: #181825;
+    --bg-surface: #313244;
+    --bg-hover: #45475a;
+    --bg-active: #585b70;
+}
+html.window-transparency.compact-layout[data-theme="macchiato"] {
+    --bg-titlebar: #181926;
+    --bg-sidebar: #1e2030;
+    --bg-surface: #363a4f;
+    --bg-hover: #494d64;
+    --bg-active: #5b6078;
+}
+html.window-transparency.compact-layout[data-theme="latte"] {
+    --bg-titlebar: #dce0e8;
+    --bg-sidebar: #e6e9ef;
+    --bg-surface: #ffffff;
+    --bg-hover: #bcc0cc;
+    --bg-active: #acb0be;
+}
+html.window-transparency.compact-layout[data-theme="dracula"] {
+    --bg-titlebar: #16171d;
+    --bg-sidebar: #1e1f29;
+    --bg-surface: #282a36;
+    --bg-hover: #343746;
+    --bg-active: #44475a;
+}
+html.window-transparency.compact-layout[data-theme="nord"] {
+    --bg-titlebar: #2e3440;
+    --bg-sidebar: #3b4252;
+    --bg-surface: #434c5e;
+    --bg-hover: #4c566a;
+    --bg-active: #4c566a;
+}
+html.window-transparency.compact-layout[data-theme="solarized"] {
+    --bg-titlebar: #002b36;
+    --bg-sidebar: #073642;
+    --bg-surface: #073642;
+    --bg-hover: #586e75;
+    --bg-active: #073642;
+}
+html.window-transparency.compact-layout[data-theme="gruvbox"] {
+    --bg-titlebar: #1d2021;
+    --bg-sidebar: #3c3836;
+    --bg-surface: #32302f;
+    --bg-hover: #504945;
+    --bg-active: #665c54;
+}
+html.window-transparency.compact-layout[data-theme="tokyo"] {
+    --bg-titlebar: #16161e;
+    --bg-sidebar: #24283b;
+    --bg-surface: #24283b;
+    --bg-hover: #2f3549;
+    --bg-active: #33467c;
+}
+
 html,
 body,
 #app {

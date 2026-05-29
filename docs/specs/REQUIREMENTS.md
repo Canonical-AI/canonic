@@ -1320,6 +1320,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user toggles "Window blur" or "Window transparency" in Settings
   then: the window vibrancy and background update immediately and the choice persists across restarts
 
+* scenario: compact layout keeps a transparent background but opaque panels and tooltips
+  given: transparency is on and the window is resized below the compact breakpoint
+  when: the layout becomes compact (panels and tooltips float over content)
+  then: the main background stays transparent (vibrancy) while the floating panels and tooltips/popovers render opaque so they stay readable
+
+* scenario: leaving compact layout restores transparent panels
+  given: the layout is compact with opaque panels
+  when: the window is widened above the compact breakpoint
+  then: panels and tooltips return to the semi-transparent appearance
+
 ## External File Sync (EXT)
 
 * scenario: file added outside the app appears in the sidebar

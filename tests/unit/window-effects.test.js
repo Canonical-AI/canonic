@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import { nextTick } from "vue";
 import { useAppStore } from "../../src/store/index.js";
 
 // applyAppearanceSettings is internal to the store; we drive it through
@@ -12,6 +13,15 @@ function setPlatform(platform) {
     value: platform,
     configurable: true,
   });
+}
+
+function setWidth(px) {
+  Object.defineProperty(window, "innerWidth", {
+    value: px,
+    configurable: true,
+    writable: true,
+  });
+  window.dispatchEvent(new Event("resize"));
 }
 
 // The store wires many IPC listeners (api.share.onStats, api.peers.onFound,
@@ -33,12 +43,17 @@ function mockCanonic(cfg) {
 
 describe("window transparency platform gating", () => {
   beforeEach(() => {
+    setWidth(1200); // ensure non-compact before the store reads innerWidth
     setActivePinia(createPinia());
-    document.documentElement.classList.remove("window-transparency");
+    document.documentElement.classList.remove(
+      "window-transparency",
+      "compact-layout",
+    );
   });
 
   afterEach(() => {
     delete window.canonic;
+    setWidth(1200);
   });
 
   it("applies the transparency class on macOS when enabled", async () => {
@@ -76,6 +91,43 @@ describe("window transparency platform gating", () => {
     mockCanonic({ windowTransparency: true });
     const store = useAppStore();
     await store.loadConfig();
+    expect(
+      document.documentElement.classList.contains("window-transparency"),
+    ).toBe(false);
+  });
+
+  it("keeps background transparency but flags compact layout when narrow", async () => {
+    setPlatform("MacIntel");
+    mockCanonic({ windowTransparency: true });
+    const store = useAppStore();
+    await store.loadConfig();
+    const html = document.documentElement;
+    expect(html.classList.contains("window-transparency")).toBe(true);
+    expect(html.classList.contains("compact-layout")).toBe(false);
+
+    // Shrink below the compact breakpoint. Background transparency stays on
+    // (vibrancy), but compact-layout flags CSS to re-opaque panels/tooltips.
+    setWidth(500);
+    await nextTick();
+    expect(store.isCompactLayout).toBe(true);
+    expect(html.classList.contains("window-transparency")).toBe(true);
+    expect(html.classList.contains("compact-layout")).toBe(true);
+
+    // Expand again — compact flag clears.
+    setWidth(1200);
+    await nextTick();
+    expect(html.classList.contains("compact-layout")).toBe(false);
+  });
+
+  it("does not add compact-layout on non-mac (no transparency anyway)", async () => {
+    setPlatform("Win32");
+    mockCanonic({ windowTransparency: true });
+    const store = useAppStore();
+    await store.loadConfig();
+    setWidth(500);
+    await nextTick();
+    // compact-layout still toggles (it's layout-driven), but window-transparency
+    // is absent so the opaque overrides are inert.
     expect(
       document.documentElement.classList.contains("window-transparency"),
     ).toBe(false);

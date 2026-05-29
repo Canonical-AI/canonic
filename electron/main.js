@@ -850,6 +850,66 @@ function createMenu() {
   Menu.setApplicationMenu(menu);
 }
 
+// ── MCP config sync ───────────────────────────────────────────────────────────
+// The api/MCP server listens on a fresh random port each launch, but agent CLIs
+// store the canonic endpoint in their own config (e.g. ~/.claude.json). If we only
+// refreshed that on Agent-panel interaction, an externally-launched agent would hit
+// last run's dead port. So we re-point every already-registered agent at the live
+// port as soon as the server is up. We only touch agents that already have a canonic
+// entry (never auto-register) and respect opt-outs.
+// Presets differ on the config key: most use `mcpServers.canonic`, OpenCode uses
+// `mcp.canonic`. Honoring the preset's own key avoids writing a key that fails the
+// agent's schema.
+function getDeep(obj, dottedKey) {
+  return dottedKey.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+}
+function setDeep(obj, dottedKey, value) {
+  const keys = dottedKey.split('.');
+  const last = keys.pop();
+  let cur = obj;
+  for (const k of keys) { if (typeof cur[k] !== 'object' || cur[k] == null) cur[k] = {}; cur = cur[k]; }
+  cur[last] = value;
+}
+
+function syncMcpConfig(agentId, port) {
+  const preset = agentPresets.getPreset(agentId);
+  if (!preset || !preset.mcpConfigPath || !port) return;
+  const cfg = configService.read() || {};
+  if ((cfg.mcpOptOuts || {})[agentId]) return;
+  try {
+    const fs = require('fs');
+    const file = preset.mcpConfigPath;
+    if (!fs.existsSync(file)) return;  // not registered → leave to the UI flow
+    const entry = preset.mcpEntryTemplate(port);
+    if (preset.mcpConfigFormat === 'json') {
+      let json = {};
+      try { json = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { return; }
+      const key = preset.mcpConfigKey || 'mcpServers.canonic';
+      if (getDeep(json, key) == null) return;  // only refresh if present
+      setDeep(json, key, entry);
+      fs.writeFileSync(file, JSON.stringify(json, null, 2), { mode: 0o600 });
+    } else if (preset.mcpConfigFormat === 'toml') {
+      let content = fs.readFileSync(file, 'utf-8');
+      if (!content.includes('[mcp_servers.canonic]')) return;
+      // Drop the stale canonic block, then append a fresh one with the live port.
+      content = content.replace(/\n*\[mcp_servers\.canonic\][\s\S]*?(?=\n\[|\s*$)/, '');
+      content = content.trimEnd() + '\n\n' + entry + '\n';
+      fs.writeFileSync(file, content, { mode: 0o600 });
+    }
+  } catch (err) {
+    logError("[mcp] syncMcpConfig failed:", err.message);
+  }
+}
+
+// Re-point every already-registered preset agent at the live MCP port.
+function syncAllMcpConfigs(port) {
+  if (!port) return;
+  // agent-presets exports the preset array as module.exports directly.
+  for (const preset of agentPresets) {
+    if (preset.mcpConfigPath) syncMcpConfig(preset.id, port);
+  }
+}
+
 app.whenReady().then(async () => {
   log("[main] app ready");
   try {
@@ -946,6 +1006,11 @@ app.whenReady().then(async () => {
         if (caller) refocusApp(caller);
       }
       mainWindow?.webContents.send(`agent:${event.type}`, event.data);
+    })
+    .then((port) => {
+      // Server is up on a fresh random port — re-point any already-registered
+      // agents (e.g. ~/.claude.json) so externally-launched CLIs hit the live port.
+      syncAllMcpConfigs(port || apiServer.getPort());
     })
     .catch((err) => {
       logError("[api-server] failed to start:", err);
@@ -2190,50 +2255,6 @@ function setupIpcHandlers() {
   // that ALREADY have a canonic entry (respects the explicit register/opt-out flow — never
   // auto-adds). Used to heal stale ports when the server is relaunched on a new port.
   // Read/write a dotted key path (e.g. "mcpServers.canonic" or "mcp.canonic") in a JSON object.
-  // Presets differ: most use `mcpServers.canonic`, OpenCode uses `mcp.canonic`. Honoring the
-  // preset's own key avoids writing a wrong top-level key that fails the agent's schema.
-  function getDeep(obj, dottedKey) {
-    return dottedKey.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
-  }
-  function setDeep(obj, dottedKey, value) {
-    const keys = dottedKey.split('.');
-    const last = keys.pop();
-    let cur = obj;
-    for (const k of keys) { if (typeof cur[k] !== 'object' || cur[k] == null) cur[k] = {}; cur = cur[k]; }
-    cur[last] = value;
-  }
-
-  function syncMcpConfig(agentId, port) {
-    const preset = agentPresets.getPreset(agentId);
-    if (!preset || !preset.mcpConfigPath || !port) return;
-    const cfg = configService.read() || {};
-    if ((cfg.mcpOptOuts || {})[agentId]) return;
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const file = preset.mcpConfigPath;
-      if (!fs.existsSync(file)) return;  // not registered → leave to the UI flow
-      const entry = preset.mcpEntryTemplate(port);
-      if (preset.mcpConfigFormat === 'json') {
-        let json = {};
-        try { json = JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { return; }
-        const key = preset.mcpConfigKey || 'mcpServers.canonic';
-        if (getDeep(json, key) == null) return;  // only refresh if present
-        setDeep(json, key, entry);
-        fs.writeFileSync(file, JSON.stringify(json, null, 2), { mode: 0o600 });
-      } else if (preset.mcpConfigFormat === 'toml') {
-        let content = fs.readFileSync(file, 'utf-8');
-        if (!content.includes('[mcp_servers.canonic]')) return;
-        // Drop the stale canonic block, then append a fresh one with the live port.
-        content = content.replace(/\n*\[mcp_servers\.canonic\][\s\S]*?(?=\n\[|\s*$)/, '');
-        content = content.trimEnd() + '\n\n' + entry + '\n';
-        fs.writeFileSync(file, content, { mode: 0o600 });
-      }
-    } catch (err) {
-      logError("[mcp] syncMcpConfig failed:", err.message);
-    }
-  }
-
   // Inject-context agents (Pi) can't post comments via MCP — instead they append JSON lines to
   // `<cwd>/.canonic/comments.inbox.jsonl`. Drain that file into the real per-doc comment store.
   // Returns the number of comments created.

@@ -1897,6 +1897,15 @@ export const useAppStore = defineStore("app", () => {
     saveAgentControlPrefs()
   }
 
+  // Open the right-hand agent panel, optionally pre-selecting an agent and
+  // flavor. Used by the editor's /review and /build slash commands.
+  function openAgentPanel({ agentId = null, flavor = null } = {}) {
+    if (agentId) setActiveAgent(agentId)
+    if (flavor) setActiveFlavor(flavor)
+    rightPanelTab.value = 'agent'
+    rightPanelCollapsed.value = false
+  }
+
   function setTargetDir(dir) {
     targetDir.value = dir
     saveAgentControlPrefs()
@@ -3033,6 +3042,7 @@ export const useAppStore = defineStore("app", () => {
     setAgentModel,
     setAgentEffort,
     setActiveFlavor,
+    openAgentPanel,
     setTargetDir,
     pickTargetDirectory,
     hydrateAgentControlPrefs,

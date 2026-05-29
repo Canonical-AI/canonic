@@ -634,8 +634,18 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 * scenario: slash trigger opens menu
   given: a writable document with an editable editor
-  when: the user types `/`
+  when: the user types `/` after a space
   then: the slash menu tooltip appears anchored to the caret with the root "Insert" entry highlighted
+
+* scenario: slash at the start of a line opens menu
+  given: a writable document with the caret at the start of a line or block (including an empty new line or the start of the document)
+  when: the user types `/`
+  then: the slash menu tooltip appears
+
+* scenario: slash mid-word does not open menu
+  given: the caret sits immediately after a non-space character (e.g. `TODO`)
+  when: the user types `/`
+  then: the slash menu does not open and the `/` is inserted as normal text
 
 * scenario: Cmd/Ctrl+I opens slash menu
   given: a writable document with an editable editor
@@ -661,6 +671,38 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the user typed `/` to open the menu
   when: an action is selected
   then: the trigger `/` character is removed from the document before the block is inserted
+
+### Agent slash commands
+
+* scenario: root menu lists Review and Build
+  given: the slash menu is open at the root
+  when: the user views the menu
+  then: the root entries include "Review with agent" and "Build with agent" alongside "Insert"
+
+* scenario: agent slash commands are searchable
+  given: the slash menu is open at the root
+  when: the user types "build"
+  then: the highlighted entry is "Build with agent"
+
+* scenario: /review lists configured agents
+  given: at least one agent is configured
+  when: the user opens the slash menu and selects "Review with agent"
+  then: a submenu lists every configured agent by name
+
+* scenario: selecting a reviewer agent opens the panel
+  given: the slash menu is open in the Review submenu and agent "Claude" is listed
+  when: the user selects "Claude"
+  then: the right panel opens to the Agent tab (uncollapsed), "Claude" becomes the active agent, the flavor is set to reviewer, and the trigger "/" is removed from the document
+
+* scenario: /build opens the agent in implementer mode
+  given: the slash menu is open in the Build submenu and agent "Claude" is listed
+  when: the user selects "Claude"
+  then: the right panel opens to the Agent tab, "Claude" becomes active, and the flavor is set to implementer
+
+* scenario: no agents configured
+  given: no agents are configured
+  when: the user selects "Review with agent" or "Build with agent"
+  then: the submenu offers a "Set up an agent…" entry that opens the agent panel in the chosen flavor
 
 ### Table toolbar
 

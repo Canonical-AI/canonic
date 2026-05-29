@@ -68,7 +68,14 @@ import {
     Heading2,
     Heading3,
     Minus,
+    Eye,
+    Hammer,
+    Bot,
+    Settings,
 } from "lucide-vue-next";
+import { useAppStore } from "../../../store";
+
+const store = useAppStore();
 
 const visible = ref(false);
 const query = ref("");
@@ -81,7 +88,21 @@ let onActionCallback = null;
 let onCloseCallback = null;
 
 const MENU_DATA = {
-    main: [{ id: "insert", label: "Insert", icon: Type, submenu: "insert" }],
+    main: [
+        { id: "insert", label: "Insert", icon: Type, submenu: "insert" },
+        {
+            id: "review",
+            label: "Review with agent",
+            icon: Eye,
+            submenu: "review-agents",
+        },
+        {
+            id: "build",
+            label: "Build with agent",
+            icon: Hammer,
+            submenu: "build-agents",
+        },
+    ],
     insert: [
         { id: "text", label: "Text & Headings", icon: Type, submenu: "text" },
         { id: "lists", label: "Lists", icon: List, submenu: "lists" },
@@ -118,7 +139,28 @@ const MENU_DATA = {
     ],
 };
 
-const currentItems = computed(() => MENU_DATA[currentMenu.value] || []);
+// /review and /build dive into a dynamic list of the user's configured agents.
+function agentItems(flavor) {
+    const agents = store.configuredAgents || [];
+    if (agents.length === 0) {
+        return [
+            { id: "setup-agent", label: "Set up an agent…", icon: Settings, flavor },
+        ];
+    }
+    return agents.map((a) => ({
+        id: `agent-${a.id}`,
+        label: a.name,
+        icon: Bot,
+        agentId: a.id,
+        flavor,
+    }));
+}
+
+const currentItems = computed(() => {
+    if (currentMenu.value === "review-agents") return agentItems("reviewer");
+    if (currentMenu.value === "build-agents") return agentItems("implementer");
+    return MENU_DATA[currentMenu.value] || [];
+});
 
 const filtered = computed(() => {
     const q = query.value.toLowerCase();
@@ -157,6 +199,18 @@ function select(item) {
         return;
     }
 
+    // Agent slash commands (/review, /build): open the agent panel with the
+    // chosen agent + flavor. `flavor` is present on both real agents and the
+    // "Set up an agent…" fallback (which has no agentId).
+    if (item.flavor) {
+        store.openAgentPanel({
+            agentId: item.agentId || null,
+            flavor: item.flavor,
+        });
+        finishAgentSelection();
+        return;
+    }
+
     if (item.action) {
         const cb = onActionCallback;
         onActionCallback = null;
@@ -164,6 +218,16 @@ function select(item) {
         visible.value = false;
         cb?.(item.action);
     }
+}
+
+// Close the menu and let the editor strip the trigger "/" from the document.
+// handleAction() deletes the slash for any action it doesn't recognise.
+function finishAgentSelection() {
+    const cb = onActionCallback;
+    onActionCallback = null;
+    onCloseCallback = null;
+    visible.value = false;
+    cb?.("agent-command");
 }
 
 function selectActive() {

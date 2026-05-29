@@ -124,34 +124,10 @@
       "artifactName": "${name}-${arch}.${ext}",
       "category": "Office",
       "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "flatpak",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "pacman",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "tar.gz",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
+        "AppImage",
+        "flatpak",
+        "pacman",
+        "tar.gz"
       ]
     },
     "flatpak": {

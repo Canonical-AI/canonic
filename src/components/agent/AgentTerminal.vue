@@ -45,9 +45,27 @@ function parseColor(c) {
   if (m) { const h = m[1]; return [h[0] + h[0], h[1] + h[1], h[2] + h[2]].map(x => parseInt(x, 16)) }
   m = c.match(/^#([0-9a-f]{6})$/i)
   if (m) { const h = m[1]; return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)) }
+  // Handles both legacy `rgb(r,g,b)` / `rgba(r,g,b,a)` and modern `rgb(r g b / a)` syntax —
+  // window-blur mode resolves bg vars to the modern slash form. Grab the first three numbers.
   m = c.match(/rgba?\(([^)]+)\)/i)
-  if (m) { const p = m[1].split(',').map(s => parseFloat(s)); return [p[0], p[1], p[2]] }
+  if (m) {
+    const nums = m[1].match(/[\d.]+/g)
+    if (nums && nums.length >= 3) return [nums[0], nums[1], nums[2]].map(Number)
+  }
   return null
+}
+
+// Pack [r,g,b] back into an opaque #rrggbb. xterm's color parser only understands hex/named
+// colors — it rejects rgb()/rgba() strings and silently falls back to black — so every var we
+// feed it must be flattened first. Alpha is intentionally dropped (terminal bg must be opaque).
+function rgbToHex(rgb) {
+  if (!rgb) return null
+  return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')
+}
+
+// Resolve a CSS var straight to an opaque hex for xterm.
+function cssHex(name, fallback) {
+  return rgbToHex(parseColor(cssVar(name, fallback))) || fallback
 }
 
 // WCAG relative luminance (0 dark … 1 light).
@@ -63,18 +81,19 @@ function luminance(rgb) {
 function buildTheme() {
   // Match the surrounding AI Control panel (which uses --bg-sidebar) so the terminal blends in
   // rather than reading as a separate boxed window.
-  const bg = cssVar('--bg-sidebar', '#0c0e12')
+  const bgRgb = parseColor(cssVar('--bg-sidebar', '#0c0e12'))
+  const bg = rgbToHex(bgRgb) || '#0c0e12'
   // Auto-contrast: light text on dark bg, dark text on light bg. Overrides --text-primary so a
   // mismatched theme can't render unreadable terminal text.
-  const isLightBg = luminance(parseColor(bg)) > 0.5
+  const isLightBg = luminance(bgRgb) > 0.5
   const fg = isLightBg ? '#1c1c1c' : '#e6e6e6'
   return {
     background: bg,
     foreground: fg,
     cursor: cssVar('--accent-light', '#6a97b5'),
     cursorAccent: bg,
-    selectionBackground: cssVar('--bg-hover', '#282f3b'),
-    black: isLightBg ? '#3a3a3a' : cssVar('--bg-surface', '#161a21'),
+    selectionBackground: cssHex('--bg-hover', '#282f3b'),
+    black: isLightBg ? '#3a3a3a' : cssHex('--bg-surface', '#161a21'),
     red: cssVar('--error', '#e74c3c'),
     green: cssVar('--success', '#4b7d6f'),
     yellow: cssVar('--warning', '#f39c12'),
@@ -135,14 +154,14 @@ onMounted(async () => {
   // Keystrokes → PTY
   term.onData((data) => api?.agentControl?.ptyInput({ sessionId: props.session.id, data }))
 
-  // PTY → terminal (filter to this session)
+  // PTY → terminal (filter to this session; ignore stray events after the term is disposed)
   api?.agentControl?.onPtyData(({ sessionId, data }) => {
-    if (sessionId !== props.session.id) return
+    if (!term || sessionId !== props.session.id) return
     term.write(data)
     onAgentOutput()
   })
   api?.agentControl?.onPtyExit(({ sessionId, code }) => {
-    if (sessionId !== props.session.id) return
+    if (!term || sessionId !== props.session.id) return
     term.write(`\r\n\x1b[90m[process exited${code != null ? ` (code ${code})` : ''}]\x1b[0m\r\n`)
     emit('exit', { code })
   })
@@ -192,7 +211,11 @@ onBeforeUnmount(() => {
   themeObserver?.disconnect()
   clearTimeout(idleTimer)
   clearTimeout(hardTimer)
-  term?.dispose()
+  // Drop the IPC listeners before disposing so a late pty:data/exit can't hit a dead terminal.
+  api?.agentControl?.removeListeners?.()
+  const t = term
+  term = null
+  t?.dispose()
 })
 </script>
 

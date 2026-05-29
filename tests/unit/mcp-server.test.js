@@ -4,7 +4,9 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 
-const LOCKFILE = path.join(os.homedir(), '.config', 'canonic', 'api.lock')
+// Isolate config dir per test file so parallel workers don't share one lockfile.
+process.env.CANONIC_CONFIG_DIR = path.join(os.tmpdir(), `canonic-test-mcp-${process.pid}`)
+const LOCKFILE = path.join(process.env.CANONIC_CONFIG_DIR, 'api.lock')
 const apiServer = await import('../../electron/api-server.js')
 const mcp = await import('../../electron/mcp-server.js')
 

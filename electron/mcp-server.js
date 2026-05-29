@@ -55,7 +55,7 @@ let _ipcSend = null   // (channel, data) => void
 function setIpcSend(fn) { _ipcSend = fn }
 
 // ── Comments helpers ──────────────────────────────────────────────────────────
-const CANONIC_DIR = path.join(os.homedir(), '.config', 'canonic')
+const CANONIC_DIR = process.env.CANONIC_CONFIG_DIR || path.join(os.homedir(), '.config', 'canonic')
 const COMMENTS_DIR = path.join(CANONIC_DIR, 'comments')
 
 function docIdFor(relPath) {

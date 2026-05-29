@@ -372,6 +372,9 @@ jobs:
           formula-name: canonic
           formula-path: Casks/canonic.rb
           homebrew-tap: Canonical-AI/homebrew-tap
+          # This workflow runs on a PR-merge (not a tag push), so the action
+          # can't infer the tag from the ref — pass it explicitly.
+          tag-name: v${{ needs.compute-version.outputs.version }}
           download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic-arm64.dmg
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

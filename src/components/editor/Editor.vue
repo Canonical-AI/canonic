@@ -625,7 +625,7 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 48px 12px;
+    padding: 10px 48px 8px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
 }
@@ -819,7 +819,7 @@ onMounted(() => {
 }
 
 .editor-content {
-    padding: 32px 48px 32px 48px;
+    padding: 18px 48px 32px 48px;
     position: relative;
     min-height: 100%;
 }
@@ -997,7 +997,7 @@ onMounted(() => {
     font-size: 1.85em;
     font-weight: 700;
     color: var(--text-primary);
-    margin: 1.5em 0 0.5em;
+    margin: 1em 0 0.5em;
     letter-spacing: -0.02em;
     line-height: 1.2;
     border-bottom: 1px solid var(--border);
@@ -1008,7 +1008,7 @@ onMounted(() => {
     font-size: 1.45em;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 1.4em 0 0.4em;
+    margin: 1em 0 0.4em;
     letter-spacing: -0.01em;
     line-height: 1.3;
 }
@@ -1017,7 +1017,7 @@ onMounted(() => {
     font-size: 1.2em;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 1.2em 0 0.3em;
+    margin: 0.9em 0 0.3em;
 }
 
 .milkdown .ProseMirror h4,

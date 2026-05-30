@@ -634,8 +634,18 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 * scenario: slash trigger opens menu
   given: a writable document with an editable editor
-  when: the user types `/`
+  when: the user types `/` after a space
   then: the slash menu tooltip appears anchored to the caret with the root "Insert" entry highlighted
+
+* scenario: slash at the start of a line opens menu
+  given: a writable document with the caret at the start of a line or block (including an empty new line or the start of the document)
+  when: the user types `/`
+  then: the slash menu tooltip appears
+
+* scenario: slash mid-word does not open menu
+  given: the caret sits immediately after a non-space character (e.g. `TODO`)
+  when: the user types `/`
+  then: the slash menu does not open and the `/` is inserted as normal text
 
 * scenario: Cmd/Ctrl+I opens slash menu
   given: a writable document with an editable editor
@@ -661,6 +671,38 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the user typed `/` to open the menu
   when: an action is selected
   then: the trigger `/` character is removed from the document before the block is inserted
+
+### Agent slash commands
+
+* scenario: root menu lists Review and Build
+  given: the slash menu is open at the root
+  when: the user views the menu
+  then: the root entries include "Review with agent" and "Build with agent" alongside "Insert"
+
+* scenario: agent slash commands are searchable
+  given: the slash menu is open at the root
+  when: the user types "build"
+  then: the highlighted entry is "Build with agent"
+
+* scenario: /review lists configured agents
+  given: at least one agent is configured
+  when: the user opens the slash menu and selects "Review with agent"
+  then: a submenu lists every configured agent by name
+
+* scenario: selecting a reviewer agent opens the panel
+  given: the slash menu is open in the Review submenu and agent "Claude" is listed
+  when: the user selects "Claude"
+  then: the right panel opens to the Agent tab (uncollapsed), "Claude" becomes the active agent, the flavor is set to reviewer, and the trigger "/" is removed from the document
+
+* scenario: /build opens the agent in implementer mode
+  given: the slash menu is open in the Build submenu and agent "Claude" is listed
+  when: the user selects "Claude"
+  then: the right panel opens to the Agent tab, "Claude" becomes active, and the flavor is set to implementer
+
+* scenario: no agents configured
+  given: no agents are configured
+  when: the user selects "Review with agent" or "Build with agent"
+  then: the submenu offers a "Set up an agent…" entry that opens the agent panel in the chosen flavor
 
 ### Table toolbar
 
@@ -1245,6 +1287,48 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: tabs are open in workspace W1
   when: the user opens workspace W2
   then: the tab strip is empty in W2
+
+## Window Chrome — Transparency & Blur (CHROME)
+
+* scenario: macOS shows transparency and blur controls
+  given: the app runs on macOS
+  when: the user opens Settings → Appearance
+  then: both "Window transparency" (with opacity slider) and "Window blur" controls are shown
+
+* scenario: Linux and Windows hide transparency and blur controls
+  given: the app runs on Linux or Windows
+  when: the user opens Settings → Appearance
+  then: the "Window transparency", "Transparency opacity", and "Window blur" controls are not shown, and searching settings for "blur" or "transparency" returns no result
+
+* scenario: macOS vibrancy blur frosts the desktop behind the window
+  given: the app runs on macOS and "Window blur" is on
+  when: the window is displayed
+  then: the OS vibrancy material ("under-window") renders a frosted-glass blur of the desktop behind the panels
+
+* scenario: macOS transparency tints panels over the blur
+  given: the app runs on macOS and "Window transparency" is on at opacity X
+  when: the window is displayed
+  then: panel backgrounds are semi-transparent at opacity X so the vibrancy/desktop shows through
+
+* scenario: Linux and Windows windows stay fully opaque
+  given: the app runs on Linux or Windows
+  when: the window is displayed
+  then: the window is created non-transparent with a solid background color, the `window-transparency` class is not applied, and no blur is attempted regardless of stored config
+
+* scenario: changing blur or transparency applies without restart on macOS
+  given: the app runs on macOS
+  when: the user toggles "Window blur" or "Window transparency" in Settings
+  then: the window vibrancy and background update immediately and the choice persists across restarts
+
+* scenario: compact layout keeps a transparent background but opaque panels and tooltips
+  given: transparency is on and the window is resized below the compact breakpoint
+  when: the layout becomes compact (panels and tooltips float over content)
+  then: the main background stays transparent (vibrancy) while the floating panels and tooltips/popovers render opaque so they stay readable
+
+* scenario: leaving compact layout restores transparent panels
+  given: the layout is compact with opaque panels
+  when: the window is widened above the compact breakpoint
+  then: panels and tooltips return to the semi-transparent appearance
 
 ## External File Sync (EXT)
 

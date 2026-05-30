@@ -3,6 +3,14 @@ import { $prose } from "@milkdown/utils";
 
 export const SLASH_MENU_KEY = new PluginKey("slashMenu");
 
+// Decide whether a typed "/" should open the slash menu.
+// Fires at the start of a line/block (newline, empty line, or doc start) or
+// when preceded by a space — but not mid-word (e.g. "TODO/done").
+export function slashTriggerAllowed({ parentOffset, charBefore }) {
+  if (parentOffset === 0) return true;
+  return charBefore === " ";
+}
+
 export const createSlashMenuPlugin = (tooltipRef) => {
   let lastModITime = 0;
 
@@ -15,14 +23,17 @@ export const createSlashMenuPlugin = (tooltipRef) => {
             if (text !== "/") return false;
             if (!view.editable) return false;
 
-            // Only fire if preceded by a space (so " /") fires but "/" doesn't)
-            if (from > 0) {
-              const charBefore = view.state.doc.textBetween(from - 1, from);
-              if (charBefore !== " ") return false;
-            } else {
-              // At position 0 (start of doc) — no preceding space
+            // Fire at the start of a line/block or after a space — never mid-word.
+            const $from = view.state.doc.resolve(from);
+            const charBefore =
+              from > 0 ? view.state.doc.textBetween(from - 1, from) : "";
+            if (
+              !slashTriggerAllowed({
+                parentOffset: $from.parentOffset,
+                charBefore,
+              })
+            )
               return false;
-            }
 
             if (tooltipRef.value?.visible) return false;
 

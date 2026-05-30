@@ -103,6 +103,25 @@ export const useAppStore = defineStore("app", () => {
 
   const isCompactLayout = computed(() => isSmallScreen.value);
 
+  // Window transparency preference (set from config in applyAppearanceSettings).
+  const _transparencyPref = ref(false);
+  watch(
+    _transparencyPref,
+    (on) => {
+      document.documentElement.classList.toggle("window-transparency", on);
+    },
+    { immediate: true },
+  );
+  // Compact layout floats panels/tooltips over content. CSS uses this class to
+  // re-opaque those surfaces while keeping the main background transparent.
+  watch(
+    isCompactLayout,
+    (compact) => {
+      document.documentElement.classList.toggle("compact-layout", compact);
+    },
+    { immediate: true },
+  );
+
   const sidebarCollapsed = ref(
     storage.getItem("canonic:sidebarCollapsed") === "true",
   );
@@ -539,11 +558,15 @@ export const useAppStore = defineStore("app", () => {
   // ── PREFERENCES & APP CONFIGURATION ──
   // ==========================================
   function applyAppearanceSettings(cfg) {
-    const transparencyOn = cfg?.windowTransparency !== false;
-    document.documentElement.classList.toggle(
-      "window-transparency",
-      transparencyOn,
-    );
+    // Transparency only renders correctly on macOS (vibrancy). On
+    // Linux/Windows the semi-transparent panels would show the raw desktop
+    // or the window's solid backgroundColor, so keep panels opaque there.
+    const isMac =
+      typeof navigator !== "undefined" &&
+      /Mac|iPhone|iPad/.test(navigator.platform || "");
+    const transparencyOn = isMac && cfg?.windowTransparency !== false;
+    // The watcher applies the actual class (also gated on compact layout).
+    _transparencyPref.value = transparencyOn;
     storage.setItem("canonic:window-transparency", String(transparencyOn));
 
     const transparencyOpacity = cfg?.windowTransparencyOpacity ?? 0.88;
@@ -1891,6 +1914,15 @@ export const useAppStore = defineStore("app", () => {
     saveAgentControlPrefs()
   }
 
+  // Open the right-hand agent panel, optionally pre-selecting an agent and
+  // flavor. Used by the editor's /review and /build slash commands.
+  function openAgentPanel({ agentId = null, flavor = null } = {}) {
+    if (agentId) setActiveAgent(agentId)
+    if (flavor) setActiveFlavor(flavor)
+    rightPanelTab.value = 'agent'
+    rightPanelCollapsed.value = false
+  }
+
   function setTargetDir(dir) {
     targetDir.value = dir
     saveAgentControlPrefs()
@@ -3027,6 +3059,7 @@ export const useAppStore = defineStore("app", () => {
     setAgentModel,
     setAgentEffort,
     setActiveFlavor,
+    openAgentPanel,
     setTargetDir,
     pickTargetDirectory,
     hydrateAgentControlPrefs,

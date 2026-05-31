@@ -19,6 +19,52 @@
                 {{ docTitle }}
             </h1>
             <div class="topbar-actions">
+                <!-- Document action menu -->
+                <div class="action-menu-wrap" ref="actionMenuRef">
+                    <button
+                        class="action-btn icon-only"
+                        @click="showActionMenu = !showActionMenu"
+                        title="Document actions"
+                    >
+                        <MoreHorizontal :size="15" />
+                    </button>
+                    <div v-if="showActionMenu" class="action-popover">
+                        <button class="popover-item" @click="copyFullPath">
+                            <Copy :size="12" />
+                            <span>Copy full path</span>
+                        </button>
+                        <button class="popover-item" @click="copyRelativePath">
+                            <Copy :size="12" />
+                            <span>Copy relative path</span>
+                        </button>
+                        <div class="popover-divider" />
+                        <button class="popover-item" @click="showMovePicker = !showMovePicker">
+                            <FolderInput :size="12" />
+                            <span>Move to folder</span>
+                        </button>
+                        <div v-if="showMovePicker" class="move-picker">
+                            <button class="move-opt" @click="doMove('')">
+                                (workspace root)
+                            </button>
+                            <button
+                                v-for="dir in availableDirs"
+                                :key="dir.path"
+                                class="move-opt"
+                                @click="doMove(dir.path)"
+                            >
+                                {{ dir.path }}
+                            </button>
+                        </div>
+                        <div class="popover-divider" />
+                        <button
+                            class="popover-item popover-item--danger"
+                            @click="confirmDelete"
+                        >
+                            <Trash2 :size="12" />
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                </div>
                 <div class="topbar-divider" />
                 <span v-if="store.isDirty" class="unsaved-label">Unsaved</span>
                 <button
@@ -218,7 +264,7 @@ import { MilkdownProvider } from "@milkdown/vue";
 import { ProsemirrorAdapterProvider } from "@prosemirror-adapter/vue";
 import { useAppStore } from "../../store";
 import { v4 as uuidv4 } from "uuid";
-import { Tag, GitFork, GitBranch, ArrowLeft, Columns2 } from "lucide-vue-next";
+import { Tag, GitFork, GitBranch, ArrowLeft, Columns2, MoreHorizontal, Copy, Trash2, FolderInput } from "lucide-vue-next";
 import MilkdownEditor from "./MilkdownEditor.vue";
 import InDocFindBar from "./InDocFindBar.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
@@ -247,6 +293,78 @@ const canSplit = computed(() => store.refPanes.length < 2 && !!nextSplitDoc());
 function splitPane() {
     const doc = nextSplitDoc();
     if (doc) store.addRefPane(doc.path);
+}
+
+// ── Document action menu ────────────────────────────────────────────────────
+const showActionMenu = ref(false);
+const showMovePicker = ref(false);
+const actionMenuRef = ref(null);
+
+const availableDirs = computed(() => {
+    const dirs = [];
+    const walk = (items) => {
+        for (const it of items) {
+            if (it.type === "directory") {
+                dirs.push(it);
+                if (it.children) walk(it.children);
+            }
+        }
+    };
+    walk(store.files);
+    return dirs;
+});
+
+function copyFullPath() {
+    const full = store.workspacePath
+        ? `${store.workspacePath}/${store.currentFile}`
+        : store.currentFile;
+    navigator.clipboard.writeText(full).catch(() => {});
+    closeActionMenu();
+}
+
+function copyRelativePath() {
+    navigator.clipboard.writeText(store.currentFile).catch(() => {});
+    closeActionMenu();
+}
+
+async function doMove(dirPath) {
+    closeActionMenu();
+    await store.moveFile(store.currentFile, dirPath);
+}
+
+function confirmDelete() {
+    closeActionMenu();
+    const name = store.currentFile.split("/").pop() || store.currentFile;
+    if (!window.confirm(`Delete "${name}"? This moves it to the trash.`)) return;
+    store.deleteFile(store.currentFile);
+}
+
+function closeActionMenu() {
+    showActionMenu.value = false;
+    showMovePicker.value = false;
+}
+
+function onActionMenuClickOutside(e) {
+    if (actionMenuRef.value && !actionMenuRef.value.contains(e.target)) {
+        closeActionMenu();
+    }
+}
+
+// Close menu on Esc or click outside
+watch(showActionMenu, (open) => {
+    if (open) {
+        document.addEventListener("click", onActionMenuClickOutside, true);
+        document.addEventListener("keydown", onActionMenuEsc);
+    } else {
+        document.removeEventListener("click", onActionMenuClickOutside, true);
+        document.removeEventListener("keydown", onActionMenuEsc);
+    }
+});
+
+function onActionMenuEsc(e) {
+    if (e.key === "Escape") {
+        closeActionMenu();
+    }
 }
 
 provide("openCommentFromToolbar", (selectedText, fixedCoords) => {
@@ -692,6 +810,93 @@ onMounted(() => {
 .action-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+.icon-only {
+    padding: 5px 8px;
+}
+
+/* Document action popover */
+.action-menu-wrap {
+    position: relative;
+}
+
+.action-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-mid);
+    border-radius: 8px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    z-index: 400;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.popover-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+.popover-item:hover {
+    background: var(--bg-hover);
+}
+.popover-item--danger {
+    color: var(--danger, #e5534b);
+}
+.popover-item--danger:hover {
+    background: rgba(229, 83, 75, 0.1);
+}
+
+.popover-item > svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.popover-divider {
+    height: 1px;
+    background: var(--border-light, var(--border));
+    margin: 4px 6px;
+}
+
+/* Move-to-folder picker inside the popover */
+.move-picker {
+    max-height: 180px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border-light, var(--border));
+    margin-top: 2px;
+    padding: 4px 0;
+}
+.move-opt {
+    display: block;
+    width: 100%;
+    padding: 5px 10px 5px 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+}
+.move-opt:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .icon-label {

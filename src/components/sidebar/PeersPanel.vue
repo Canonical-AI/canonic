@@ -16,7 +16,7 @@
     <div v-if="view === 'favorites'" class="panel-body">
       <div class="discover-header">
         <div class="discover-meta">
-          {{ store.favoritedPeers.length }} favorite{{ store.favoritedPeers.length !== 1 ? 's' : '' }}
+          {{ favoritesCount }} favorite{{ favoritesCount !== 1 ? 's' : '' }}
         </div>
         <button class="refresh-btn" @click="refreshDiscover" :disabled="discovering">
           <RefreshCw :size="13" :class="{ spin: discovering }" />
@@ -235,7 +235,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useAppStore } from '../../store'
 import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw, FolderSync } from 'lucide-vue-next'
 import demoConfig from "../../demo/config.json"
@@ -245,6 +245,12 @@ const api = window.canonic
 
 const view = ref('favorites')
 const discovering = ref(false)
+
+// Demo mode keeps its sample peers (Priya, Ben) in demoPeers, separate from the
+// live favoritedPeers list, so count both for the header.
+const favoritesCount = computed(
+  () => (store.isDemoMode ? store.demoPeers.length : 0) + store.favoritedPeers.length
+)
 const peerFiles = reactive({}) // peerId -> string[] | null | undefined
 const peerFilesExpanded = reactive({}) // peerId -> boolean
 const dirExpansion = reactive({}) // peerId:dirKey -> boolean
@@ -650,6 +656,30 @@ function toggleFavorite(peer) {
   padding: 0 10px 4px 43px;
   font-style: italic;
 }
+
+/* Demo-mode favorited peer file list (live mode uses the ascii tree below). */
+.peer-files-container {
+  padding: 2px 0 6px;
+}
+
+.peer-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 10px 5px 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.peer-file:hover { background: var(--bg-hover); color: var(--accent-light); }
+.peer-file > svg { flex-shrink: 0; color: var(--text-muted); }
+.peer-file .file-name { flex: 1; }
 
 .peer-files {
   display: flex;

@@ -181,11 +181,42 @@ describe("split panels", () => {
     expect(store.refPanes).toEqual([]);
   });
 
-  it("activateRefPane() swaps a pane with the active editor", async () => {
+  it("setActivePane() focuses a pane without swapping its content", () => {
     store.addRefPane("b.md");
-    await store.activateRefPane(0);
-    expect(store.currentFile).toBe("b.md");
-    expect(store.refPanes).toEqual(["a.md"]);
+    store.setActivePane("b.md");
+    expect(store.activePane).toBe("b.md");
+    // No swap: the primary doc and the pane stay in place.
+    expect(store.currentFile).toBe("a.md");
+    expect(store.refPanes).toEqual(["b.md"]);
+  });
+
+  it("savePaneFile() writes pane edits to disk for an arbitrary path", async () => {
+    store.addRefPane("b.md");
+    await store.savePaneFile("b.md", "# B\n\nEdited in pane.");
+    expect(mockFiles["b.md"]).toBe("# B\n\nEdited in pane.\n");
+    expect(store.currentFile).toBe("a.md"); // primary doc untouched
+  });
+
+  it("setRefPaneFile() carries the active marker to the new path", () => {
+    store.addRefPane("b.md");
+    store.setActivePane("b.md");
+    store.setRefPaneFile(0, "c.md");
+    expect(store.refPanes).toEqual(["c.md"]);
+    expect(store.activePane).toBe("c.md");
+  });
+
+  it("removeRefPane() resets the active pane back to main", () => {
+    store.addRefPane("b.md");
+    store.setActivePane("b.md");
+    store.removeRefPane(0);
+    expect(store.activePane).toBe("main");
+  });
+
+  it("openFile() refocuses the primary editor", async () => {
+    store.addRefPane("b.md");
+    store.setActivePane("b.md");
+    await store.openFile("c.md");
+    expect(store.activePane).toBe("main");
   });
 
   it("openFile() removes a doc from the panes when it becomes active", async () => {

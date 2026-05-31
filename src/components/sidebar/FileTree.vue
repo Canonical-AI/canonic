@@ -51,13 +51,7 @@
                 @blur="confirmNewFolder"
             />
         </div>
-        <div
-            class="tree-body"
-            :class="isDragOver && 'drag-over'"
-            @dragover.prevent="handleDragOver"
-            @dragleave="isDragOver = false"
-            @drop="handleDrop"
-        >
+        <div class="tree-body">
             <TreeNode
                 v-for="item in store.files"
                 :key="item.path"
@@ -88,7 +82,6 @@ const showNewDoc = inject("showNewDoc");
 const creatingFolder = ref(false);
 const folderName = ref("");
 const folderInput = ref(null);
-const isDragOver = ref(false);
 const branchOpen = ref(false);
 const sidebarTitle = computed(() => store.workspaceName || "Documents");
 
@@ -105,26 +98,6 @@ watch(creatingFolder, async (val) => {
         folderInput.value?.focus();
     }
 });
-
-function handleDragOver(e) {
-    if (store.isCompactLayout) return;
-    if (e.dataTransfer.types.includes("application/canonic-path")) {
-        isDragOver.value = true;
-        e.dataTransfer.dropEffect = "move";
-    }
-}
-
-async function handleDrop(e) {
-    if (store.isCompactLayout) return;
-    isDragOver.value = false;
-    const draggedPath = e.dataTransfer.getData("application/canonic-path");
-    if (!draggedPath) return;
-
-    // Only move if it's not already at the root
-    if (draggedPath.includes("/")) {
-        await store.moveFile(draggedPath, "");
-    }
-}
 
 async function confirmNewFolder() {
     const name = folderName.value.trim();
@@ -204,15 +177,8 @@ async function confirmNewFolder() {
     flex: 1;
     overflow-y: auto;
     padding: 4px 0;
-    transition:
-        background 0.15s,
-        box-shadow 0.15s;
 }
 
-.tree-body.drag-over {
-    background: var(--bg-hover);
-    box-shadow: inset 0 0 0 1px var(--accent-muted);
-}
 .empty-hint {
     padding: 12px;
     font-size: 0.8125rem;

@@ -489,6 +489,27 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ***
 
+## Document Tree (TREE)
+
+> The sidebar file tree lists documents and folders. New documents may be created with a path, and existing documents may be moved between folders by dragging onto a folder node.
+
+* scenario: create a document with a path creates the parent folders
+  given: the user is creating a new document
+  when: they name it `feature/open-document-tabs`
+  then: the folder `feature/` is created if missing and the document is written at `feature/open-document-tabs.md` with `# open-document-tabs` as its heading
+
+* scenario: drop a document onto a folder moves it into that folder
+  given: the user is dragging a document in the tree
+  when: they drop it onto a folder node
+  then: the document is moved into that folder
+
+* scenario: dropping a document outside a folder does nothing
+  given: the user is dragging a document in the tree
+  when: they release it over empty tree space or over a file node rather than a folder
+  then: nothing happens and the document keeps its current location
+
+***
+
 ## Comments (CMT)
 
 > Inline comments anchored to selected text. Shown in the right panel. Comments persist across restarts.

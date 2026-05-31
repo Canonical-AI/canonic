@@ -1392,6 +1392,23 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: another process modifies the active doc on disk
   then: a toast appears noting the on-disk change, the unsaved edits remain in the buffer, and the user can click "Reload from disk" to discard edits and load the disk content
 
+## Agent REST API Discovery (AGT-API)
+
+* scenario: API index describes the surface
+  given: Canonic is running
+  when: an agent calls `GET /` with no token
+  then: a JSON index is returned with the standing instructions, every REST route and its params, the auth model (token-free vs bearer), and the MCP endpoint plus its live tool list
+
+* scenario: API index lists the live MCP tools
+  given: Canonic is running
+  when: an agent calls `GET /`
+  then: `mcp.tools` includes every registered tool name (e.g. read_doc, get_doc_changes, get_doc_history) so the list stays in sync as tools are added
+
+* scenario: API index is rejected from a web origin
+  given: a `GET /` request carrying a non-localhost Origin
+  when: the server handles it
+  then: it returns `403 forbidden`
+
 ## Agent API — Read Comments (AGT-CMT)
 
 * scenario: agent reads comments for one doc

@@ -415,6 +415,52 @@ describe('MCP server doc history & changes', () => {
   })
 })
 
+describe('REST API index (GET /)', () => {
+  function get(pathname, headers = {}) {
+    return new Promise((resolve) => {
+      http.get({ hostname: '127.0.0.1', port, path: pathname, headers }, (res) => {
+        let raw = ''
+        res.on('data', (c) => (raw += c))
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(raw) }) }
+          catch { resolve({ status: res.statusCode, body: raw }) }
+        })
+      })
+    })
+  }
+
+  it('returns a self-describing index with REST routes and MCP pointer', async () => {
+    const res = await get('/')
+    expect(res.status).toBe(200)
+    expect(res.body.name).toBe('Canonic local API')
+    expect(res.body.version).toBeTruthy()
+    expect(typeof res.body.instructions).toBe('string')
+    expect(res.body.instructions).toContain('Canonic')
+    const paths = res.body.rest.map((r) => r.path)
+    expect(paths).toContain('/doc?path=<relPath>')
+    expect(paths).toContain('/comment')
+    expect(res.body.mcp.endpoint).toBe('/mcp')
+  })
+
+  it('lists the live MCP tool set including the diff tools', async () => {
+    const res = await get('/')
+    expect(res.body.mcp.tools).toContain('get_doc_changes')
+    expect(res.body.mcp.tools).toContain('get_doc_history')
+    expect(res.body.mcp.tools).toContain('read_doc')
+  })
+
+  it('documents both token-free and bearer auth', async () => {
+    const res = await get('/')
+    expect(res.body.auth.tokenFree).toBeTruthy()
+    expect(res.body.auth.bearer).toContain('Bearer')
+  })
+
+  it('rejects the index from a foreign web Origin with 403', async () => {
+    const res = await get('/', { Origin: 'https://evil.example.com' })
+    expect(res.status).toBe(403)
+  })
+})
+
 describe('MCP server Origin guard', () => {
   function postMcp(headers) {
     return new Promise((resolve) => {

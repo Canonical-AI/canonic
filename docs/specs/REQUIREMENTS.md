@@ -1227,6 +1227,25 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user unchecks "Stack split panels" in the theme menu
   then: the panes are arranged side by side, and the choice persists across restarts
 
+## Editor Topbar (TOP)
+
+> The editor topbar shows the current document title alongside Save, Version and Split actions. The title is clickable to rename the document in place.
+
+* scenario: click the title to rename
+  given: a document is open
+  when: the user clicks the title in the editor topbar
+  then: the title becomes an editable input pre-filled with the current name
+
+* scenario: confirm a title rename
+  given: the title input is editing
+  when: the user types a new name and presses Enter (or blurs the input)
+  then: the document is renamed to the new name and its tab updates
+
+* scenario: cancel a title rename
+  given: the title input is editing
+  when: the user presses Escape
+  then: the input reverts to the original title and no rename occurs
+
 ## Editor Tabs (TAB)
 
 * scenario: tab appears when a file is opened

@@ -13,8 +13,8 @@
             <h1
                 v-else
                 class="doc-title"
-                @dblclick="startTitleRename"
-                title="Double-click to rename"
+                @click="startTitleRename"
+                title="Click to rename"
             >
                 {{ docTitle }}
             </h1>
@@ -636,7 +636,15 @@ onMounted(() => {
     color: var(--text-primary);
     margin: 0;
     letter-spacing: -0.01em;
-    cursor: text;
+    cursor: pointer;
+    padding: 1px 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    transition: background 0.1s;
+}
+
+.doc-title:hover {
+    background: var(--bg-hover);
 }
 
 .doc-title-input {

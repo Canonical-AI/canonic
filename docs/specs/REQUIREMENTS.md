@@ -114,6 +114,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user clicks an Edit action such as Copy
   then: it runs against the focused editor or input via the window's webContents
 
+* scenario: menu popover stays opaque in transparency mode
+  given: window transparency is enabled
+  when: the hamburger menu is opened
+  then: its popover background is fully opaque so the items stay readable over content
+
+* scenario: compact layout exposes the menu as an expandable tree
+  given: the window is below the small-screen threshold
+  when: the user opens the compact menu and taps "Menu"
+  then: it expands in place to the same File / Edit / Config actions (no separate hamburger) and tapping an action runs it and closes the menu
+
 ***
 
 ## Workspace Templates (WKS)

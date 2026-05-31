@@ -257,6 +257,36 @@
                         }}</span>
                     </button>
                 </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section">
+                    <button class="dropdown-item" @click="toggleAppMenu">
+                        <Menu :size="14" />
+                        <span>Menu</span>
+                        <ChevronRight
+                            :size="14"
+                            class="app-menu-chevron"
+                            :class="{ open: appMenuExpanded }"
+                        />
+                    </button>
+                    <template v-if="appMenuExpanded">
+                        <template
+                            v-for="group in appMenuGroups"
+                            :key="group.label"
+                        >
+                            <div class="dropdown-subgroup-label">
+                                {{ group.label }}
+                            </div>
+                            <button
+                                v-for="item in group.items"
+                                :key="item.label"
+                                class="dropdown-item dropdown-item--nested"
+                                @click="runAppMenuItem(item)"
+                            >
+                                <span>{{ item.label }}</span>
+                            </button>
+                        </template>
+                    </template>
+                </div>
             </div>
         </div>
 
@@ -575,6 +605,7 @@ import {
     Share2,
     ArrowUpCircle,
     Menu,
+    ChevronRight,
     Eye,
     EyeOff,
 } from "lucide-vue-next";
@@ -600,6 +631,7 @@ import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
+import { useAppMenu } from "../../composables/useAppMenu.js";
 
 const store = useAppStore();
 const router = useRouter();
@@ -1082,6 +1114,31 @@ function onResizeStart(e) {
 const mobileMenuOpen = ref(false);
 const menuBtnRef = ref(null);
 const mobileMenuDropdownRef = ref(null);
+
+// App menu (File/Edit/Config) shared with the desktop hamburger; in compact
+// layout it's surfaced as an expandable "Menu" tree inside the mobile menu.
+const { groups: appMenuGroups, refreshDefault: refreshAppMenuDefault } =
+    useAppMenu({
+        onOpenSettings: () => {
+            mobileMenuOpen.value = false;
+            showSettings.value = true;
+        },
+        onReloadConfig: reloadConfig,
+    });
+const appMenuExpanded = ref(false);
+function toggleAppMenu() {
+    appMenuExpanded.value = !appMenuExpanded.value;
+    if (appMenuExpanded.value) refreshAppMenuDefault();
+}
+async function runAppMenuItem(item) {
+    mobileMenuOpen.value = false;
+    appMenuExpanded.value = false;
+    try {
+        await item.run();
+    } catch (err) {
+        console.error("[AppMenu] action failed:", err);
+    }
+}
 
 function openMobileTab(side, tab) {
     mobileMenuOpen.value = false;
@@ -1803,6 +1860,29 @@ function toggleDistractionFree() {
     height: 1px;
     background: var(--border-light);
     margin: 6px 4px;
+}
+
+.app-menu-chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+}
+.app-menu-chevron.open {
+    transform: rotate(90deg);
+}
+
+.dropdown-subgroup-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 6px 8px 2px 14px;
+    font-weight: 600;
+}
+
+.dropdown-item--nested {
+    padding-left: 22px;
+    font-size: 0.78rem;
 }
 
 /* Overrides for sidebar and right panel in compact mode */

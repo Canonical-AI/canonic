@@ -9,65 +9,36 @@
         </button>
 
         <div v-if="open" class="app-menu-dropdown">
-            <div class="menu-group-label">File</div>
-            <button class="menu-item" @click="run(newWorkspace)">
-                New workspace…
-            </button>
-            <button class="menu-item" @click="run(openWorkspace)">
-                Open workspace…
-            </button>
-            <button class="menu-item" @click="run(openFile)">Open file…</button>
-
-            <div class="menu-divider"></div>
-            <div class="menu-group-label">Edit</div>
-            <button class="menu-item" @click="run(() => edit('undo'))">
-                Undo
-            </button>
-            <button class="menu-item" @click="run(() => edit('redo'))">
-                Redo
-            </button>
-            <button class="menu-item" @click="run(() => edit('cut'))">Cut</button>
-            <button class="menu-item" @click="run(() => edit('copy'))">
-                Copy
-            </button>
-            <button class="menu-item" @click="run(() => edit('paste'))">
-                Paste
-            </button>
-            <button class="menu-item" @click="run(() => edit('selectAll'))">
-                Select all
-            </button>
-
-            <div class="menu-divider"></div>
-            <div class="menu-group-label">Config</div>
-            <button class="menu-item" @click="run(() => emit('open-settings'))">
-                Settings
-            </button>
-            <button class="menu-item" @click="run(setDefault)">
-                {{ isDefault ? "Default editor ✓" : "Set as default editor" }}
-            </button>
-            <button class="menu-item" @click="run(openConfig)">
-                Open config file
-            </button>
-            <button class="menu-item" @click="run(() => emit('reload-config'))">
-                Reload config
-            </button>
+            <template v-for="(group, gi) in groups" :key="group.label">
+                <div v-if="gi > 0" class="menu-divider"></div>
+                <div class="menu-group-label">{{ group.label }}</div>
+                <button
+                    v-for="item in group.items"
+                    :key="item.label"
+                    class="menu-item"
+                    @click="run(item.run)"
+                >
+                    {{ item.label }}
+                </button>
+            </template>
         </div>
     </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from "vue";
-import { useRouter } from "vue-router";
-import { useAppStore } from "../../store";
 import { Menu } from "lucide-vue-next";
+import { useAppMenu } from "../../composables/useAppMenu.js";
 
 const emit = defineEmits(["open-settings", "reload-config"]);
-const store = useAppStore();
-const router = useRouter();
 
 const open = ref(false);
 const rootRef = ref(null);
-const isDefault = ref(false);
+
+const { groups, refreshDefault } = useAppMenu({
+    onOpenSettings: () => emit("open-settings"),
+    onReloadConfig: () => emit("reload-config"),
+});
 
 // Close the dropdown after an action runs.
 async function run(fn) {
@@ -79,50 +50,15 @@ async function run(fn) {
     }
 }
 
-function newWorkspace() {
-    // The guided new-workspace flow (name + template) lives on the Get Started
-    // screen; route there rather than duplicating it.
-    router.push("/");
-}
-
-async function openWorkspace() {
-    const chosen = await window.canonic.workspace.openDialog();
-    if (!chosen) return;
-    await store.openWorkspace(chosen, "blank");
-    router.push("/workspace");
-}
-
-async function openFile() {
-    const chosen = await window.canonic.files.openDialog();
-    if (!chosen) return;
-    const ok = await store.openStandaloneFile(chosen);
-    if (ok) router.push("/workspace");
-}
-
-function edit(action) {
-    return window.canonic.app.editAction(action);
-}
-
-async function setDefault() {
-    await window.canonic.app.setDefaultEditor(true);
-    isDefault.value = await window.canonic.app.isDefaultEditor();
-}
-
-function openConfig() {
-    return window.canonic.app.openConfig();
-}
-
 function onDocClick(e) {
     if (open.value && rootRef.value && !rootRef.value.contains(e.target)) {
         open.value = false;
     }
 }
 
-onMounted(async () => {
+onMounted(() => {
     document.addEventListener("click", onDocClick, true);
-    try {
-        isDefault.value = await window.canonic.app.isDefaultEditor();
-    } catch {}
+    refreshDefault();
 });
 onBeforeUnmount(() => {
     document.removeEventListener("click", onDocClick, true);

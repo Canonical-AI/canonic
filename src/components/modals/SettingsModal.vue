@@ -66,63 +66,70 @@
                         <div
                             v-show="shouldShow('displayName', 'profile')"
                             id="setting-displayName"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Display name</label>
-                            <input
-                                v-model="form.displayName"
-                                class="field-input"
-                                placeholder="Your Name"
-                            />
-                            <p class="field-hint">
-                                Used in git commits and comments.
-                            </p>
+                            <div class="set-info">
+                                <span class="set-name">Display name</span>
+                                <span class="set-desc">
+                                    Used in git commits and comments.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <input
+                                    v-model="form.displayName"
+                                    class="set-input"
+                                    placeholder="Your Name"
+                                />
+                            </div>
                         </div>
                         <div
                             v-show="shouldShow('defaultEditor', 'profile')"
                             id="setting-defaultEditor"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Default editor</label>
-                            <button
-                                class="default-editor-btn"
-                                :class="{
-                                    'default-editor-btn--done': isDefaultEditor,
-                                }"
-                                :disabled="isDefaultEditor"
-                                @click="toggleDefaultEditor"
-                            >
-                                {{
-                                    isDefaultEditor
-                                        ? "Canonic is already default for .md"
-                                        : "Set as Default for .md"
-                                }}
-                            </button>
+                            <div class="set-info">
+                                <span class="set-name">Default editor</span>
+                                <span class="set-desc">
+                                    Set Canonic as the default app for .md files.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <button
+                                    class="default-editor-btn"
+                                    :class="{
+                                        'default-editor-btn--done':
+                                            isDefaultEditor,
+                                    }"
+                                    :disabled="isDefaultEditor"
+                                    @click="toggleDefaultEditor"
+                                >
+                                    {{
+                                        isDefaultEditor
+                                            ? "Already default"
+                                            : "Set as default"
+                                    }}
+                                </button>
+                            </div>
                         </div>
                         <div
                             v-show="shouldShow('hints', 'profile')"
                             id="setting-hints"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: hintsEnabled }"
-                                @click="hintsEnabled = !hintsEnabled"
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Show feature hints</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: hintsEnabled }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Show feature hints</span>
+                                <span class="set-desc">
                                     Tips shown at the bottom of the sidebar.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: hintsEnabled }"
+                                    @click="hintsEnabled = !hintsEnabled"
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -230,68 +237,86 @@
                         <div
                             v-show="shouldShow('assistantName', 'providers')"
                             id="setting-assistantName"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Name</label>
-                            <input
-                                v-model="form.assistant.name"
-                                class="field-input"
-                                placeholder="Spark"
-                            />
-                            <p class="field-hint">
-                                How the assistant introduces itself.
-                            </p>
+                            <div class="set-info">
+                                <span class="set-name">Name</span>
+                                <span class="set-desc">
+                                    How the assistant introduces itself.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <input
+                                    v-model="form.assistant.name"
+                                    class="set-input"
+                                    placeholder="Spark"
+                                />
+                            </div>
                         </div>
                         <div
                             v-show="shouldShow('assistantModel', 'providers')"
                             id="setting-assistantModel"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Provider</label>
-                            <select
-                                v-model="form.assistant.providerId"
-                                class="field-select"
-                            >
-                                <option value="">— None —</option>
-                                <option
-                                    v-for="p in form.providers"
-                                    :key="p.id"
-                                    :value="p.id"
+                            <div class="set-info">
+                                <span class="set-name">Provider</span>
+                                <span class="set-desc">
+                                    Which configured backend the assistant uses.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.assistant.providerId"
+                                    class="set-select"
                                 >
-                                    {{ p.label }}
-                                </option>
-                            </select>
+                                    <option value="">— None —</option>
+                                    <option
+                                        v-for="p in form.providers"
+                                        :key="p.id"
+                                        :value="p.id"
+                                    >
+                                        {{ p.label }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                         <div
                             v-show="shouldShow('assistantModel', 'providers')"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Model</label>
-                            <input
-                                v-model="form.assistant.model"
-                                class="field-input"
-                                placeholder="e.g. anthropic/claude-sonnet-4-5"
-                            />
-                            <p class="field-hint">
-                                Any model ID supported by the selected provider.
-                            </p>
+                            <div class="set-info">
+                                <span class="set-name">Model</span>
+                                <span class="set-desc">
+                                    Any model ID supported by the selected
+                                    provider.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <input
+                                    v-model="form.assistant.model"
+                                    class="set-input"
+                                    placeholder="e.g. anthropic/claude-sonnet-4-5"
+                                />
+                            </div>
                         </div>
                         <div
                             v-show="shouldShow('assistantModel', 'providers')"
-                            class="field"
+                            class="set-row set-row--top"
                         >
-                            <label class="field-label"
-                                >Extra instructions</label
-                            >
-                            <textarea
-                                v-model="form.assistant.extraInstructions"
-                                class="field-input field-textarea"
-                                placeholder="e.g. Focus on B2B SaaS context..."
-                                rows="3"
-                            />
-                            <p class="field-hint">
-                                Appended to the base system prompt.
-                            </p>
+                            <div class="set-info">
+                                <span class="set-name">Extra instructions</span>
+                                <span class="set-desc">
+                                    Appended to the base system prompt.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <textarea
+                                    v-model="form.assistant.extraInstructions"
+                                    class="set-input set-textarea"
+                                    placeholder="e.g. Focus on B2B SaaS context..."
+                                    rows="3"
+                                />
+                            </div>
                         </div>
 
                         <p
@@ -307,67 +332,78 @@
                                 shouldShow('completionEnabled', 'providers')
                             "
                             id="setting-completionEnabled"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.completion.enabled }"
-                                @click="
-                                    form.completion.enabled =
-                                        !form.completion.enabled
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Enable inline completions</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.completion.enabled }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name"
+                                    >Enable inline completions</span
+                                >
+                                <span class="set-desc">
                                     Ghost text suggestions as you type.
                                     <kbd class="kbd">Tab</kbd> accept ·
                                     <kbd class="kbd">Esc</kbd> dismiss.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.completion.enabled }"
+                                    @click="
+                                        form.completion.enabled =
+                                            !form.completion.enabled
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                         <div
                             v-show="
                                 shouldShow('completionEnabled', 'providers')
                             "
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Provider</label>
-                            <select
-                                v-model="form.completion.providerId"
-                                class="field-select"
-                            >
-                                <option value="">— None —</option>
-                                <option
-                                    v-for="p in form.providers"
-                                    :key="p.id"
-                                    :value="p.id"
+                            <div class="set-info">
+                                <span class="set-name">Completion provider</span>
+                                <span class="set-desc">
+                                    Backend used for ghost-text suggestions.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.completion.providerId"
+                                    class="set-select"
                                 >
-                                    {{ p.label }}
-                                </option>
-                            </select>
+                                    <option value="">— None —</option>
+                                    <option
+                                        v-for="p in form.providers"
+                                        :key="p.id"
+                                        :value="p.id"
+                                    >
+                                        {{ p.label }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                         <div
                             v-show="
                                 shouldShow('completionEnabled', 'providers')
                             "
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Model</label>
-                            <input
-                                v-model="form.completion.model"
-                                class="field-input"
-                                placeholder="codestral-latest"
-                            />
+                            <div class="set-info">
+                                <span class="set-name">Completion model</span>
+                                <span class="set-desc">
+                                    Model ID for inline completions.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <input
+                                    v-model="form.completion.model"
+                                    class="set-input"
+                                    placeholder="codestral-latest"
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -382,73 +418,92 @@
                         </h3>
                         <div v-show="shouldShow('hotkeys', 'hotkeys')">
                             <p class="section-heading">Editor Shortcuts</p>
-                            <p class="field-hint" style="margin-bottom: 24px">
-                                Customize your keyboard shortcuts. Use
-                                <code>Mod</code> for Cmd (macOS) or Ctrl
+                            <p class="field-hint" style="margin-bottom: 4px">
+                                Use <code>Mod</code> for Cmd (macOS) or Ctrl
                                 (Windows/Linux).
                             </p>
-                            <div class="field">
-                                <label class="field-label"
-                                    >Select line/block</label
-                                >
-                                <input
-                                    v-model="form.hotkeys.selectLine"
-                                    class="field-input kbd-input"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Select line/block</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.selectLine"
+                                        class="set-input set-input--kbd"
+                                    />
+                                </div>
                             </div>
-                            <div class="field">
-                                <label class="field-label">Move block up</label>
-                                <input
-                                    v-model="form.hotkeys.moveUp"
-                                    class="field-input kbd-input"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Move block up</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.moveUp"
+                                        class="set-input set-input--kbd"
+                                    />
+                                </div>
                             </div>
-                            <div class="field">
-                                <label class="field-label"
-                                    >Move block down</label
-                                >
-                                <input
-                                    v-model="form.hotkeys.moveDown"
-                                    class="field-input kbd-input"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Move block down</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.moveDown"
+                                        class="set-input set-input--kbd"
+                                    />
+                                </div>
                             </div>
 
                             <p class="section-heading">Find & Replace</p>
-                            <div class="field">
-                                <label class="field-label"
-                                    >Find in document</label
-                                >
-                                <input
-                                    v-model="form.hotkeys.findInDoc"
-                                    class="field-input kbd-input"
-                                    placeholder="Mod-f"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Find in document</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.findInDoc"
+                                        class="set-input set-input--kbd"
+                                        placeholder="Mod-f"
+                                    />
+                                </div>
                             </div>
-                            <div class="field">
-                                <label class="field-label"
-                                    >Find in workspace</label
-                                >
-                                <input
-                                    v-model="form.hotkeys.findInWorkspace"
-                                    class="field-input kbd-input"
-                                    placeholder="Mod-Shift-f"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Find in workspace</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.findInWorkspace"
+                                        class="set-input set-input--kbd"
+                                        placeholder="Mod-Shift-f"
+                                    />
+                                </div>
                             </div>
-                            <div class="field">
-                                <label class="field-label">Find next</label>
-                                <input
-                                    v-model="form.hotkeys.findNext"
-                                    class="field-input kbd-input"
-                                    placeholder="Mod-g"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Find next</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.findNext"
+                                        class="set-input set-input--kbd"
+                                        placeholder="Mod-g"
+                                    />
+                                </div>
                             </div>
-                            <div class="field">
-                                <label class="field-label">Find previous</label>
-                                <input
-                                    v-model="form.hotkeys.findPrev"
-                                    class="field-input kbd-input"
-                                    placeholder="Mod-Shift-g"
-                                />
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name">Find previous</span>
+                                </div>
+                                <div class="set-control">
+                                    <input
+                                        v-model="form.hotkeys.findPrev"
+                                        class="set-input set-input--kbd"
+                                        placeholder="Mod-Shift-g"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -471,31 +526,26 @@
                         <div
                             v-show="shouldShow('transparency', 'appearance')"
                             id="setting-transparency"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.windowTransparency }"
-                                @click="
-                                    form.windowTransparency =
-                                        !form.windowTransparency
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Window transparency</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.windowTransparency }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Window transparency</span>
+                                <span class="set-desc">
                                     Semi-transparent panel backgrounds. Desktop
                                     shows through.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.windowTransparency }"
+                                    @click="
+                                        form.windowTransparency =
+                                            !form.windowTransparency
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                         <div
@@ -504,71 +554,70 @@
                             "
                             v-if="form.windowTransparency"
                             id="setting-transparencyOpacity"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">
-                                Transparency opacity
-                            </label>
-                            <div class="opacity-control-row">
-                                <input
-                                    type="range"
-                                    v-model.number="
-                                        form.windowTransparencyOpacity
-                                    "
-                                    min="0.1"
-                                    max="0.99"
-                                    step="0.01"
-                                    class="opacity-slider"
-                                />
-                                <div class="opacity-input-wrapper">
+                            <div class="set-info">
+                                <span class="set-name">Transparency opacity</span>
+                                <span class="set-desc">
+                                    Lower = more see-through. Up to 99%.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div class="opacity-control-row">
                                     <input
-                                        type="number"
-                                        :value="
-                                            Math.round(
-                                                form.windowTransparencyOpacity *
-                                                    100,
-                                            )
+                                        type="range"
+                                        v-model.number="
+                                            form.windowTransparencyOpacity
                                         "
-                                        @input="
-                                            form.windowTransparencyOpacity =
-                                                $event.target.value / 100
-                                        "
-                                        min="10"
-                                        max="99"
-                                        class="field-input opacity-number-input"
+                                        min="0.1"
+                                        max="0.99"
+                                        step="0.01"
+                                        class="opacity-slider"
                                     />
-                                    <span class="opacity-percent-symbol"
-                                        >%</span
-                                    >
+                                    <div class="opacity-input-wrapper">
+                                        <input
+                                            type="number"
+                                            :value="
+                                                Math.round(
+                                                    form.windowTransparencyOpacity *
+                                                        100,
+                                                )
+                                            "
+                                            @input="
+                                                form.windowTransparencyOpacity =
+                                                    $event.target.value / 100
+                                            "
+                                            min="10"
+                                            max="99"
+                                            class="field-input opacity-number-input"
+                                        />
+                                        <span class="opacity-percent-symbol"
+                                            >%</span
+                                        >
+                                    </div>
                                 </div>
                             </div>
-                            <p class="field-hint">
-                                Lower = more see-through. Up to 99% supported.
-                            </p>
                         </div>
                         <div
                             v-show="shouldShow('blur', 'appearance')"
                             id="setting-blur"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.windowBlur }"
-                                @click="form.windowBlur = !form.windowBlur"
-                            >
-                                <div class="card-header">
-                                    <span class="card-label">Window blur</span>
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.windowBlur }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Window blur</span>
+                                <span class="set-desc">
                                     Native frosted-glass blur behind window.
                                     macOS only.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.windowBlur }"
+                                    @click="form.windowBlur = !form.windowBlur"
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -581,63 +630,69 @@
                         <div
                             v-show="shouldShow('grain', 'appearance')"
                             id="setting-grain"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.grainEnabled }"
-                                @click="form.grainEnabled = !form.grainEnabled"
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Enable grain overlay</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.grainEnabled }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Enable grain overlay</span>
+                                <span class="set-desc">
                                     Add a subtle, analog photo grain pattern to
                                     the interface.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.grainEnabled }"
+                                    @click="
+                                        form.grainEnabled = !form.grainEnabled
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                         <div
                             v-show="shouldShow('grainOpacity', 'appearance')"
                             id="setting-grainOpacity"
                             v-if="form.grainEnabled"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label"> Grain intensity </label>
-                            <div class="opacity-control-row">
-                                <input
-                                    type="range"
-                                    v-model.number="form.grainOpacity"
-                                    min="0.01"
-                                    max="0.15"
-                                    step="0.01"
-                                    class="opacity-slider"
-                                />
-                                <div class="opacity-input-wrapper">
+                            <div class="set-info">
+                                <span class="set-name">Grain intensity</span>
+                                <span class="set-desc">
+                                    How visible the grain texture is.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div class="opacity-control-row">
                                     <input
-                                        type="number"
-                                        :value="
-                                            Math.round(form.grainOpacity * 100)
-                                        "
-                                        @input="
-                                            form.grainOpacity =
-                                                $event.target.value / 100
-                                        "
-                                        min="1"
-                                        max="15"
-                                        class="field-input opacity-number-input"
+                                        type="range"
+                                        v-model.number="form.grainOpacity"
+                                        min="0.01"
+                                        max="0.15"
+                                        step="0.01"
+                                        class="opacity-slider"
                                     />
-                                    <span class="opacity-percent-symbol"
-                                        >%</span
-                                    >
+                                    <div class="opacity-input-wrapper">
+                                        <input
+                                            type="number"
+                                            :value="
+                                                Math.round(
+                                                    form.grainOpacity * 100,
+                                                )
+                                            "
+                                            @input="
+                                                form.grainOpacity =
+                                                    $event.target.value / 100
+                                            "
+                                            min="1"
+                                            max="15"
+                                            class="field-input opacity-number-input"
+                                        />
+                                        <span class="opacity-percent-symbol"
+                                            >%</span
+                                        >
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -655,59 +710,49 @@
                                 shouldShow('paragraphSpacing', 'appearance')
                             "
                             id="setting-paragraphSpacing"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.editorParagraphSpacing }"
-                                @click="
-                                    form.editorParagraphSpacing =
-                                        !form.editorParagraphSpacing
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Paragraph spacing</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{
-                                            on: form.editorParagraphSpacing,
-                                        }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Paragraph spacing</span>
+                                <span class="set-desc">
                                     Add margin between paragraphs for better
                                     readability.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.editorParagraphSpacing }"
+                                    @click="
+                                        form.editorParagraphSpacing =
+                                            !form.editorParagraphSpacing
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
 
                         <div
                             v-show="shouldShow('editorTabs', 'appearance')"
                             id="setting-editorTabs"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.tabsEnabled }"
-                                @click="form.tabsEnabled = !form.tabsEnabled"
-                            >
-                                <div class="card-header">
-                                    <span class="card-label">Editor tabs</span>
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.tabsEnabled }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Editor tabs</span>
+                                <span class="set-desc">
                                     Show a strip of tabs for files opened this
                                     session.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.tabsEnabled }"
+                                    @click="form.tabsEnabled = !form.tabsEnabled"
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                         <div
@@ -716,33 +761,27 @@
                             "
                             v-if="form.tabsEnabled"
                             id="setting-editorTabsPosition"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Tab position</label>
-                            <div class="scope-options">
-                                <label
-                                    v-for="opt in tabsPositionOptions"
-                                    :key="opt.value"
-                                    :class="[
-                                        'scope-option',
-                                        form.tabsPosition === opt.value &&
-                                            'selected',
-                                    ]"
+                            <div class="set-info">
+                                <span class="set-name">Tab position</span>
+                                <span class="set-desc">
+                                    Where the editor tab strip sits.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.tabsPosition"
+                                    class="set-select"
                                 >
-                                    <input
-                                        type="radio"
-                                        v-model="form.tabsPosition"
+                                    <option
+                                        v-for="opt in tabsPositionOptions"
+                                        :key="opt.value"
                                         :value="opt.value"
-                                    />
-                                    <div class="scope-content">
-                                        <span class="scope-name">{{
-                                            opt.label
-                                        }}</span>
-                                        <span class="scope-desc">{{
-                                            opt.desc
-                                        }}</span>
-                                    </div>
-                                </label>
+                                    >
+                                        {{ opt.label }}
+                                    </option>
+                                </select>
                             </div>
                         </div>
 
@@ -755,33 +794,26 @@
                         <div
                             v-show="shouldShow('copyOnSelect', 'appearance')"
                             id="setting-copyOnSelect"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.clipboard.copyOnSelect }"
-                                @click="
-                                    form.clipboard.copyOnSelect =
-                                        !form.clipboard.copyOnSelect
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Copy on select</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{
-                                            on: form.clipboard.copyOnSelect,
-                                        }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Copy on select</span>
+                                <span class="set-desc">
                                     Automatically copy text to clipboard when
                                     selected.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.clipboard.copyOnSelect }"
+                                    @click="
+                                        form.clipboard.copyOnSelect =
+                                            !form.clipboard.copyOnSelect
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -790,69 +822,55 @@
                                 shouldShow('middleClickPaste', 'appearance')
                             "
                             id="setting-middleClickPaste"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{
-                                    active: form.clipboard.middleClickPaste,
-                                }"
-                                @click="
-                                    form.clipboard.middleClickPaste =
-                                        !form.clipboard.middleClickPaste
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Middle-click paste</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{
-                                            on: form.clipboard.middleClickPaste,
-                                        }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Middle-click paste</span>
+                                <span class="set-desc">
                                     Paste clipboard content with the middle
                                     mouse button.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{
+                                        on: form.clipboard.middleClickPaste,
+                                    }"
+                                    @click="
+                                        form.clipboard.middleClickPaste =
+                                            !form.clipboard.middleClickPaste
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
 
                         <div
                             v-show="shouldShow('ctrlClickPaste', 'appearance')"
                             id="setting-ctrlClickPaste"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{
-                                    active: form.clipboard.ctrlClickPaste,
-                                }"
-                                @click="
-                                    form.clipboard.ctrlClickPaste =
-                                        !form.clipboard.ctrlClickPaste
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Ctrl-click paste</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{
-                                            on: form.clipboard.ctrlClickPaste,
-                                        }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Ctrl-click paste</span>
+                                <span class="set-desc">
                                     Paste clipboard content with Ctrl + Click.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{
+                                        on: form.clipboard.ctrlClickPaste,
+                                    }"
+                                    @click="
+                                        form.clipboard.ctrlClickPaste =
+                                            !form.clipboard.ctrlClickPaste
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -862,74 +880,76 @@
                         <div
                             v-show="shouldShow('themeAuto', 'appearance')"
                             id="setting-themeAuto"
-                            class="field"
+                            class="set-row"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.theme.auto }"
-                                @click="form.theme.auto = !form.theme.auto"
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Match system theme</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.theme.auto }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                            <div class="set-info">
+                                <span class="set-name">Match system theme</span>
+                                <span class="set-desc">
                                     Automatically switch between light and dark
-                                    themes when your system appearance
-                                    changes.
-                                </p>
+                                    themes when your system appearance changes.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.theme.auto }"
+                                    @click="form.theme.auto = !form.theme.auto"
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                         <div
                             v-show="shouldShow('themeLight', 'appearance')"
                             id="setting-themeLight"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Light theme</label>
-                            <select
-                                v-model="form.theme.light"
-                                class="field-select"
-                            >
-                                <option
-                                    v-for="t in builtinThemeNames"
-                                    :key="t"
-                                    :value="t"
+                            <div class="set-info">
+                                <span class="set-name">Light theme</span>
+                                <span class="set-desc">
+                                    Applied when the system is in light mode.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.theme.light"
+                                    class="set-select"
                                 >
-                                    {{ t }}
-                                </option>
-                            </select>
-                            <p class="field-hint">
-                                Applied when the system is in light mode.
-                            </p>
+                                    <option
+                                        v-for="t in builtinThemeNames"
+                                        :key="t"
+                                        :value="t"
+                                    >
+                                        {{ t }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                         <div
                             v-show="shouldShow('themeDark', 'appearance')"
                             id="setting-themeDark"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label">Dark theme</label>
-                            <select
-                                v-model="form.theme.dark"
-                                class="field-select"
-                            >
-                                <option
-                                    v-for="t in builtinThemeNames"
-                                    :key="t"
-                                    :value="t"
+                            <div class="set-info">
+                                <span class="set-name">Dark theme</span>
+                                <span class="set-desc">
+                                    Applied when the system is in dark mode.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.theme.dark"
+                                    class="set-select"
                                 >
-                                    {{ t }}
-                                </option>
-                            </select>
-                            <p class="field-hint">
-                                Applied when the system is in dark mode.
-                            </p>
+                                    <option
+                                        v-for="t in builtinThemeNames"
+                                        :key="t"
+                                        :value="t"
+                                    >
+                                        {{ t }}
+                                    </option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
@@ -945,56 +965,50 @@
                         <div
                             v-show="shouldShow('shareScope', 'sharing')"
                             id="setting-shareScope"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label"
-                                >Default share scope</label
-                            >
-                            <p class="field-hint" style="margin-bottom: 12px">
-                                What gets shared when you click "Share
-                                document."
-                            </p>
-                            <div class="scope-options">
-                                <label
-                                    v-for="opt in scopeOptions"
-                                    :key="opt.value"
-                                    :class="[
-                                        'scope-option',
-                                        form.sharingDefaults.scope ===
-                                            opt.value && 'selected',
-                                    ]"
+                            <div class="set-info">
+                                <span class="set-name">Default share scope</span>
+                                <span class="set-desc">
+                                    What gets shared when you click "Share
+                                    document."
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.sharingDefaults.scope"
+                                    class="set-select"
                                 >
-                                    <input
-                                        type="radio"
-                                        v-model="form.sharingDefaults.scope"
+                                    <option
+                                        v-for="opt in scopeOptions"
+                                        :key="opt.value"
                                         :value="opt.value"
-                                    />
-                                    <div class="scope-content">
-                                        <span class="scope-name">{{
-                                            opt.label
-                                        }}</span>
-                                        <span class="scope-desc">{{
-                                            opt.desc
-                                        }}</span>
-                                    </div>
-                                </label>
+                                    >
+                                        {{ opt.label }}
+                                    </option>
+                                </select>
                             </div>
                         </div>
                         <div
                             v-show="shouldShow('sharePermission', 'sharing')"
                             id="setting-sharePermission"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label"
-                                >Default access level</label
-                            >
-                            <select
-                                v-model="form.sharingDefaults.permission"
-                                class="field-select"
-                            >
-                                <option value="view">Read only</option>
-                                <option value="comment">Can comment</option>
-                            </select>
+                            <div class="set-info">
+                                <span class="set-name">Default access level</span>
+                                <span class="set-desc">
+                                    What peers can do with shared docs by default.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.sharingDefaults.permission"
+                                    class="set-select"
+                                >
+                                    <option value="view">Read only</option>
+                                    <option value="comment">Can comment</option>
+                                </select>
+                            </div>
                         </div>
 
                         <p
@@ -1006,31 +1020,29 @@
                         <div
                             v-show="shouldShow('autoShareWorkspace', 'sharing')"
                             id="setting-autoShareWorkspace"
-                            class="field"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.autoShareWorkspace }"
-                                @click="
-                                    form.autoShareWorkspace =
-                                        !form.autoShareWorkspace
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name"
                                         >Auto-share current workspace</span
                                     >
+                                    <span class="set-desc">
+                                        Start sharing your active workspace when
+                                        the app opens.
+                                    </span>
+                                </div>
+                                <div class="set-control">
                                     <div
                                         class="toggle"
                                         :class="{ on: form.autoShareWorkspace }"
+                                        @click="
+                                            form.autoShareWorkspace =
+                                                !form.autoShareWorkspace
+                                        "
                                     >
                                         <div class="toggle-thumb"></div>
                                     </div>
                                 </div>
-                                <p class="card-desc">
-                                    Start sharing your active workspace when the
-                                    app opens.
-                                </p>
                             </div>
                             <div
                                 v-if="store.workspaceShareInfo"
@@ -1064,36 +1076,32 @@
                                 shouldShow('autoShareAllWorkspaces', 'sharing')
                             "
                             id="setting-autoShareAllWorkspaces"
-                            class="field"
                         >
-                            <div
-                                class="settings-card"
-                                :class="{
-                                    active: form.autoShareAllWorkspaces,
-                                }"
-                                @click="
-                                    form.autoShareAllWorkspaces =
-                                        !form.autoShareAllWorkspaces
-                                "
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name"
                                         >Auto-share all workspaces</span
                                     >
+                                    <span class="set-desc">
+                                        Automatically share your
+                                        {{ store.recentWorkspaces.length }}
+                                        recent workspaces on startup.
+                                    </span>
+                                </div>
+                                <div class="set-control">
                                     <div
                                         class="toggle"
                                         :class="{
                                             on: form.autoShareAllWorkspaces,
                                         }"
+                                        @click="
+                                            form.autoShareAllWorkspaces =
+                                                !form.autoShareAllWorkspaces
+                                        "
                                     >
                                         <div class="toggle-thumb"></div>
                                     </div>
                                 </div>
-                                <p class="card-desc">
-                                    Automatically share your
-                                    {{ store.recentWorkspaces.length }} recent
-                                    workspaces on startup.
-                                </p>
                             </div>
                             <div
                                 v-if="store.sharesByFile['__all_workspaces__']"
@@ -1216,23 +1224,25 @@
                         <div
                             v-show="shouldShow('workspacePath', 'workspace')"
                             id="setting-workspacePath"
-                            class="field"
+                            class="set-row"
                         >
-                            <label class="field-label"
-                                >Default workspace location</label
-                            >
-                            <div class="path-input">
+                            <div class="set-info">
+                                <span class="set-name"
+                                    >Default workspace location</span
+                                >
+                                <span class="set-desc">
+                                    New workspaces created here by default.
+                                </span>
+                            </div>
+                            <div class="set-control">
                                 <input
                                     v-model="form.defaultWorkspacePath"
-                                    class="field-input"
+                                    class="set-input"
                                 />
-                                <button class="browse-btn" @click="openDialog">
+                                <button class="browse-btn" @click="browsePath">
                                     Browse
                                 </button>
                             </div>
-                            <p class="field-hint">
-                                New workspaces created here by default.
-                            </p>
                         </div>
                     </div>
 
@@ -1248,41 +1258,34 @@
                         <div
                             v-show="shouldShow('telemetry', 'privacy')"
                             id="setting-telemetry"
-                            class="field"
                         >
-                            <label class="field-label">Usage Logging</label>
-                            <p class="field-hint" style="margin-bottom: 12px">
-                                Help improve Canonic by sharing anonymous usage
-                                data.
-                            </p>
-                            <div
-                                class="settings-card"
-                                :class="{ active: form.telemetryEnabled }"
-                                @click="
-                                    form.telemetryEnabled =
-                                        !form.telemetryEnabled
-                                "
-                            >
-                                <div class="telemetry-header">
-                                    <span class="card-label"
+                            <div class="set-row">
+                                <div class="set-info">
+                                    <span class="set-name"
                                         >Enable usage logging</span
                                     >
+                                    <span class="set-desc">
+                                        Anonymous feature-usage events (e.g.
+                                        "Version saved") to understand how
+                                        Canonic is used.
+                                        <strong
+                                            >We never collect your API keys or
+                                            document content.</strong
+                                        >
+                                    </span>
+                                </div>
+                                <div class="set-control">
                                     <div
                                         class="toggle"
                                         :class="{ on: form.telemetryEnabled }"
+                                        @click="
+                                            form.telemetryEnabled =
+                                                !form.telemetryEnabled
+                                        "
                                     >
                                         <div class="toggle-thumb"></div>
                                     </div>
                                 </div>
-                                <p class="card-desc">
-                                    We track feature usage (e.g. "AI chat
-                                    started", "Version saved") to understand how
-                                    Canonic is being used.
-                                    <strong
-                                        >We never collect your API keys or
-                                        document content.</strong
-                                    >
-                                </p>
                             </div>
                             <p class="field-hint" style="margin-top: 12px">
                                 Logs are stored locally in
@@ -1300,29 +1303,28 @@
                         <h3 v-if="activeTab === 'all'" class="all-tab-heading">
                             {{ navItems.updates }}
                         </h3>
-                        <div class="field">
-                            <div
-                                v-show="shouldShow('autoUpdate', 'updates')"
-                                id="setting-autoUpdate"
-                                class="settings-card"
-                                :class="{ active: form.autoUpdate }"
-                                @click="form.autoUpdate = !form.autoUpdate"
-                            >
-                                <div class="card-header">
-                                    <span class="card-label"
-                                        >Download updates automatically</span
-                                    >
-                                    <div
-                                        class="toggle"
-                                        :class="{ on: form.autoUpdate }"
-                                    >
-                                        <div class="toggle-thumb"></div>
-                                    </div>
-                                </div>
-                                <p class="card-desc">
+                        <div
+                            v-show="shouldShow('autoUpdate', 'updates')"
+                            id="setting-autoUpdate"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name"
+                                    >Download updates automatically</span
+                                >
+                                <span class="set-desc">
                                     Canonic downloads updates in the background
                                     and notifies you when ready.
-                                </p>
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: form.autoUpdate }"
+                                    @click="form.autoUpdate = !form.autoUpdate"
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
                             </div>
                         </div>
                         <div v-show="activeTab !== 'all'" class="field">
@@ -2168,7 +2170,113 @@ async function confirmReset() {
 }
 
 .tab-content {
-    max-width: 560px;
+    max-width: 720px;
+}
+
+/* ── Compact 2-column setting rows ── */
+.set-group-title {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 28px 0 2px;
+}
+.set-group-title:first-child {
+    margin-top: 0;
+}
+.set-group-sub {
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin: 0 0 4px;
+}
+
+.set-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 24px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border-mid);
+}
+.set-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.set-name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.set-desc {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+.set-control {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.set-input,
+.set-select {
+    background: var(--bg-base);
+    border: 1px solid var(--border-mid);
+    border-radius: 7px;
+    padding: 7px 11px;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.set-input {
+    width: 260px;
+    max-width: 44vw;
+}
+.set-input:focus,
+.set-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-muted);
+}
+.set-select {
+    cursor: pointer;
+    min-width: 170px;
+}
+.set-input--sm {
+    width: 160px;
+}
+.set-input--kbd {
+    width: 160px;
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.set-row--top {
+    align-items: start;
+}
+.set-row--top .set-control {
+    align-items: start;
+}
+.set-textarea {
+    resize: vertical;
+    min-height: 64px;
+    line-height: 1.5;
+    padding-top: 8px;
+}
+.set-control .opacity-control-row {
+    width: 280px;
+    gap: 12px;
+}
+.set-control .browse-btn {
+    flex-shrink: 0;
 }
 
 /* ── Fields & Inputs ── */
@@ -2414,6 +2522,7 @@ async function confirmReset() {
     position: relative;
     transition: background 0.2s;
     flex-shrink: 0;
+    cursor: pointer;
 }
 .toggle.on {
     background: var(--accent);

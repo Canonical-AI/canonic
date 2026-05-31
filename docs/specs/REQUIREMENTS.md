@@ -48,6 +48,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user clicks the gear icon in the titlebar
   then: the Settings modal opens
 
+* scenario: settings use a compact two-column row layout
+  given: the Settings modal is open on any tab
+  when: a setting is displayed
+  then: its name and description sit on the left and its control on the right of a single divided row — on/off settings show a toggle, free-text settings a single-line input, and multi-choice settings a dropdown
+
 * scenario: API key change takes effect immediately
   given: Settings is open and the user changes the API key and saves
   when: the user sends a new AI chat message

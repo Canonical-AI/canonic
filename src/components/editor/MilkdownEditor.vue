@@ -1237,6 +1237,58 @@ const dragHandlePlugin = $prose(() => {
     });
 });
 
+// --- Empty-line round-trip ---
+// On disk we store blank lines literally (no <br />). Internally Milkdown
+// represents blank paragraphs as <br /> html nodes, which round-trip cleanly.
+// We translate only at the disk boundary:
+//   save: each <br /> empty paragraph -> one extra blank line
+//   load: each blank line beyond the single separator -> one empty paragraph
+
+// Apply a text transform to everything except fenced code blocks, so blank
+// lines / <br /> inside code are never touched.
+function applyOutsideCodeFences(md, fn) {
+    const fence = /(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\1[ \t]*(?=\n|$)/g;
+    let out = "";
+    let last = 0;
+    let m;
+    while ((m = fence.exec(md)) !== null) {
+        out += fn(md.slice(last, m.index)) + m[0];
+        last = m.index + m[0].length;
+    }
+    return out + fn(md.slice(last));
+}
+
+// Serialize boundary: turn Milkdown's <br /> empty-paragraph markers into
+// real blank lines before writing to disk.
+function stripEmptyLineBr(markdown) {
+    return applyOutsideCodeFences(markdown, (s) =>
+        s.replace(/<br \/>\n\n/g, "\n"),
+    );
+}
+
+// Parse boundary (remark): rebuild blank paragraphs from blank-line gaps
+// between blocks. One blank line is the standard separator; each additional
+// blank line becomes an empty paragraph so spacing survives reload and gets a
+// gutter line number. Driven by source positions, so blank lines inside code
+// blocks are ignored.
+const preserveEmptyLinesRemark = () => (tree) => {
+    const kids = tree.children;
+    if (!kids || kids.length < 2) return;
+    const out = [kids[0]];
+    for (let i = 1; i < kids.length; i++) {
+        const prevEnd = kids[i - 1].position?.end?.line;
+        const curStart = kids[i].position?.start?.line;
+        if (prevEnd != null && curStart != null) {
+            const empties = curStart - prevEnd - 2; // blank lines beyond the separator
+            for (let j = 0; j < empties; j++) {
+                out.push({ type: "paragraph", children: [] });
+            }
+        }
+        out.push(kids[i]);
+    }
+    tree.children = out;
+};
+
 // --- Editor setup ---
 
 const { loading, get } = useEditor((root) =>
@@ -1249,7 +1301,9 @@ const { loading, get } = useEditor((root) =>
                 editable: () => !editorReadonly.value,
             }));
             ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
-                const fixed = markdown.replace(/\\\[\\\[/g, "[[");
+                const fixed = stripEmptyLineBr(
+                    markdown.replace(/\\\[\\\[/g, "[["),
+                );
                 emit("update", fixed);
             });
             ctx.update(prosePluginsCtx, (plugins) => [
@@ -1260,6 +1314,7 @@ const { loading, get } = useEditor((root) =>
             ]);
             ctx.update(remarkPluginsCtx, (plugins) => [
                 ...plugins,
+                { plugin: preserveEmptyLinesRemark, options: {} },
                 { plugin: mermaidRemarkPlugin, options: {} },
                 { plugin: wikiLinkRemarkPlugin, options: {} },
             ]);

@@ -652,20 +652,38 @@ export const useAppStore = defineStore("app", () => {
       if (result.error) throw new Error(result.error);
       workspacePath.value = result.path;
       isExternalRepo.value = result.isExternal === true;
-      workspaceName.value = chosenPath.split("/").pop();
-      const recent = recentWorkspaces.value.filter(
-        (w) => w.path !== chosenPath,
-      );
-      recent.unshift({
-        path: chosenPath,
-        name: workspaceName.value,
-        openedAt: Date.now(),
-      });
-      recentWorkspaces.value = recent.slice(0, 8);
-      storage.setItem(
-        "canonic:recentWorkspaces",
-        JSON.stringify(recentWorkspaces.value),
-      );
+      workspaceName.value = chosenPath.split(/[\\/]/).pop();
+      // Record in the durable main-process history (skip the demo workspace).
+      // Falls back to a local-only list if the bridge is unavailable (web/tests).
+      if (!isDemoMode.value) {
+        const entry = {
+          path: chosenPath,
+          name: workspaceName.value,
+          openedAt: Date.now(),
+        };
+        if (api.workspace?.addRecent) {
+          try {
+            recentWorkspaces.value = await api.workspace.addRecent(
+              entry.path,
+              entry.name,
+            );
+          } catch {
+            recentWorkspaces.value = [
+              entry,
+              ...recentWorkspaces.value.filter((w) => w.path !== entry.path),
+            ].slice(0, 8);
+          }
+        } else {
+          recentWorkspaces.value = [
+            entry,
+            ...recentWorkspaces.value.filter((w) => w.path !== entry.path),
+          ].slice(0, 8);
+        }
+        storage.setItem(
+          "canonic:recentWorkspaces",
+          JSON.stringify(recentWorkspaces.value),
+        );
+      }
       refPanes.value = [];
       openTabs.value = [];
       currentFile.value = null;
@@ -702,6 +720,23 @@ export const useAppStore = defineStore("app", () => {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  // Load the durable recent-workspace list from the main process (source of
+  // truth) into the reactive ref, caching to localStorage for instant paint.
+  // No-op fallback to the cached value when the bridge isn't present (web/tests).
+  async function loadRecents() {
+    if (!api.workspace?.recents) return recentWorkspaces.value;
+    try {
+      const list = await api.workspace.recents();
+      if (Array.isArray(list)) {
+        recentWorkspaces.value = list;
+        storage.setItem("canonic:recentWorkspaces", JSON.stringify(list));
+      }
+    } catch {
+      // keep the cached value
+    }
+    return recentWorkspaces.value;
   }
 
   async function renameFile(oldPath, newName) {
@@ -2884,6 +2919,7 @@ export const useAppStore = defineStore("app", () => {
     workspacePath,
     workspaceName,
     recentWorkspaces,
+    loadRecents,
     files,
     currentFile,
     currentContent,

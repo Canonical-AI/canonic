@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("workspace:init", path, template),
     getDefault: () => ipcRenderer.invoke("workspace:get-default"),
     openDirectoryDialog: () => ipcRenderer.invoke("dialog:open-directory"),
+    recents: () => ipcRenderer.invoke("workspace:recent-list"),
+    addRecent: (path, name) =>
+      ipcRenderer.invoke("workspace:recent-add", path, name),
+    removeRecent: (path) => ipcRenderer.invoke("workspace:recent-remove", path),
   },
 
   // Files

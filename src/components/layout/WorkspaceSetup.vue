@@ -249,8 +249,14 @@ async function checkSetup() {
     }
     await store.loadConfig();
     await store.logEvent("app:start");
+
+    // The main process owns the recent-workspace history; pull the fresh list
+    // before deciding whether to reopen the last one (the localStorage cache
+    // can be stale or empty on a file:// origin).
+    await store.loadRecents();
+    const last = store.recentWorkspaces[0];
+    autoLaunching.value = !store.workspacePath && !!last;
     if (autoLaunching.value) {
-        const last = store.recentWorkspaces[0];
         try {
             await store.openWorkspace(last.path, "blank");
             router.push("/workspace");

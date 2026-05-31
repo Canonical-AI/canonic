@@ -19,6 +19,7 @@ const semver = require("semver");
 
 const configService = require("./config");
 const versionsService = require("./versions");
+const recentsService = require("./recents");
 const apiServer = require("./api-server");
 const { startWatcher, stopWatcher, getIndex } = require("./fileIndex");
 const agentPresets = require("./agent-presets");
@@ -1203,6 +1204,15 @@ function setupIpcHandlers() {
     const defaultPath = path.join(os.homedir(), "canonic");
     return defaultPath;
   });
+
+  // Durable recent-workspace history (see electron/recents.js).
+  ipcMain.handle("workspace:recent-list", () => recentsService.list());
+  ipcMain.handle("workspace:recent-add", (_, workspacePath, name) =>
+    recentsService.add(workspacePath, name),
+  );
+  ipcMain.handle("workspace:recent-remove", (_, workspacePath) =>
+    recentsService.remove(workspacePath),
+  );
 
   ipcMain.handle("files:open-dialog", async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {

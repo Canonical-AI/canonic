@@ -18,6 +18,21 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the app launches
   then: the Setup screen is skipped and the Workspace screen loads directly
 
+* scenario: recent workspaces persist across launches
+  given: the user has opened one or more workspaces
+  when: the app is closed and relaunched
+  then: the recent-workspace list is restored from the main-process store (`~/.config/canonic/workspaces.json`), newest first, capped at 8 — not from renderer localStorage
+
+* scenario: last workspace reopens automatically
+  given: config exists and the recent-workspace list is non-empty
+  when: the app launches and no workspace is already open
+  then: the most recently opened workspace is reopened automatically; if it can't be opened an error is shown and the Setup screen remains
+
+* scenario: the demo workspace is never recorded as recent
+  given: the user opens the demo from the Setup screen
+  when: the demo workspace loads
+  then: it does not appear in the recent-workspace list
+
 * scenario: setup screen fields
   given: the Setup screen is open
   when: the user views it

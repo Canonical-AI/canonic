@@ -1305,10 +1305,10 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the window is displayed
   then: the OS vibrancy material ("under-window") renders a frosted-glass blur of the desktop behind the panels
 
-* scenario: macOS transparency tints panels over the blur
+* scenario: macOS transparency keeps bars and editor see-through, floating menus solid
   given: the app runs on macOS and "Window transparency" is on at opacity X
   when: the window is displayed
-  then: panel backgrounds are semi-transparent at opacity X so the vibrancy/desktop shows through
+  then: the topbar, left sidebar, right panel, editor surface and outer container are semi-transparent at opacity X so the vibrancy/desktop shows through, while floating menus (tooltips, popovers, dropdowns, modals, toasts) render fully opaque so they stay readable over content
 
 * scenario: Linux and Windows windows stay fully opaque
   given: the app runs on Linux or Windows
@@ -1320,15 +1320,15 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user toggles "Window blur" or "Window transparency" in Settings
   then: the window vibrancy and background update immediately and the choice persists across restarts
 
-* scenario: compact layout keeps a transparent background but opaque panels and tooltips
-  given: transparency is on and the window is resized below the compact breakpoint
-  when: the layout becomes compact (panels and tooltips float over content)
-  then: the main background stays transparent (vibrancy) while the floating panels and tooltips/popovers render opaque so they stay readable
+* scenario: floating menus stay opaque while bars stay transparent
+  given: transparency is on (any window width, compact or wide)
+  when: a tooltip, popover, dropdown, slash menu, table/floating toolbar, branch menu, agent selector, modal, or toast renders over content
+  then: its background is fully opaque so text over content stays readable, while the topbar, sidebar and right panel keep their transparency (vibrancy)
 
-* scenario: leaving compact layout restores transparent panels
-  given: the layout is compact with opaque panels
-  when: the window is widened above the compact breakpoint
-  then: panels and tooltips return to the semi-transparent appearance
+* scenario: components referencing alias surfaces are never undefined
+  given: a component styles a surface with `--bg-secondary` or `--bg-body`
+  when: it renders under any theme
+  then: the alias resolves to a real themed surface (never an undefined background); inside a floating menu it resolves opaque, on a transparent bar it follows that bar
 
 ## External File Sync (EXT)
 

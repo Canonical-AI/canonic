@@ -373,22 +373,41 @@
                         :class="{ 'split-row--stacked': store.splitStacked }"
                     >
                         <div
-                            class="split-pane split-pane--active"
+                            class="split-pane"
                             :class="{
+                                'split-pane--active':
+                                    store.refPanes.length === 0 ||
+                                    store.activePane === 'main',
                                 'split-pane--dragover': activeDragOver,
                             }"
+                            @focusin="store.setActivePane('main')"
                             @dragover.capture="onActiveDragOver"
                             @dragleave="activeDragOver = false"
                             @drop.capture="onActiveDrop"
                         >
                             <Editor />
                         </div>
-                        <RefDocPane
-                            v-for="(p, i) in store.refPanes"
-                            :key="p + ':' + i"
-                            :file-path="p"
-                            :index="i"
-                        />
+                        <template v-if="store.refPanes.length === 2">
+                            <div
+                                class="split-row split-row--nested"
+                                :class="{ 'split-row--stacked': !store.splitStacked }"
+                            >
+                                <RefDocPane
+                                    v-for="(p, i) in store.refPanes"
+                                    :key="p + ':' + i"
+                                    :file-path="p"
+                                    :index="i"
+                                />
+                            </div>
+                        </template>
+                        <template v-else>
+                            <RefDocPane
+                                v-for="(p, i) in store.refPanes"
+                                :key="p + ':' + i"
+                                :file-path="p"
+                                :index="i"
+                            />
+                        </template>
                     </div>
                     <EditorTabs
                         v-if="store.tabsEnabled && store.tabsPosition !== 'top'"
@@ -993,6 +1012,23 @@ async function reloadConfig() {
 
 function onGlobalKeydown(e) {
     const hk = store.findHotkeys;
+
+    // Ctrl+T — focus the file tree
+    if ((e.ctrlKey || e.metaKey) && e.key === "t" && !e.shiftKey) {
+        // Don't steal focus from inputs/editors
+        const tag = document.activeElement?.tagName;
+        const isInput = tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable;
+        if (!isInput) {
+            e.preventDefault();
+            store.focusTree();
+            nextTick(() => {
+                const tree = document.querySelector(".file-tree");
+                if (tree) tree.focus();
+            });
+            return;
+        }
+    }
+
     if (matchesHotkey(e, hk.findInWorkspace)) {
         e.preventDefault();
         store.searchViewOpen = true;
@@ -1318,7 +1354,7 @@ function toggleDistractionFree() {
     background: var(--bg-editor);
 }
 
-/* Split panels — active editor + read-only reference panes side by side */
+/* Split panels — primary editor + reference panes side by side */
 .split-row {
     display: flex;
     flex: 1;
@@ -1330,7 +1366,37 @@ function toggleDistractionFree() {
     flex-direction: column;
 }
 
-.split-pane--active {
+/* Bento-box: when 3 panes are open the 2 ref panes nest in the opposite
+   direction — row-nested inside a stacked layout, column-nested inside
+   a side-by-side layout. */
+.split-row--nested {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Outer border on the nested container (edge between primary + ref area). */
+.split-row--stacked > .split-row--nested {
+    border-top: 1px solid var(--border);
+}
+.split-row:not(.split-row--stacked) > .split-row--nested {
+    border-left: 1px solid var(--border);
+}
+
+/* Nested ref panes strip inherited outer-edge borders; the container handles it. */
+.split-row--nested :deep(.ref-pane) {
+    border-top: none;
+    border-left: none;
+}
+/* Row-nested (stacked outer): side-by-side ref panes → divider between them. */
+.split-row--nested:not(.split-row--stacked) :deep(.ref-pane + .ref-pane) {
+    border-left: 1px solid var(--border);
+}
+/* Column-nested (side-by-side outer): stacked ref panes → divider between them. */
+.split-row--nested.split-row--stacked :deep(.ref-pane + .ref-pane) {
+    border-top: 1px solid var(--border);
+}
+
+.split-pane {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -1339,8 +1405,16 @@ function toggleDistractionFree() {
     position: relative;
 }
 
+/* Active-pane highlight (only meaningful while reference panes are open). */
+.split-row:has(.ref-pane) .split-pane--active {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.split-row--stacked:has(.ref-pane) .split-pane--active {
+    box-shadow: inset 0 2px 0 var(--accent);
+}
+
 .split-pane--dragover {
-    box-shadow: inset 0 0 0 2px var(--accent);
+    box-shadow: inset 0 0 0 2px var(--accent) !important;
 }
 
 .empty-state {

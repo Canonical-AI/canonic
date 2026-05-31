@@ -5,6 +5,8 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const gitService = require('./git.js')
+const { generateDiff, countDiff } = require('./diff.js')
 
 // ── Shared state (set by api-server.js on start) ──────────────────────────────
 let _workspacePath = null
@@ -38,7 +40,8 @@ function buildInstructions() {
   const lines = [
     'You are connected to Canonic, the user\'s local Markdown doc workspace.',
     'Use the Canonic tools to act on docs: get_open_docs (what the user is viewing right now), read_doc / write_doc / create_doc, and post_comment / read_comments for inline review.',
-    'When the user refers to "this doc" or gives no path, act on the focused doc. Call get_open_docs to refresh — the focus and open tray change as the user works.'
+    'When the user refers to "this doc" or gives no path, act on the focused doc. Call get_open_docs to refresh — the focus and open tray change as the user works.',
+    'When the user says they updated or changed a doc and wants you to act on the edits, call get_doc_changes to fetch the diff (use get_doc_history first if they reference an older revision), then plan and implement from those differences.'
   ]
   if (_focusedDoc) {
     lines.push(`Right now the user is focused on: ${_focusedDoc}`)
@@ -91,6 +94,14 @@ function resolvePath(docPath) {
     throw new Error(`Path escapes workspace: ${docPath}`)
   }
   return full
+}
+
+// Workspace-relative, forward-slashed path for git operations. Validates containment
+// via resolvePath (throws on escape), then derives the path isomorphic-git expects.
+function relDocPath(docPath) {
+  const full = resolvePath(docPath)
+  const root = path.resolve(_workspacePath)
+  return path.relative(root, full).split(path.sep).join('/')
 }
 
 const tools = {
@@ -260,6 +271,87 @@ const tools = {
     handler: async (args) => {
       const comments = readCommentsFor(args.path).filter(c => !c.resolved)
       return { comments }
+    }
+  },
+
+  get_doc_history: {
+    description: 'List the commit revisions for a doc (newest first), each with its oid, message, author and date. Pair with get_doc_changes to inspect what a given revision changed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Relative path to the doc' }
+      },
+      required: ['path']
+    },
+    handler: async (args) => {
+      const rel = relDocPath(args.path)
+      const commits = await gitService.log(getWorkspacePath(), rel)
+      const revisions = commits.map((c) => ({
+        oid: c.oid,
+        shortOid: c.oid.slice(0, 8),
+        message: c.message,
+        author: c.author,
+        date: new Date(c.timestamp).toISOString()
+      }))
+      return { path: rel, revisions }
+    }
+  },
+
+  get_doc_changes: {
+    description: 'Review what changed in a doc as a unified diff ("+ " added / "- " removed lines), so you can plan an implementation from the user\'s edits. By default it compares the current version on disk against the last committed revision — i.e. the user\'s unsaved/uncommitted edits, which is what "I just updated the doc" usually means. If the doc has no uncommitted edits, it shows what the most recent commit introduced. Pass `since` (an oid from get_doc_history) to compare the current version against an older revision instead.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Relative path to the doc' },
+        since: { type: 'string', description: 'Optional commit oid to compare against (from get_doc_history)' }
+      },
+      required: ['path']
+    },
+    handler: async (args) => {
+      const ws = getWorkspacePath()
+      const rel = relDocPath(args.path)
+      const full = resolvePath(args.path)
+      if (!fs.existsSync(full)) return { error: `Doc not found: ${args.path}` }
+      const current = fs.readFileSync(full, 'utf-8')
+      const commits = await gitService.log(ws, rel)
+
+      let before
+      let after
+      let comparedAgainst
+      if (args.since) {
+        before = await gitService.readCommit(ws, rel, args.since)
+        after = current
+        comparedAgainst = `revision ${String(args.since).slice(0, 8)}`
+      } else if (commits.length) {
+        const headOid = commits[0].oid
+        const headContent = await gitService.readCommit(ws, rel, headOid)
+        if (headContent !== current) {
+          before = headContent
+          after = current
+          comparedAgainst = `last commit ${headOid.slice(0, 8)} (uncommitted edits)`
+        } else {
+          // No uncommitted edits — show what the latest commit introduced.
+          const cd = await gitService.commitDiff(ws, rel, headOid)
+          before = cd.before
+          after = cd.after
+          comparedAgainst = `commit ${headOid.slice(0, 8)} vs its parent`
+        }
+      } else {
+        // No git history at all — treat the whole doc as newly added.
+        before = ''
+        after = current
+        comparedAgainst = 'no prior revision (entire document is new)'
+      }
+
+      const { added, removed } = countDiff(before, after)
+      return {
+        path: rel,
+        comparedAgainst,
+        hasChanges: added + removed > 0,
+        added,
+        removed,
+        diff: generateDiff(before, after)
+      }
     }
   },
 

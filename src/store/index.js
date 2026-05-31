@@ -1014,9 +1014,11 @@ export const useAppStore = defineStore("app", () => {
       md
         .replace(/\r\n/g, "\n") // consistent line endings
         .replace(/[ \t]+$/gm, "") // strip trailing whitespace per line
-        .replace(/\n{3,}/g, "\n\n") // max one blank line between blocks
         .trimEnd() + "\n"
     ); // single trailing newline
+    // NOTE: blank lines between blocks are intentionally preserved (no collapse)
+    // so user-authored spacing round-trips. Empty paragraphs map to blank lines
+    // via preserveEmptyLinesRemark / stripEmptyLineBr in MilkdownEditor.vue.
   }
 
   async function saveFile(content) {

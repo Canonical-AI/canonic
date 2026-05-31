@@ -9,6 +9,7 @@ process.env.CANONIC_CONFIG_DIR = path.join(os.tmpdir(), `canonic-test-mcp-${proc
 const LOCKFILE = path.join(process.env.CANONIC_CONFIG_DIR, 'api.lock')
 const apiServer = await import('../../electron/api-server.js')
 const mcp = await import('../../electron/mcp-server.js')
+const gitService = await import('../../electron/git.js')
 
 let port, token
 
@@ -83,16 +84,16 @@ describe('MCP server', () => {
   })
 
   describe('tools/list', () => {
-    it('returns all 9 tools', async () => {
+    it('returns all 11 tools', async () => {
       const res = await mcpRequest('tools/list')
       expect(res.status).toBe(200)
       const tools = res.body.result.tools
-      expect(tools.length).toBe(9)
+      expect(tools.length).toBe(11)
       const names = tools.map(t => t.name).sort()
       expect(names).toEqual([
-        'create_doc', 'get_open_docs', 'get_workspace_info', 'list_docs',
-        'post_comment', 'read_comments', 'read_doc',
-        'start_session', 'write_doc'
+        'create_doc', 'get_doc_changes', 'get_doc_history', 'get_open_docs',
+        'get_workspace_info', 'list_docs', 'post_comment', 'read_comments',
+        'read_doc', 'start_session', 'write_doc'
       ])
     })
 
@@ -342,6 +343,121 @@ describe('MCP server tools with workspace set', () => {
     const info = JSON.parse(text)
     expect(info.name).toBeTruthy()
     expect(info.path).toBe(tmpDir)
+  })
+})
+
+describe('MCP server doc history & changes', () => {
+  const tmpDir = path.join(os.tmpdir(), 'canonic-mcp-git-' + Date.now())
+  const doc = 'spec.md'
+  const v1 = '# Spec\n\nOriginal line.\n'
+  let firstOid
+
+  function call(name, args) {
+    return mcpRequest('tools/call', { name, arguments: args }).then(r =>
+      JSON.parse(r.body.result.content[0].text)
+    )
+  }
+
+  beforeAll(async () => {
+    await gitService.initWorkspace(tmpDir, 'blank')
+    fs.writeFileSync(path.join(tmpDir, doc), v1, 'utf-8')
+    const r = await gitService.commit(tmpDir, doc, 'Add spec')
+    firstOid = r.oid
+    apiServer.setWorkspacePath(tmpDir)
+  })
+
+  afterAll(() => {
+    apiServer.setWorkspacePath(null)
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('get_doc_history lists the commit that added the doc', async () => {
+    const res = await call('get_doc_history', { path: doc })
+    expect(Array.isArray(res.revisions)).toBe(true)
+    expect(res.revisions.length).toBeGreaterThanOrEqual(1)
+    expect(res.revisions[0].message).toContain('Add spec')
+    expect(res.revisions[0].oid).toBe(firstOid)
+    expect(res.revisions[0].shortOid).toBe(firstOid.slice(0, 8))
+  })
+
+  it('get_doc_changes reports uncommitted edits as a unified diff', async () => {
+    // Simulate "I updated the document" — edit on disk without committing.
+    fs.writeFileSync(path.join(tmpDir, doc), '# Spec\n\nUpdated line.\n', 'utf-8')
+    const res = await call('get_doc_changes', { path: doc })
+    expect(res.hasChanges).toBe(true)
+    expect(res.added).toBeGreaterThanOrEqual(1)
+    expect(res.removed).toBeGreaterThanOrEqual(1)
+    expect(res.diff).toContain('+ Updated line.')
+    expect(res.diff).toContain('- Original line.')
+    expect(res.comparedAgainst).toContain('uncommitted')
+  })
+
+  it('get_doc_changes with `since` diffs the current version against an older revision', async () => {
+    const res = await call('get_doc_changes', { path: doc, since: firstOid })
+    expect(res.hasChanges).toBe(true)
+    expect(res.diff).toContain('+ Updated line.')
+    expect(res.comparedAgainst).toContain(firstOid.slice(0, 8))
+  })
+
+  it('get_doc_changes reports no changes when the doc matches its last commit', async () => {
+    fs.writeFileSync(path.join(tmpDir, doc), '# Spec\n\nUpdated line.\n', 'utf-8')
+    await gitService.commit(tmpDir, doc, 'Update spec')
+    const res = await call('get_doc_changes', { path: doc })
+    // No uncommitted edits → falls back to what the latest commit introduced.
+    expect(res.comparedAgainst).toContain('vs its parent')
+  })
+
+  it('get_doc_changes errors for a nonexistent doc', async () => {
+    const r = await mcpRequest('tools/call', {
+      name: 'get_doc_changes', arguments: { path: 'nope.md' }
+    })
+    expect(r.body.result.content[0].text).toContain('Error')
+  })
+})
+
+describe('REST API index (GET /)', () => {
+  function get(pathname, headers = {}) {
+    return new Promise((resolve) => {
+      http.get({ hostname: '127.0.0.1', port, path: pathname, headers }, (res) => {
+        let raw = ''
+        res.on('data', (c) => (raw += c))
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(raw) }) }
+          catch { resolve({ status: res.statusCode, body: raw }) }
+        })
+      })
+    })
+  }
+
+  it('returns a self-describing index with REST routes and MCP pointer', async () => {
+    const res = await get('/')
+    expect(res.status).toBe(200)
+    expect(res.body.name).toBe('Canonic local API')
+    expect(res.body.version).toBeTruthy()
+    expect(typeof res.body.instructions).toBe('string')
+    expect(res.body.instructions).toContain('Canonic')
+    const paths = res.body.rest.map((r) => r.path)
+    expect(paths).toContain('/doc?path=<relPath>')
+    expect(paths).toContain('/comment')
+    expect(res.body.mcp.endpoint).toBe('/mcp')
+  })
+
+  it('lists the live MCP tool set including the diff tools', async () => {
+    const res = await get('/')
+    expect(res.body.mcp.tools).toContain('get_doc_changes')
+    expect(res.body.mcp.tools).toContain('get_doc_history')
+    expect(res.body.mcp.tools).toContain('read_doc')
+  })
+
+  it('documents both token-free and bearer auth', async () => {
+    const res = await get('/')
+    expect(res.body.auth.tokenFree).toBeTruthy()
+    expect(res.body.auth.bearer).toContain('Bearer')
+  })
+
+  it('rejects the index from a foreign web Origin with 403', async () => {
+    const res = await get('/', { Origin: 'https://evil.example.com' })
+    expect(res.status).toBe(403)
   })
 })
 

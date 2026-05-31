@@ -48,6 +48,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user clicks the gear icon in the titlebar
   then: the Settings modal opens
 
+* scenario: settings use a compact two-column row layout
+  given: the Settings modal is open on any tab
+  when: a setting is displayed
+  then: its name and description sit on the left and its control on the right of a single divided row — on/off settings show a toggle, free-text settings a single-line input, and multi-choice settings a dropdown
+
 * scenario: API key change takes effect immediately
   given: Settings is open and the user changes the API key and saves
   when: the user sends a new AI chat message
@@ -486,6 +491,27 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the user clicks a commit in the History panel
   when: the diff view opens
   then: it shows the diff of that commit relative to the current working state
+
+***
+
+## Document Tree (TREE)
+
+> The sidebar file tree lists documents and folders. New documents may be created with a path, and existing documents may be moved between folders by dragging onto a folder node.
+
+* scenario: create a document with a path creates the parent folders
+  given: the user is creating a new document
+  when: they name it `feature/open-document-tabs`
+  then: the folder `feature/` is created if missing and the document is written at `feature/open-document-tabs.md` with `# open-document-tabs` as its heading
+
+* scenario: drop a document onto a folder moves it into that folder
+  given: the user is dragging a document in the tree
+  when: they drop it onto a folder node
+  then: the document is moved into that folder
+
+* scenario: dropping a document outside a folder does nothing
+  given: the user is dragging a document in the tree
+  when: they release it over empty tree space or over a file node rather than a folder
+  then: nothing happens and the document keeps its current location
 
 ***
 
@@ -1206,6 +1232,25 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user unchecks "Stack split panels" in the theme menu
   then: the panes are arranged side by side, and the choice persists across restarts
 
+## Editor Topbar (TOP)
+
+> The editor topbar shows the current document title alongside Save, Version and Split actions. The title is clickable to rename the document in place.
+
+* scenario: click the title to rename
+  given: a document is open
+  when: the user clicks the title in the editor topbar
+  then: the title becomes an editable input pre-filled with the current name
+
+* scenario: confirm a title rename
+  given: the title input is editing
+  when: the user types a new name and presses Enter (or blurs the input)
+  then: the document is renamed to the new name and its tab updates
+
+* scenario: cancel a title rename
+  given: the title input is editing
+  when: the user presses Escape
+  then: the input reverts to the original title and no rename occurs
+
 ## Editor Tabs (TAB)
 
 * scenario: tab appears when a file is opened
@@ -1305,10 +1350,10 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the window is displayed
   then: the OS vibrancy material ("under-window") renders a frosted-glass blur of the desktop behind the panels
 
-* scenario: macOS transparency tints panels over the blur
+* scenario: macOS transparency keeps bars and editor see-through, floating menus solid
   given: the app runs on macOS and "Window transparency" is on at opacity X
   when: the window is displayed
-  then: panel backgrounds are semi-transparent at opacity X so the vibrancy/desktop shows through
+  then: the topbar, left sidebar, right panel, editor surface and outer container are semi-transparent at opacity X so the vibrancy/desktop shows through, while floating menus (tooltips, popovers, dropdowns, modals, toasts) render fully opaque so they stay readable over content
 
 * scenario: Linux and Windows windows stay fully opaque
   given: the app runs on Linux or Windows
@@ -1320,15 +1365,15 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user toggles "Window blur" or "Window transparency" in Settings
   then: the window vibrancy and background update immediately and the choice persists across restarts
 
-* scenario: compact layout keeps a transparent background but opaque panels and tooltips
-  given: transparency is on and the window is resized below the compact breakpoint
-  when: the layout becomes compact (panels and tooltips float over content)
-  then: the main background stays transparent (vibrancy) while the floating panels and tooltips/popovers render opaque so they stay readable
+* scenario: floating menus stay opaque while bars stay transparent
+  given: transparency is on (any window width, compact or wide)
+  when: a tooltip, popover, dropdown, slash menu, table/floating toolbar, branch menu, agent selector, modal, or toast renders over content
+  then: its background is fully opaque so text over content stays readable, while the topbar, sidebar and right panel keep their transparency (vibrancy)
 
-* scenario: leaving compact layout restores transparent panels
-  given: the layout is compact with opaque panels
-  when: the window is widened above the compact breakpoint
-  then: panels and tooltips return to the semi-transparent appearance
+* scenario: components referencing alias surfaces are never undefined
+  given: a component styles a surface with `--bg-secondary` or `--bg-body`
+  when: it renders under any theme
+  then: the alias resolves to a real themed surface (never an undefined background); inside a floating menu it resolves opaque, on a transparent bar it follows that bar
 
 ## External File Sync (EXT)
 
@@ -1351,6 +1396,23 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the active doc has unsaved edits
   when: another process modifies the active doc on disk
   then: a toast appears noting the on-disk change, the unsaved edits remain in the buffer, and the user can click "Reload from disk" to discard edits and load the disk content
+
+## Agent REST API Discovery (AGT-API)
+
+* scenario: API index describes the surface
+  given: Canonic is running
+  when: an agent calls `GET /` with no token
+  then: a JSON index is returned with the standing instructions, every REST route and its params, the auth model (token-free vs bearer), and the MCP endpoint plus its live tool list
+
+* scenario: API index lists the live MCP tools
+  given: Canonic is running
+  when: an agent calls `GET /`
+  then: `mcp.tools` includes every registered tool name (e.g. read_doc, get_doc_changes, get_doc_history) so the list stays in sync as tools are added
+
+* scenario: API index is rejected from a web origin
+  given: a `GET /` request carrying a non-localhost Origin
+  when: the server handles it
+  then: it returns `403 forbidden`
 
 ## Agent API — Read Comments (AGT-CMT)
 
@@ -1615,7 +1677,7 @@ Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (s
 * scenario: MCP tools/list returns all tools
   given: the MCP server is running
   when: an agent sends a tools/list request
-  then: all 9 tools are listed with descriptions and input schemas
+  then: all 11 tools are listed with descriptions and input schemas
 
 * scenario: get_open_docs returns the live editor view
   given: a workspace is open
@@ -1641,6 +1703,26 @@ Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (s
   given: a workspace is open
   when: an agent calls get_workspace_info
   then: workspace name, path, current branch, focused doc, and open-tray paths are returned
+
+* scenario: get_doc_history lists a doc's revisions
+  given: a workspace is open and a doc has at least one commit
+  when: an agent calls get_doc_history with the doc path
+  then: its commit revisions are returned newest-first, each with oid, short oid, message, author, and date
+
+* scenario: get_doc_changes returns uncommitted edits as a diff
+  given: a doc has been edited on disk since its last commit
+  when: an agent calls get_doc_changes with the doc path
+  then: a unified diff of the working version against the last commit is returned with added/removed counts, so the agent can plan from the edits
+
+* scenario: get_doc_changes compares against an older revision
+  given: a doc has multiple commits
+  when: an agent calls get_doc_changes with `since` set to an older oid
+  then: a unified diff of the current version against that revision is returned
+
+* scenario: get_doc_changes with no uncommitted edits shows the last commit's diff
+  given: a doc matches its last commit exactly
+  when: an agent calls get_doc_changes with the doc path
+  then: the diff of what that most recent commit introduced (versus its parent) is returned
 
 ### Demo Mode
 

@@ -105,6 +105,44 @@ function getAppVersion() {
   }
 }
 
+// Self-describing index for curl-only agents: what the local API is, how to authenticate,
+// every REST route with its params, and a pointer to the richer MCP surface. Built fresh per
+// call so the MCP tool list (and thus new tools) stays in sync automatically.
+function buildApiIndex() {
+  return {
+    name: 'Canonic local API',
+    version: getAppVersion(),
+    description:
+      'Local-only HTTP API for agents to read and act on the user\'s Markdown workspace. Bound to 127.0.0.1. ' +
+      'Prefer the MCP endpoint if your client speaks MCP; the plain REST routes below are a curl-friendly subset.',
+    instructions: mcp.buildInstructions(),
+    auth: {
+      tokenFree:
+        'GET /, /ping, /workspace, /doc, /comment need no token. They are localhost-only and reject any request carrying a non-localhost Origin.',
+      bearer:
+        'Session and event routes (/session/start, /session/cancel, /comments, /activity) require an "Authorization: Bearer <token>" header.',
+      lockfile:
+        `Read the port and bearer token from the lockfile at ${LOCKFILE} ({ "port", "token" }).`,
+    },
+    rest: [
+      { method: 'GET', path: '/', description: 'This API index.' },
+      { method: 'GET', path: '/ping', description: 'Liveness check and app version.' },
+      { method: 'GET', path: '/workspace', description: 'Workspace name, path, current branch, focused doc, open tray, and the doc list.' },
+      { method: 'GET', path: '/doc?path=<relPath>', description: 'Read a doc\'s markdown. Omit path to read the doc the user currently has focused.' },
+      { method: 'POST', path: '/doc', body: { path: '<relPath>', content: '<markdown>' }, description: 'Overwrite a doc; the editor repaints live.' },
+      { method: 'GET', path: '/comment?path=<relPath>', description: 'Open (unresolved) comments on a doc.' },
+      { method: 'POST', path: '/comment', body: { path: '<relPath>', text: '<comment>', anchor: { quotedText: '<passage>' } }, description: 'Leave a comment, optionally anchored to a quoted passage.' },
+    ],
+    mcp: {
+      endpoint: '/mcp',
+      protocol: 'JSON-RPC 2.0 (MCP 2024-11-05)',
+      note:
+        'The full toolset lives here — including get_doc_changes and get_doc_history for diffs and revisions, plus create_doc, list_docs, and start_session. Send a tools/list request to enumerate with schemas.',
+      tools: Object.keys(mcp.tools),
+    },
+  }
+}
+
 async function handleRequest(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1')
   const { pathname } = url
@@ -128,8 +166,13 @@ async function handleRequest(req, res) {
   // browser-originated requests (a visited page could otherwise POST /doc to write arbitrary
   // files, since JSON bodies sent as text/plain are CORS "simple" requests with no preflight).
   // Agents and curl send no Origin header and pass through.
-  if (['/workspace', '/doc', '/comment'].includes(pathname) && mcp.hasForeignOrigin(req)) {
+  if (['/', '/workspace', '/doc', '/comment'].includes(pathname) && mcp.hasForeignOrigin(req)) {
     return sendJson(res, 403, { error: 'forbidden' })
+  }
+
+  // Self-describing index — the first call a curl agent makes to learn the surface.
+  if (pathname === '/' && req.method === 'GET') {
+    return sendJson(res, 200, buildApiIndex())
   }
   if (pathname === '/workspace' && req.method === 'GET') {
     const info = await mcp.tools.get_workspace_info.handler({})

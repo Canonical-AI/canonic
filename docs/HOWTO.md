@@ -226,9 +226,9 @@ Supported agents: **Claude Code, Codex, Gemini CLI, OpenCode, Pi** (or any custo
 2. Type a prompt and press **`Cmd/Ctrl+Enter`**.
 3. The agent's CLI spawns in the embedded terminal and your prompt is sent once it finishes loading. From there it's the normal interactive CLI.
 
-The agent sees what you're working on: the focused doc and your open tray are pushed to the MCP server, and the agent can call `get_open_docs` (or read the context injected at startup) to act on "this doc" without you pasting a path. It can also read, edit, comment on, and create docs in the workspace through the Canonic MCP tools.
+The agent sees what you're working on: the focused doc and your open tray are pushed to the MCP server, and the agent can call `get_open_docs` (or read the context injected at startup) to act on "this doc" without you pasting a path. It can also read, edit, comment on, and create docs in the workspace through the Canonic MCP tools. When you say *"I updated the doc"*, the agent can call `get_doc_changes` to fetch a diff of your edits (and `get_doc_history` to inspect past revisions), then plan and implement from those differences.
 
-> Pi is the exception — it doesn't use MCP. It receives the same workspace context inline via its system prompt instead.
+> Pi is the exception — it doesn't use MCP. It receives the same workspace context inline via its system prompt instead. A curl-only agent can hit `GET /` on the local API (port + token are in the lockfile) for a self-describing index of every REST route and the MCP endpoint.
 
 ### History, resume, and pop-out
 

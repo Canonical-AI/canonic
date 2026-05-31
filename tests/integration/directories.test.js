@@ -201,6 +201,16 @@ describe("directory CRUD", () => {
     ).toBe(true);
   });
 
+  it("createFile() with a path creates the parent folder", async () => {
+    const filePath = await store.createFile("feature/open-document-tabs");
+
+    expect(filePath).toBe("feature/open-document-tabs.md");
+    expect(
+      fs.existsSync(path.join(tmpDir, "feature", "open-document-tabs.md")),
+    ).toBe(true);
+    expect(store.currentFile).toBe("feature/open-document-tabs.md");
+  });
+
   it("renameFile() works for nested paths", async () => {
     await mockApi.files.mkdir(tmpDir, "Docs");
     await mockApi.files.write(tmpDir, "Docs/draft.md", "# Draft");

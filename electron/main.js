@@ -1494,7 +1494,12 @@ function setupIpcHandlers() {
   ipcMain.handle("files:new", async (_, workspacePath, fileName) => {
     const filePath = fileName.endsWith(".md") ? fileName : `${fileName}.md`;
     const fullPath = resolveSafePath(workspacePath, filePath);
-    const template = `# ${fileName.replace(".md", "")}\n\n`;
+    // Names may include a path (e.g. "feature/open-document-tabs"); ensure the
+    // parent directory exists or writeFileSync fails silently with ENOENT.
+    const dir = path.dirname(fullPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const title = path.basename(filePath, ".md");
+    const template = `# ${title}\n\n`;
     fs.writeFileSync(fullPath, template, "utf-8");
     return filePath;
   });

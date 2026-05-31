@@ -17,6 +17,12 @@
     --bg-hover: #282f3b; /* surface-light */
     --bg-active: #1e242e; /* surface-bright */
 
+    /* Aliases — some components reference these names. Point them at real,
+       theme-aware surfaces so they're never undefined (which renders as a
+       transparent background). They re-resolve per theme via var() indirection. */
+    --bg-secondary: var(--bg-surface);
+    --bg-body: var(--bg-base);
+
     /* Borders — warm beige at low opacity on dark */
     --border: rgba(214, 207, 203, 0.12);
     --border-mid: rgba(214, 207, 203, 0.2);
@@ -284,8 +290,11 @@
     --warning: #e0af68;
 }
 
-/* ── Window blur mode — transparent containers, rgba panels ── */
-/* --blur-opacity is set inline on <html> by JS (from config/localStorage) */
+/* ── Window blur mode — transparent bars, rgba panels ── */
+/* Topbar, sidebar, right panel, editor and container stay semi-transparent so
+   the macOS vibrancy shows through. Only FLOATING menus (tooltips, popovers,
+   dropdowns, modals) are re-opaqued below — they sit over content and would be
+   unreadable if see-through. --blur-opacity is set inline on <html> by JS. */
 html.window-transparency {
     --blur-opacity: 0.88;
 
@@ -378,55 +387,68 @@ html.window-transparency[data-theme="tokyo"] {
     --bg-active: rgb(51 70 124 / var(--blur-opacity));
 }
 
-/* Modals and the agent panel popover stay solid — re-opaque --bg-surface/--bg-base
-   so transparency never bleeds through these floating menus */
+/* Floating menus stay solid — tooltips, popovers, dropdowns, modals and the
+   toast sit OVER content, so re-opaque --bg-surface/--bg-base here. The bars
+   (titlebar/sidebar/right panel) keep their transparency above. --bg-secondary
+   and --bg-body alias --bg-surface/--bg-base, so they re-opaque in this scope
+   too without being listed. Floater classes: see selector list. */
 
-html.window-transparency :is(.modal, .agent-popup) {
+html.window-transparency :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #161a21;
     --bg-base: #0c0e12;
 }
-html.window-transparency[data-theme="auteur"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="auteur"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #24232a;
     --bg-base: #1a0f15;
 }
-html.window-transparency[data-theme="paper"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="paper"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #ffffff;
     --bg-base: #f6f4f7;
 }
-html.window-transparency[data-theme="mocha"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="mocha"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #313244;
     --bg-base: #1e1e2e;
 }
-html.window-transparency[data-theme="macchiato"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="macchiato"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #363a4f;
     --bg-base: #24273a;
 }
-html.window-transparency[data-theme="latte"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="latte"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #ffffff;
     --bg-base: #eff1f5;
 }
-html.window-transparency[data-theme="dracula"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="dracula"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #282a36;
     --bg-base: #1e1f29;
 }
-html.window-transparency[data-theme="nord"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="nord"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #434c5e;
     --bg-base: #2e3440;
 }
-html.window-transparency[data-theme="solarized"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="solarized"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #073642;
     --bg-base: #002b36;
 }
-html.window-transparency[data-theme="gruvbox"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="gruvbox"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #32302f;
     --bg-base: #282828;
 }
-html.window-transparency[data-theme="tokyo"] :is(.modal, .agent-popup) {
+html.window-transparency[data-theme="tokyo"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
     --bg-surface: #24283b;
     --bg-base: #1a1b26;
 }
 
-/* Compact layout: panels and tooltips float over content, so re-opaque the
+/* Re-resolve the surface aliases INSIDE the floater scope. Custom properties
+   substitute var() at the element where they're declared, so the :root alias
+   `--bg-secondary: var(--bg-surface)` would keep the transparent root value
+   here. Declaring it again on the floater makes it resolve against the floater's
+   now-opaque --bg-surface (set per theme above). Theme-agnostic via var(). */
+html.window-transparency :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt) {
+    --bg-secondary: var(--bg-surface);
+    --bg-body: var(--bg-base);
+}
+
+/* Compact layout: the bars themselves float over content, so re-opaque the
    surfaces they use (sidebar/titlebar/surface/hover/active). --bg-editor and
    --bg-container are intentionally left transparent so the main background
    keeps its vibrancy. Values mirror each theme's solid palette. */

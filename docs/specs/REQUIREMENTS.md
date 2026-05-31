@@ -1655,7 +1655,7 @@ Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (s
 * scenario: MCP tools/list returns all tools
   given: the MCP server is running
   when: an agent sends a tools/list request
-  then: all 9 tools are listed with descriptions and input schemas
+  then: all 11 tools are listed with descriptions and input schemas
 
 * scenario: get_open_docs returns the live editor view
   given: a workspace is open
@@ -1681,6 +1681,26 @@ Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (s
   given: a workspace is open
   when: an agent calls get_workspace_info
   then: workspace name, path, current branch, focused doc, and open-tray paths are returned
+
+* scenario: get_doc_history lists a doc's revisions
+  given: a workspace is open and a doc has at least one commit
+  when: an agent calls get_doc_history with the doc path
+  then: its commit revisions are returned newest-first, each with oid, short oid, message, author, and date
+
+* scenario: get_doc_changes returns uncommitted edits as a diff
+  given: a doc has been edited on disk since its last commit
+  when: an agent calls get_doc_changes with the doc path
+  then: a unified diff of the working version against the last commit is returned with added/removed counts, so the agent can plan from the edits
+
+* scenario: get_doc_changes compares against an older revision
+  given: a doc has multiple commits
+  when: an agent calls get_doc_changes with `since` set to an older oid
+  then: a unified diff of the current version against that revision is returned
+
+* scenario: get_doc_changes with no uncommitted edits shows the last commit's diff
+  given: a doc matches its last commit exactly
+  when: an agent calls get_doc_changes with the doc path
+  then: the diff of what that most recent commit introduced (versus its parent) is returned
 
 ### Demo Mode
 

@@ -190,6 +190,36 @@
                 ref="mobileMenuDropdownRef"
             >
                 <div class="dropdown-section">
+                    <button class="dropdown-item" @click="toggleAppMenu">
+                        <Menu :size="14" />
+                        <span>Menu</span>
+                        <ChevronRight
+                            :size="14"
+                            class="app-menu-chevron"
+                            :class="{ open: appMenuExpanded }"
+                        />
+                    </button>
+                    <template v-if="appMenuExpanded">
+                        <template
+                            v-for="group in appMenuGroups"
+                            :key="group.label"
+                        >
+                            <div class="dropdown-subgroup-label">
+                                {{ group.label }}
+                            </div>
+                            <button
+                                v-for="item in group.items"
+                                :key="item.label"
+                                class="dropdown-item dropdown-item--nested"
+                                @click="runAppMenuItem(item)"
+                            >
+                                <span>{{ item.label }}</span>
+                            </button>
+                        </template>
+                    </template>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section">
                     <div class="dropdown-section-title">Navigation</div>
                     <button
                         class="dropdown-item"
@@ -256,36 +286,6 @@
                                 : "Focus Mode"
                         }}</span>
                     </button>
-                </div>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-section">
-                    <button class="dropdown-item" @click="toggleAppMenu">
-                        <Menu :size="14" />
-                        <span>Menu</span>
-                        <ChevronRight
-                            :size="14"
-                            class="app-menu-chevron"
-                            :class="{ open: appMenuExpanded }"
-                        />
-                    </button>
-                    <template v-if="appMenuExpanded">
-                        <template
-                            v-for="group in appMenuGroups"
-                            :key="group.label"
-                        >
-                            <div class="dropdown-subgroup-label">
-                                {{ group.label }}
-                            </div>
-                            <button
-                                v-for="item in group.items"
-                                :key="item.label"
-                                class="dropdown-item dropdown-item--nested"
-                                @click="runAppMenuItem(item)"
-                            >
-                                <span>{{ item.label }}</span>
-                            </button>
-                        </template>
-                    </template>
                 </div>
             </div>
         </div>

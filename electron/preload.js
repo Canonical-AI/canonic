@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("canonic", {
     getVersion: () => ipcRenderer.invoke("app:version"),
     isDefaultEditor: () => ipcRenderer.invoke("app:is-default-md"),
     setDefaultEditor: (value) => ipcRenderer.invoke("app:set-default-md", value),
+    openConfig: () => ipcRenderer.invoke("app:open-config"),
+    editAction: (action) => ipcRenderer.invoke("app:edit-action", action),
   },
 
   // Telemetry

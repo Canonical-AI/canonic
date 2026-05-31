@@ -14,6 +14,10 @@
                 <span class="app-name"
                     >canonic<span class="accent">.ai</span></span
                 >
+                <AppMenu
+                    @open-settings="showSettings = true"
+                    @reload-config="reloadConfig"
+                />
             </div>
             <div class="titlebar-center"></div>
             <div class="titlebar-right">
@@ -591,6 +595,7 @@ import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
 import ConfirmModal from "../modals/ConfirmModal.vue";
+import AppMenu from "./AppMenu.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
@@ -920,21 +925,13 @@ onMounted(async () => {
         });
 
         if (window.canonic.menu.onReloadConfig) {
-            window.canonic.menu.onReloadConfig(async () => {
-                try {
-                    await store.loadConfig();
-                    if (store.config?.themes) {
-                        registerConfigThemes(store.config.themes);
-                    }
-                    applyAutoTheme();
-                } catch (err) {
-                    console.error("Failed to reload config from menu:", err);
-                }
-            });
+            window.canonic.menu.onReloadConfig(reloadConfig);
         }
     }
 
     if (!store.workspacePath && !store.currentFile) {
+        // The main process owns the recent list; refresh it before auto-opening.
+        await store.loadRecents();
         const last = store.recentWorkspaces[0];
         if (last) {
             try {
@@ -947,6 +944,20 @@ onMounted(async () => {
         }
     }
 });
+
+// Reload config from disk and re-apply themes/appearance. Shared by the native
+// macOS menu (menu:reload-config) and the in-app hamburger (AppMenu).
+async function reloadConfig() {
+    try {
+        await store.loadConfig();
+        if (store.config?.themes) {
+            registerConfigThemes(store.config.themes);
+        }
+        applyAutoTheme();
+    } catch (err) {
+        console.error("Failed to reload config:", err);
+    }
+}
 
 function onGlobalKeydown(e) {
     const hk = store.findHotkeys;

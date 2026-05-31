@@ -90,6 +90,32 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ***
 
+## Application Menu (MENU)
+
+> Top-level app actions live in an in-app hamburger menu (the ☰ in the titlebar) on every platform, so the window stays clean. The native menu bar is removed on Windows/Linux; macOS keeps a minimal app menu (App + Edit + Window) so standard keyboard shortcuts still work.
+
+* scenario: hamburger menu groups
+  given: a workspace is open
+  when: the user clicks the ☰ menu in the titlebar
+  then: a dropdown shows File (New workspace, Open workspace, Open file), Edit (Undo, Redo, Cut, Copy, Paste, Select all), and Config (Settings, Set as default, Open config, Reload config)
+
+* scenario: native menu bar removed on Windows and Linux
+  given: the app is running on Windows or Linux
+  when: the window is shown
+  then: there is no native menu bar; every menu action is reached through the hamburger
+
+* scenario: macOS keeps a minimal native menu
+  given: the app is running on macOS
+  when: the menu bar is shown
+  then: only the App, Edit, and Window menus are present, so standard accelerators (Cmd+C/V/X/Z/A, Cmd+comma, Cmd+Q) keep working
+
+* scenario: edit actions operate on the focused field
+  given: the hamburger menu is open
+  when: the user clicks an Edit action such as Copy
+  then: it runs against the focused editor or input via the window's webContents
+
+***
+
 ## Workspace Templates (WKS)
 
 > When creating a new workspace the user picks a template. Blank gives an empty repo. PM Framework scaffolds a full directory hierarchy with twelve starter documents.

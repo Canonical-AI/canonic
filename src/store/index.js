@@ -1267,7 +1267,9 @@ export const useAppStore = defineStore("app", () => {
     }
 
     const diskContent = await api.files.read(workspacePath.value, filePath);
-    console.log("[Store] File content read, setting currentFile to:", filePath);
+    if (import.meta.env.DEV) {
+      console.log("[Store] File content read, setting currentFile to:", filePath);
+    }
     currentFile.value = filePath;
     addTab(filePath);
 

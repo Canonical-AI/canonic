@@ -1221,6 +1221,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the action fires
   then: no file is written; a hint informs the user that demo mode is read-only
 
+* scenario: demo workspace is throwaway scratch
+  given: demo mode has written its sample files to the demo workspace dir (<home>/canonic-demo)
+  when: the user opens a real workspace (leaving demo mode) or quits the app
+  then: the demo workspace dir is deleted so its regenerated files never linger on disk
+
 ### Split Panels (SPLIT)
 
 * scenario: open a reference pane

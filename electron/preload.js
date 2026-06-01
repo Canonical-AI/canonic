@@ -182,6 +182,12 @@ contextBridge.exposeInMainWorld("canonic", {
     getPaths: () => ipcRenderer.invoke("cleanup:get-paths"),
   },
 
+  // Demo workspace lifecycle
+  demo: {
+    register: (path) => ipcRenderer.invoke("demo:register", path),
+    cleanup: () => ipcRenderer.invoke("demo:cleanup"),
+  },
+
   // Updates
   update: {
     check: () => ipcRenderer.invoke("update:check"),

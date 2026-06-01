@@ -92,6 +92,23 @@ const discoveredPeers = [];
 // ── Network watcher ────────────────────────────────────────────────────────
 let networkWatcherInterval = null;
 let lastNetworkInterface = null;
+// Path of the throwaway demo workspace (<home>/canonic-demo). Registered by the
+// renderer when demo mode loads; deleted when demo mode is left or the app quits
+// so the demo's regenerated scratch files never linger on disk.
+let demoWorkspacePath = null;
+
+function cleanupDemoWorkspace() {
+  const target = demoWorkspacePath;
+  demoWorkspacePath = null;
+  // Guard: only ever remove a dir literally named "canonic-demo" so a misregistered
+  // path can never nuke a real workspace.
+  if (!target || path.basename(target) !== "canonic-demo") return;
+  try {
+    if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+  } catch (err) {
+    console.error("[main] Failed to clean up demo workspace", err);
+  }
+}
 
 function getActiveInterface() {
   const ifaces = os.networkInterfaces();
@@ -455,6 +472,7 @@ app.on("will-quit", () => {
   if (networkWatcherInterval) clearInterval(networkWatcherInterval);
   discoveryService.stopDiscovery();
   stopWatcher();
+  cleanupDemoWorkspace();
 });
 
 async function setDefaultEditor(value) {
@@ -1770,6 +1788,18 @@ function setupIpcHandlers() {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  });
+
+  // Demo workspace lifecycle — renderer registers the throwaway demo dir so we can
+  // delete it on quit, and asks for an immediate cleanup when leaving demo mode.
+  ipcMain.handle("demo:register", (_, demoPath) => {
+    demoWorkspacePath = demoPath || null;
+    return true;
+  });
+
+  ipcMain.handle("demo:cleanup", () => {
+    cleanupDemoWorkspace();
+    return true;
   });
 
   ipcMain.handle("cleanup:get-paths", async () => {

@@ -21,6 +21,7 @@
                 @keydown.enter.prevent="onFilterEnter"
                 @keydown.arrow-down.prevent="onFilterArrowDown"
                 @keydown.arrow-up.prevent="onFilterArrowUp"
+                @keydown.arrow-right.prevent="onFilterEnter"
                 @input="onFilterInput"
             />
         </div>
@@ -206,8 +207,12 @@ function selectFilterMatch(match) {
     filterActive.value = false;
     store.setTreeFilter("");
     filterText.value = "";
-    store.navigateToPath(match.path);
-    nextTick(() => treeContainer.value?.focus());
+    if (match.type === 'file') {
+        store.openFile(match.path);
+    } else {
+        store.navigateToPath(match.path);
+        nextTick(() => treeContainer.value?.focus());
+    }
 }
 
 function clearFilter() {

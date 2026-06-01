@@ -8,9 +8,10 @@
                     'active',
                 isDragOver && 'drag-over',
                 item.type === 'directory' && isEmpty && 'empty',
+                item.type === 'directory' && 'tree-node--dir',
                 isFocused && 'focused',
             ]"
-            :style="{ paddingLeft: `${8 + depth * 16}px` }"
+            :style="{ paddingLeft: `${4 + depth * 14}px` }"
             :draggable="!store.isCompactLayout"
             @click="handleClick"
             @mouseenter="onMouseEnter"
@@ -30,7 +31,17 @@
                 v-text="item._open ? '▼' : '▶'"
             />
 
-            <!-- Icon (ASCII-style: no icon needed — chevron indicates type) -->
+            <!-- Icon (folder) -->
+            <Folder
+                v-if="item.type === 'directory' && !item._open"
+                :size="13"
+                class="dir-icon"
+            />
+            <FolderOpen
+                v-else-if="item.type === 'directory' && item._open"
+                :size="13"
+                class="dir-icon dir-icon--open"
+            />
 
             <!-- Inline rename input -->
             <input
@@ -115,7 +126,7 @@
         <div
             v-if="creatingFolder"
             class="inline-create"
-            :style="{ paddingLeft: `${8 + (depth + 1) * 16 + 18}px` }"
+            :style="{ paddingLeft: `${4 + (depth + 1) * 14 + 18}px` }"
         >
             <input
                 ref="folderInput"
@@ -133,7 +144,7 @@
         <div
             v-if="creatingFile"
             class="inline-create"
-            :style="{ paddingLeft: `${8 + (depth + 1) * 16 + 18}px` }"
+            :style="{ paddingLeft: `${4 + (depth + 1) * 14 + 18}px` }"
         >
             <input
                 ref="fileInput"
@@ -169,6 +180,8 @@ import {
     Pencil,
     Trash2,
     ArrowRightFromLine,
+    Folder,
+    FolderOpen,
 } from "lucide-vue-next";
 
 const props = defineProps({
@@ -218,7 +231,7 @@ const isFocused = computed(() => {
     return list[idx].path === props.item.path;
 });
 
-// ASCII tree lines — just the connector, no continuation prefix.
+// ASCII tree lines - just the connector, no continuation prefix.
 // Depth is shown via paddingLeft; isLast controls ├── vs └──.
 const treeLines = computed(() => {
     if (props.depth === 0) return '';
@@ -435,11 +448,11 @@ async function confirmNewFolder() {
 .tree-node {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px 4px 8px;
+    gap: 3px;
+    padding: 3px 6px 3px 4px;
     cursor: pointer;
-    border-radius: 4px;
-    margin: 0 4px;
+    border-radius: 3px;
+    margin: 0 2px;
     font-size: 0.8125rem;
     color: var(--text-secondary);
     transition: background 0.1s;
@@ -465,8 +478,12 @@ async function confirmNewFolder() {
     background: var(--bg-active);
     box-shadow: inset 0 0 0 1px var(--accent);
 }
-.tree-node.empty {
-    opacity: 0.4;
+.tree-node.tree-node--dir {
+    color: var(--secondary);
+}
+
+.tree-node.tree-node--dir:hover {
+    color: var(--secondary);
 }
 .tree-node.empty:hover {
     opacity: 0.65;
@@ -475,18 +492,28 @@ async function confirmNewFolder() {
 .tree-lines {
     flex-shrink: 0;
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     letter-spacing: 0;
     white-space: pre;
-    opacity: 0.5;
+    opacity: 0.4;
 }
 
 .chevron-ascii {
     flex-shrink: 0;
-    font-size: 0.625rem;
-    width: 12px;
+    font-size: 0.5625rem;
+    width: 10px;
     text-align: center;
     color: var(--text-muted);
+}
+
+.dir-icon {
+    flex-shrink: 0;
+    color: var(--secondary);
+}
+
+.dir-icon--open {
+    color: var(--secondary);
+    opacity: 0.85;
 }
 
 .node-name {

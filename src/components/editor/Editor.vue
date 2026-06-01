@@ -825,7 +825,7 @@ onMounted(() => {
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    background: var(--bg-surface);
+    background: #161a21;
     border: 1px solid var(--border-mid);
     border-radius: 8px;
     padding: 6px;

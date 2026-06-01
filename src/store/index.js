@@ -85,6 +85,10 @@ export const useAppStore = defineStore("app", () => {
         return;
       }
     }
+    // Target not found (e.g. deleted while the filter dropdown was open).
+    // Reset focus to the root so the tree is in a known-good state.
+    treeFocusIndex.value = 0;
+    treeFocused.value = true;
   }
 
   // ==========================================
@@ -229,7 +233,7 @@ export const useAppStore = defineStore("app", () => {
         treeFocusIndex.value = Math.max(0, flatVisibleTree.value.length - 1);
       }
     } catch (err) {
-      console.error("[Store] trashFocused failed:", err);
+      if (import.meta.env.DEV) console.error("[Store] trashFocused failed:", err);
     }
   }
 
@@ -245,7 +249,7 @@ export const useAppStore = defineStore("app", () => {
         await refreshFiles();
       }
     } catch (err) {
-      console.error("[Store] undoLastTrash failed:", err);
+      if (import.meta.env.DEV) console.error("[Store] undoLastTrash failed:", err);
     }
   }
 

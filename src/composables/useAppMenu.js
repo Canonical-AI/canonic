@@ -23,10 +23,14 @@ export function useAppMenu({ onOpenSettings, onReloadConfig } = {}) {
   // screen; route there rather than duplicating it.
   const newWorkspace = () => router.push("/");
 
+  // "Open workspace…" opens an existing directory; the template only matters for
+  // brand-new directories that need initialisation. Respect a config preference
+  // when set, otherwise default to "blank" (no scaffold).
   async function openWorkspace() {
     const chosen = await window.canonic.workspace.openDialog();
     if (!chosen) return;
-    await store.openWorkspace(chosen, "blank");
+    const template = store.config?.workspace?.defaultTemplate ?? "blank";
+    await store.openWorkspace(chosen, template);
     router.push("/workspace");
   }
 
@@ -45,6 +49,12 @@ export function useAppMenu({ onOpenSettings, onReloadConfig } = {}) {
   }
 
   const openConfig = () => window.canonic.app.openConfig();
+
+  // Extract the isDefault-dependent label so groups doesn't needlessly recompute
+  // on every other reactive change.
+  const defaultLabel = computed(() =>
+    isDefault.value ? "Default editor ✓" : "Set as default editor",
+  );
 
   const groups = computed(() => [
     {
@@ -71,9 +81,7 @@ export function useAppMenu({ onOpenSettings, onReloadConfig } = {}) {
       items: [
         { label: "Settings", run: () => onOpenSettings?.() },
         {
-          label: isDefault.value
-            ? "Default editor ✓"
-            : "Set as default editor",
+          label: defaultLabel.value,
           run: setDefault,
         },
         { label: "Open config file", run: openConfig },

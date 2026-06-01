@@ -315,8 +315,12 @@ const availableDirs = computed(() => {
 });
 
 function copyFullPath() {
+    // currentFile uses forward slashes (git-style). Normalise to the platform
+    // separator so the clipboard path is correct on Windows too.
+    const sep = navigator.platform?.startsWith('Win') ? '\\' : '/';
+    const normalizedFile = store.currentFile.replace(/\//g, sep);
     const full = store.workspacePath
-        ? `${store.workspacePath}/${store.currentFile}`
+        ? `${store.workspacePath}${sep}${normalizedFile}`
         : store.currentFile;
     navigator.clipboard.writeText(full).catch(() => {});
     closeActionMenu();

@@ -3,19 +3,23 @@
         <button
             class="icon-btn app-menu-trigger"
             title="Menu"
+            aria-label="Main menu"
+            aria-haspopup="menu"
+            :aria-expanded="open"
             @click="open = !open"
         >
             <Menu :size="15" />
         </button>
 
-        <div v-if="open" class="app-menu-dropdown">
+        <div v-if="open" class="app-menu-dropdown" role="menu">
             <template v-for="(group, gi) in groups" :key="group.label">
-                <div v-if="gi > 0" class="menu-divider"></div>
-                <div class="menu-group-label">{{ group.label }}</div>
+                <div v-if="gi > 0" class="menu-divider" role="separator"></div>
+                <div class="menu-group-label" role="presentation">{{ group.label }}</div>
                 <button
                     v-for="item in group.items"
                     :key="item.label"
                     class="menu-item"
+                    role="menuitem"
                     @click="run(item.run)"
                 >
                     {{ item.label }}
@@ -46,7 +50,7 @@ async function run(fn) {
     try {
         await fn();
     } catch (err) {
-        console.error("[AppMenu] action failed:", err);
+        if (import.meta.env.DEV) console.error("[AppMenu] action failed:", err);
     }
 }
 

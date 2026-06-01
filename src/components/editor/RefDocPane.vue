@@ -100,7 +100,7 @@ async function load(path) {
         loaded.value = true;
     } catch (err) {
         error.value = "Could not load document";
-        console.error("[RefDocPane] read failed:", err);
+        if (import.meta.env.DEV) console.error("[RefDocPane] read failed:", err);
     }
 }
 
@@ -159,7 +159,7 @@ async function flush() {
         diskBaseline.value = saved ?? snapshot; // normalized text now on disk
         if (content.value === snapshot) dirty.value = false;
     } catch (err) {
-        console.error("[RefDocPane] save failed:", err);
+        if (import.meta.env.DEV) console.error("[RefDocPane] save failed:", err);
     } finally {
         saving.value = false;
     }

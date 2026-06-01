@@ -1172,7 +1172,7 @@ async function runAppMenuItem(item) {
     try {
         await item.run();
     } catch (err) {
-        console.error("[AppMenu] action failed:", err);
+        if (import.meta.env.DEV) console.error("[AppMenu] action failed:", err);
     }
 }
 

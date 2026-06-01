@@ -20,11 +20,85 @@ export const useAppStore = defineStore("app", () => {
   const currentFile = ref(null);
   const currentContent = ref("");
 
+  // ── Tree keyboard navigation (yazi-style) ──
+  const treeFocused = ref(false);
+  const treeFilter = ref("");
+  const treeFocusIndex = ref(0);
+  const treeUndoStack = ref([]); // { id, originalPath, isDirectory } — for Ctrl+Z undo
+
+  // Flat list of visible tree nodes (respects collapsed state) for keyboard nav.
+  // Uses original item references so _open mutations propagate back to files.value.
+  const flatVisibleTree = computed(() => {
+    const out = [];
+    const walk = (items, depth) => {
+      for (const item of items || []) {
+        item._depth = depth;
+        out.push(item);
+        if (item.type === "directory" && item.children && item._open) {
+          walk(item.children, depth + 1);
+        }
+      }
+    };
+    walk(files.value, 0);
+    return out;
+  });
+
+  // Top 5 matches for the quick-filter dropdown (searches ALL files, ignores collapse)
+  const treeFilterMatches = computed(() => {
+    const filter = treeFilter.value.trim().toLowerCase();
+    if (!filter) return [];
+    const matches = [];
+    const walk = (items) => {
+      for (const item of items || []) {
+        const name = (item.name || "").toLowerCase();
+        if (name.includes(filter)) {
+          matches.push({ path: item.path, name: item.name, type: item.type });
+        }
+        if (item.children) walk(item.children);
+      }
+    };
+    walk(files.value);
+    return matches.slice(0, 5);
+  });
+
+  // Navigate to a specific path: expand parent directories, then focus the item
+  function navigateToPath(targetPath) {
+    // Expand all ancestor directories
+    const expandAncestors = (items, target) => {
+      for (const item of items || []) {
+        if (item.type === "directory" && target.startsWith(item.path + "/")) {
+          item._open = true;
+          if (item.children) expandAncestors(item.children, target);
+          return;
+        }
+        if (item.path === target) return;
+      }
+    };
+    expandAncestors(files.value, targetPath);
+
+    // Now find the item in the flat visible list
+    const list = flatVisibleTree.value;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].path === targetPath) {
+        treeFocusIndex.value = i;
+        treeFocused.value = true;
+        return;
+      }
+    }
+    // Target not found (e.g. deleted while the filter dropdown was open).
+    // Reset focus to the root so the tree is in a known-good state.
+    treeFocusIndex.value = 0;
+    treeFocused.value = true;
+  }
+
   // ==========================================
   // ── SPLIT REFERENCE PANES & INTERFACE ──
   // ==========================================
-  // Split panels: file paths of read-only reference panes shown beside the active editor
+  // Split panels: file paths of the editable reference panes shown beside the primary editor
   const refPanes = ref([]);
+  // Which pane currently has editing focus: 'main' for the primary editor, or a
+  // ref-pane file path. Drives the active-pane highlight and Cmd+S routing.
+  const activePane = ref("main");
   // Flat list of every doc in the workspace — used by the split-panel quicksearch switcher
   const flatDocList = computed(() => {
     const out = [];
@@ -37,6 +111,161 @@ export const useAppStore = defineStore("app", () => {
     walk(files.value);
     return out;
   });
+
+  // ── Tree navigation actions ──
+  function focusTree() {
+    treeFocused.value = true;
+    treeFocusIndex.value = 0;
+  }
+
+  function blurTree() {
+    treeFocused.value = false;
+  }
+
+  function navigateTree(direction) {
+    const list = flatVisibleTree.value;
+    if (list.length === 0) return;
+    if (direction === "up") {
+      treeFocusIndex.value = (treeFocusIndex.value - 1 + list.length) % list.length;
+    } else if (direction === "down") {
+      treeFocusIndex.value = (treeFocusIndex.value + 1) % list.length;
+    }
+  }
+
+  function expandCollapseTree(action) {
+    const list = flatVisibleTree.value;
+    const idx = treeFocusIndex.value;
+    if (idx < 0 || idx >= list.length) return;
+    const item = list[idx];
+    if (item.type !== "directory") return;
+
+    if (action === "expand" && !item._open) {
+      item._open = true;
+    } else if (action === "collapse" && item._open) {
+      item._open = false;
+    } else if (action === "toggle") {
+      item._open = !item._open;
+    }
+  }
+
+  function openFocused() {
+    const list = flatVisibleTree.value;
+    const idx = treeFocusIndex.value;
+    if (idx < 0 || idx >= list.length) return;
+    const item = list[idx];
+    if (item.type === "directory") {
+      expandCollapseTree("toggle");
+    } else {
+      openFile(item.path);
+    }
+  }
+
+  function leftOnTree() {
+    const list = flatVisibleTree.value;
+    const idx = treeFocusIndex.value;
+    if (idx < 0 || idx >= list.length) return;
+    const item = list[idx];
+    if (item.type === "directory" && item._open) {
+      // Collapse expanded directory
+      item._open = false;
+    } else if (item.type === "file" || (item.type === "directory" && !item._open)) {
+      // Move to parent directory
+      const parentPath = item.path.includes("/") ? item.path.split("/").slice(0, -1).join("/") : "";
+      if (!parentPath) {
+        treeFocusIndex.value = 0;
+        return;
+      }
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].path === parentPath && list[i].type === "directory") {
+          treeFocusIndex.value = i;
+          return;
+        }
+      }
+    }
+  }
+
+  function rightOnTree() {
+    const list = flatVisibleTree.value;
+    const idx = treeFocusIndex.value;
+    if (idx < 0 || idx >= list.length) return;
+    const item = list[idx];
+    if (item.type === "directory") {
+      if (!item._open) {
+        item._open = true;
+      } else {
+        // Move to first child if any
+        const nextIdx = idx + 1;
+        if (nextIdx < list.length && list[nextIdx]._depth > item._depth) {
+          treeFocusIndex.value = nextIdx;
+        }
+      }
+    } else {
+      openFile(item.path);
+    }
+  }
+
+  async function trashFocused() {
+    const list = flatVisibleTree.value;
+    const idx = treeFocusIndex.value;
+    if (idx < 0 || idx >= list.length) return;
+    const item = list[idx];
+    try {
+      if (item.type === "file") {
+        // Capture info before deleting
+        const trashEntry = { path: item.path, isDirectory: false };
+        await api.files.trash.delete(workspacePath.value, item.path, false);
+        treeUndoStack.value.push(trashEntry);
+        if (currentFile.value === item.path) {
+          currentFile.value = null;
+        }
+        await refreshFiles();
+      } else {
+        const trashEntry = { path: item.path, isDirectory: true };
+        await api.files.trash.delete(workspacePath.value, item.path, true);
+        treeUndoStack.value.push(trashEntry);
+        if (currentFile.value?.startsWith(item.path)) {
+          currentFile.value = null;
+        }
+        await refreshFiles();
+      }
+      // Clamp focus index
+      if (treeFocusIndex.value >= flatVisibleTree.value.length) {
+        treeFocusIndex.value = Math.max(0, flatVisibleTree.value.length - 1);
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) console.error("[Store] trashFocused failed:", err);
+    }
+  }
+
+  async function undoLastTrash() {
+    if (treeUndoStack.value.length === 0) return;
+    const entry = treeUndoStack.value.pop();
+    try {
+      // Find the trash item by original path and restore it
+      await loadTrash();
+      const match = trashItems.value.find(t => t.originalPath === entry.path);
+      if (match) {
+        await api.files.trash.restore(workspacePath.value, match.id);
+        await refreshFiles();
+      }
+    } catch (err) {
+      if (import.meta.env.DEV) console.error("[Store] undoLastTrash failed:", err);
+    }
+  }
+
+  function setTreeFilter(text) {
+    treeFilter.value = text;
+    treeFocusIndex.value = 0;
+  }
+
+  const treeShowMoveFor = ref(null); // path of item to show move dropdown for
+
+  function moveFocused() {
+    const list = flatVisibleTree.value;
+    const idx = treeFocusIndex.value;
+    if (idx < 0 || idx >= list.length) return;
+    treeShowMoveFor.value = list[idx].path;
+  }
 
   // ==========================================
   // ── GIT VERSIONING & REPOSITORY STATE ──
@@ -310,6 +539,7 @@ export const useAppStore = defineStore("app", () => {
   const networkChanged = ref(false);
   const externalChangeNotice = ref(null); // { file, at } when active doc changed on disk while dirty
   const editorRevision = ref(0); // bump to force editor remount (e.g. after reload-from-disk)
+  const externalReloadAt = ref(0); // bump on external fs change so reference panes reload from disk
   const fileIndex = ref({});
   const appVersion = ref(__APP_VERSION__ || "");
 
@@ -468,31 +698,37 @@ export const useAppStore = defineStore("app", () => {
     });
   }
 
+  // Reload the primary editor's doc from disk after an external change. When the
+  // user has unsaved edits we surface a notice instead of clobbering their work.
+  async function syncActiveDocFromDisk() {
+    if (!workspacePath.value || !currentFile.value) return;
+    if (isDirty.value) {
+      externalChangeNotice.value = { file: currentFile.value, at: Date.now() };
+      return;
+    }
+    try {
+      const disk = await api.files.read(workspacePath.value, currentFile.value);
+      if (disk != null && disk !== currentContent.value) {
+        currentContent.value = disk;
+        editorRevision.value += 1; // remount editor with fresh content
+      }
+    } catch {}
+  }
+
+  let externalSyncTimer = null;
   if (api.files.onIndexUpdate) {
     api.files.onIndexUpdate(async (idx) => {
       fileIndex.value = idx;
       // External fs change — repopulate sidebar tree
       if (!workspacePath.value || isDemoMode.value) return;
       await refreshFiles();
-      // Sync active doc if still on disk
-      if (!currentFile.value) return;
-      if (isDirty.value) {
-        externalChangeNotice.value = {
-          file: currentFile.value,
-          at: Date.now(),
-        };
-        return;
-      }
-      try {
-        const disk = await api.files.read(
-          workspacePath.value,
-          currentFile.value,
-        );
-        if (disk != null && disk !== currentContent.value) {
-          currentContent.value = disk;
-          editorRevision.value += 1;
-        }
-      } catch {}
+      // Coalesce bursts of writes (e.g. an agent streaming edits to the open doc)
+      // into a single reload so the editor and panes don't thrash mid-stream.
+      clearTimeout(externalSyncTimer);
+      externalSyncTimer = setTimeout(() => {
+        externalReloadAt.value = Date.now(); // editable panes reload (dirty-guarded)
+        syncActiveDocFromDisk();
+      }, 250);
     });
   }
 
@@ -652,20 +888,38 @@ export const useAppStore = defineStore("app", () => {
       if (result.error) throw new Error(result.error);
       workspacePath.value = result.path;
       isExternalRepo.value = result.isExternal === true;
-      workspaceName.value = chosenPath.split("/").pop();
-      const recent = recentWorkspaces.value.filter(
-        (w) => w.path !== chosenPath,
-      );
-      recent.unshift({
-        path: chosenPath,
-        name: workspaceName.value,
-        openedAt: Date.now(),
-      });
-      recentWorkspaces.value = recent.slice(0, 8);
-      storage.setItem(
-        "canonic:recentWorkspaces",
-        JSON.stringify(recentWorkspaces.value),
-      );
+      workspaceName.value = chosenPath.split(/[\\/]/).pop();
+      // Record in the durable main-process history (skip the demo workspace).
+      // Falls back to a local-only list if the bridge is unavailable (web/tests).
+      if (!isDemoMode.value) {
+        const entry = {
+          path: chosenPath,
+          name: workspaceName.value,
+          openedAt: Date.now(),
+        };
+        if (api.workspace?.addRecent) {
+          try {
+            recentWorkspaces.value = await api.workspace.addRecent(
+              entry.path,
+              entry.name,
+            );
+          } catch {
+            recentWorkspaces.value = [
+              entry,
+              ...recentWorkspaces.value.filter((w) => w.path !== entry.path),
+            ].slice(0, 8);
+          }
+        } else {
+          recentWorkspaces.value = [
+            entry,
+            ...recentWorkspaces.value.filter((w) => w.path !== entry.path),
+          ].slice(0, 8);
+        }
+        storage.setItem(
+          "canonic:recentWorkspaces",
+          JSON.stringify(recentWorkspaces.value),
+        );
+      }
       refPanes.value = [];
       openTabs.value = [];
       currentFile.value = null;
@@ -702,6 +956,23 @@ export const useAppStore = defineStore("app", () => {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  // Load the durable recent-workspace list from the main process (source of
+  // truth) into the reactive ref, caching to localStorage for instant paint.
+  // No-op fallback to the cached value when the bridge isn't present (web/tests).
+  async function loadRecents() {
+    if (!api.workspace?.recents) return recentWorkspaces.value;
+    try {
+      const list = await api.workspace.recents();
+      if (Array.isArray(list)) {
+        recentWorkspaces.value = list;
+        storage.setItem("canonic:recentWorkspaces", JSON.stringify(list));
+      }
+    } catch {
+      // keep the cached value
+    }
+    return recentWorkspaces.value;
   }
 
   async function renameFile(oldPath, newName) {
@@ -912,38 +1183,46 @@ export const useAppStore = defineStore("app", () => {
 
   function removeRefPane(index) {
     if (index < 0 || index >= refPanes.value.length) return;
+    const removed = refPanes.value[index];
     refPanes.value.splice(index, 1);
+    if (activePane.value === removed) activePane.value = "main";
   }
 
   function setRefPaneFile(index, filePath) {
     if (index < 0 || index >= refPanes.value.length || !filePath) return;
+    const prev = refPanes.value[index];
+    const wasActive = activePane.value === prev;
     // Picking the active doc, or a doc already shown in another pane, would duplicate it
     if (filePath === currentFile.value) {
       refPanes.value.splice(index, 1);
+      if (wasActive) activePane.value = "main";
       return;
     }
     const existing = refPanes.value.indexOf(filePath);
     if (existing !== -1 && existing !== index) {
       refPanes.value.splice(index, 1);
+      if (wasActive) activePane.value = "main";
       return;
     }
     refPanes.value[index] = filePath;
+    if (wasActive) activePane.value = filePath;
   }
 
-  // Swap a reference pane with the active editor: the pane's doc becomes editable,
-  // the previously-active doc takes the pane's slot.
-  async function activateRefPane(index) {
-    const target = refPanes.value[index];
-    if (!target) return;
-    const prevActive = currentFile.value;
-    await openFile(target); // openFile() removes `target` from refPanes
-    if (
-      prevActive &&
-      prevActive !== target &&
-      !refPanes.value.includes(prevActive)
-    ) {
-      refPanes.value.splice(index, 0, prevActive);
-    }
+  // Mark which pane is focused for editing. Panes edit in place — clicking one no
+  // longer swaps it into the primary slot; it just becomes the active editing target.
+  function setActivePane(id) {
+    activePane.value = id || "main";
+  }
+
+  // Persist an edit made in a reference pane. Mirrors saveFile() but targets an
+  // arbitrary path rather than the primary currentFile.
+  async function savePaneFile(filePath, content) {
+    if (!workspacePath.value || !filePath) return;
+    const normalized = normalizeMarkdown(content);
+    await api.files.write(workspacePath.value, filePath, normalized);
+    clearUnsaved(filePath);
+    api.search.index(workspacePath.value, filePath, normalized);
+    return normalized;
   }
 
   // When the active doc closes (deleted, etc.) while panes are open, promote one.
@@ -964,6 +1243,9 @@ export const useAppStore = defineStore("app", () => {
     // If this file is shown in a reference pane, drop it — it is becoming the active doc
     const refIdx = refPanes.value.indexOf(filePath);
     if (refIdx !== -1) refPanes.value.splice(refIdx, 1);
+
+    // Opening a doc into the primary editor focuses it.
+    activePane.value = "main";
 
     // Buffer unsaved changes for the file we're leaving
     if (isDirty.value && currentFile.value) {
@@ -2884,6 +3166,7 @@ export const useAppStore = defineStore("app", () => {
     workspacePath,
     workspaceName,
     recentWorkspaces,
+    loadRecents,
     files,
     currentFile,
     currentContent,
@@ -2937,11 +3220,13 @@ export const useAppStore = defineStore("app", () => {
     openFile,
     openStandaloneFile,
     refPanes,
+    activePane,
     flatDocList,
     addRefPane,
     removeRefPane,
     setRefPaneFile,
-    activateRefPane,
+    setActivePane,
+    savePaneFile,
     openTabs,
     tabsEnabled,
     tabsPosition,
@@ -3008,6 +3293,7 @@ export const useAppStore = defineStore("app", () => {
     networkChanged,
     externalChangeNotice,
     editorRevision,
+    externalReloadAt,
     reloadCurrentFromDisk,
     favoritePeer,
     unfavoritePeer,
@@ -3084,5 +3370,26 @@ export const useAppStore = defineStore("app", () => {
     loadMcpPort,
     registerMcp,
     optOutMcp,
+
+    // ── File tree keyboard navigation (yazi-style) ──
+    treeFocused,
+    treeFilter,
+    treeFocusIndex,
+    treeUndoStack,
+    flatVisibleTree,
+    focusTree,
+    blurTree,
+    navigateTree,
+    expandCollapseTree,
+    openFocused,
+    leftOnTree,
+    rightOnTree,
+    trashFocused,
+    undoLastTrash,
+    setTreeFilter,
+    treeShowMoveFor,
+    moveFocused,
+    treeFilterMatches,
+    navigateToPath,
   };
 });

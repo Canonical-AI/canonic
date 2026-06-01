@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld("canonic", {
     getVersion: () => ipcRenderer.invoke("app:version"),
     isDefaultEditor: () => ipcRenderer.invoke("app:is-default-md"),
     setDefaultEditor: (value) => ipcRenderer.invoke("app:set-default-md", value),
+    openConfig: () => ipcRenderer.invoke("app:open-config"),
+    editAction: (action) => ipcRenderer.invoke("app:edit-action", action),
   },
 
   // Telemetry
@@ -34,6 +36,10 @@ contextBridge.exposeInMainWorld("canonic", {
       ipcRenderer.invoke("workspace:init", path, template),
     getDefault: () => ipcRenderer.invoke("workspace:get-default"),
     openDirectoryDialog: () => ipcRenderer.invoke("dialog:open-directory"),
+    recents: () => ipcRenderer.invoke("workspace:recent-list"),
+    addRecent: (path, name) =>
+      ipcRenderer.invoke("workspace:recent-add", path, name),
+    removeRecent: (path) => ipcRenderer.invoke("workspace:recent-remove", path),
   },
 
   // Files

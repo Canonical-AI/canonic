@@ -1,25 +1,24 @@
 <template>
     <div
+        ref="rootRef"
         class="ref-pane"
         :class="{
             'ref-pane--dragover': dragOver,
             'ref-pane--stacked': store.splitStacked,
+            'ref-pane--active': isActive,
         }"
-        @click="activate"
+        @focusin="store.setActivePane(filePath)"
         @dragover.capture="onDragOver"
         @dragleave="dragOver = false"
         @drop.capture="onDrop"
     >
-        <div class="ref-topbar" @click.stop>
+        <div class="ref-topbar">
             <DocSwitcher :current-path="filePath" @select="onSwitch" />
-            <span class="ref-badge" title="Read-only reference — click pane to edit">
-                <Eye :size="11" />
-                Reference
-            </span>
+            <span class="ref-save-state" :class="saveStateClass">{{ saveStateLabel }}</span>
             <button
                 class="ref-close"
                 title="Close pane"
-                @click="store.removeRefPane(index)"
+                @click="close"
             >
                 <X :size="13" />
             </button>
@@ -30,12 +29,12 @@
             <div v-else-if="!loaded" class="ref-message">Loading…</div>
             <div v-else class="ref-content">
                 <ProsemirrorAdapterProvider>
-                    <MilkdownProvider :key="filePath">
+                    <MilkdownProvider :key="`${filePath}:${reloadKey}`">
                         <MilkdownEditor
                             :content="content"
                             :comments="[]"
-                            :readonly="true"
-                            @update="() => {}"
+                            :readonly="false"
+                            @update="onUpdate"
                         />
                     </MilkdownProvider>
                 </ProsemirrorAdapterProvider>
@@ -45,10 +44,10 @@
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { MilkdownProvider } from "@milkdown/vue";
 import { ProsemirrorAdapterProvider } from "@prosemirror-adapter/vue";
-import { Eye, X } from "lucide-vue-next";
+import { X } from "lucide-vue-next";
 import { useAppStore } from "../../store";
 import MilkdownEditor from "./MilkdownEditor.vue";
 import DocSwitcher from "./DocSwitcher.vue";
@@ -59,42 +58,124 @@ const props = defineProps({
 });
 
 const store = useAppStore();
+const rootRef = ref(null);
 const content = ref("");
+// editBaseline: last serialized markdown we accepted — used to detect real edits.
+// diskBaseline: what we believe is on disk — used to detect *external* changes so a
+// pane ignores the file-watcher event triggered by its own save.
+const editBaseline = ref("");
+const diskBaseline = ref("");
 const loaded = ref(false);
 const error = ref("");
 const dragOver = ref(false);
 
-// Load content fresh before mounting Milkdown so the editor receives final text.
-watch(
-    () => props.filePath,
-    async (path) => {
-        loaded.value = false;
-        error.value = "";
-        content.value = "";
-        try {
-            const text = await window.canonic.files.read(
-                store.workspacePath,
-                path,
-            );
-            content.value = text || "";
-            loaded.value = true;
-        } catch (err) {
-            error.value = "Could not load document";
-            console.error("[RefDocPane] read failed:", err);
-        }
-    },
-    { immediate: true },
-);
+const dirty = ref(false);
+const saving = ref(false);
+const reloadKey = ref(0);
+let saveTimer = null;
 
-function activate() {
-    store.activateRefPane(props.index);
+const isActive = computed(() => store.activePane === props.filePath);
+
+const saveStateLabel = computed(() => {
+    if (saving.value) return "Saving…";
+    if (dirty.value) return "Edited";
+    return "Saved";
+});
+const saveStateClass = computed(() => ({
+    "is-saving": saving.value,
+    "is-dirty": dirty.value && !saving.value,
+}));
+
+// Load content fresh before mounting Milkdown so the editor receives final text.
+async function load(path) {
+    loaded.value = false;
+    error.value = "";
+    content.value = "";
+    dirty.value = false;
+    try {
+        const text = await window.canonic.files.read(store.workspacePath, path);
+        content.value = text || "";
+        editBaseline.value = text || "";
+        diskBaseline.value = text || "";
+        loaded.value = true;
+    } catch (err) {
+        error.value = "Could not load document";
+        if (import.meta.env.DEV) console.error("[RefDocPane] read failed:", err);
+    }
 }
 
-function onSwitch(path) {
+watch(() => props.filePath, (path) => load(path), { immediate: true });
+
+// External change (e.g. an agent edited this doc): reload from disk when the pane
+// has no unsaved edits, otherwise leave the user's work untouched.
+watch(
+    () => store.externalReloadAt,
+    async () => {
+        if (dirty.value || saving.value) return;
+        const text = await window.canonic.files
+            .read(store.workspacePath, props.filePath)
+            .catch(() => null);
+        // Only react to genuinely external writes — diskBaseline already reflects
+        // our own saves, so this skips the watcher event our autosave just caused.
+        if (text != null && text !== diskBaseline.value) {
+            content.value = text;
+            editBaseline.value = text;
+            diskBaseline.value = text;
+            reloadKey.value += 1; // remount editor with fresh content
+        }
+    },
+);
+
+// Milkdown emits serialized markdown on every doc change. We only treat it as a
+// real edit when it diverges from the last loaded/saved text AND the editor has
+// focus — that filters out background normalization passes (which would otherwise
+// rewrite a doc the user merely opened beside their work).
+function onUpdate(markdown) {
+    content.value = markdown;
+    if (markdown === editBaseline.value) {
+        dirty.value = false;
+        return;
+    }
+    const focused = rootRef.value?.contains(document.activeElement);
+    if (focused) {
+        dirty.value = true;
+        scheduleSave();
+    }
+}
+
+function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 800);
+}
+
+async function flush() {
+    clearTimeout(saveTimer);
+    if (!dirty.value || saving.value) return;
+    const snapshot = content.value;
+    saving.value = true;
+    try {
+        const saved = await store.savePaneFile(props.filePath, snapshot);
+        editBaseline.value = snapshot;
+        diskBaseline.value = saved ?? snapshot; // normalized text now on disk
+        if (content.value === snapshot) dirty.value = false;
+    } catch (err) {
+        if (import.meta.env.DEV) console.error("[RefDocPane] save failed:", err);
+    } finally {
+        saving.value = false;
+    }
+}
+
+async function onSwitch(path) {
+    await flush();
     store.setRefPaneFile(props.index, path);
 }
 
-// Capture phase so we intercept before the read-only ProseMirror view.
+async function close() {
+    await flush();
+    store.removeRefPane(props.index);
+}
+
+// Capture phase so we intercept before the ProseMirror view.
 function onDragOver(e) {
     if (!e.dataTransfer.types.includes("application/canonic-path")) return;
     e.preventDefault();
@@ -103,16 +184,19 @@ function onDragOver(e) {
     e.dataTransfer.dropEffect = "move";
 }
 
-function onDrop(e) {
+async function onDrop(e) {
     if (!e.dataTransfer.types.includes("application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     dragOver.value = false;
     const path = e.dataTransfer.getData("application/canonic-path");
     if (path && path.endsWith(".md")) {
+        await flush();
         store.setRefPaneFile(props.index, path);
     }
 }
+
+onBeforeUnmount(flush);
 </script>
 
 <style scoped>
@@ -135,6 +219,13 @@ function onDrop(e) {
     box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+.ref-pane--active {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.ref-pane--active.ref-pane--stacked {
+    box-shadow: inset 0 2px 0 var(--accent);
+}
+
 .ref-topbar {
     display: flex;
     align-items: center;
@@ -144,14 +235,14 @@ function onDrop(e) {
     flex-shrink: 0;
 }
 
-.ref-badge {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+.ref-save-state {
+    margin-left: auto;
     font-size: 0.6875rem;
     color: var(--text-muted);
-    margin-left: auto;
+    white-space: nowrap;
 }
+.ref-save-state.is-dirty { color: var(--accent); }
+.ref-save-state.is-saving { color: var(--text-muted); font-style: italic; }
 
 .ref-close {
     display: flex;
@@ -175,7 +266,6 @@ function onDrop(e) {
 .ref-body {
     flex: 1;
     overflow-y: auto;
-    cursor: pointer;
 }
 
 .ref-content {

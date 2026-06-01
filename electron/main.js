@@ -19,6 +19,7 @@ const semver = require("semver");
 
 const configService = require("./config");
 const versionsService = require("./versions");
+const recentsService = require("./recents");
 const apiServer = require("./api-server");
 const { startWatcher, stopWatcher, getIndex } = require("./fileIndex");
 const agentPresets = require("./agent-presets");
@@ -587,266 +588,45 @@ async function setDefaultEditor(value) {
 }
 
 function createMenu() {
+  // The app menu lives in-app (AppMenu.vue hamburger) on every platform.
+  // Windows/Linux: no native menu bar at all. macOS forces an application menu
+  // to exist, so keep a minimal one — the app menu plus Edit and Window — so the
+  // standard accelerators (Cmd+,, Cmd+C/V/X/Z/A, Cmd+H, Cmd+Q, Cmd+W) keep
+  // working; everything else moved to the hamburger.
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+
   const template = [
-    ...(process.platform === "darwin"
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: "about" },
-              { type: "separator" },
-              {
-                label: "Settings...",
-                accelerator: "CmdOrCtrl+,",
-                click: () => {
-                  mainWindow?.webContents.send("menu:open-settings");
-                },
-              },
-              {
-                label: "Set as Default Markdown Editor",
-                click: async () => {
-                  await setDefaultEditor(true);
-                },
-              },
-              { type: "separator" },
-              { role: "services" },
-              { type: "separator" },
-              { role: "hide" },
-              { role: "hideOthers" },
-              { role: "unhide" },
-              { type: "separator" },
-              { role: "quit" },
-            ],
-          },
-        ]
-      : []),
     {
-      label: "File",
+      label: app.name,
       submenu: [
+        { role: "about" },
+        { type: "separator" },
         {
-          label: "New Workspace...",
-          accelerator: "CmdOrCtrl+Shift+N",
-          click: async () => {
-            const { canceled, filePaths } = await dialog.showOpenDialog(
-              mainWindow,
-              {
-                properties: ["openDirectory", "createDirectory"],
-                title: "Choose a folder for your new workspace",
-              },
-            );
-            if (!canceled && filePaths[0]) {
-              mainWindow?.webContents.send("menu:new-workspace", filePaths[0]);
-            }
-          },
+          label: "Settings...",
+          accelerator: "CmdOrCtrl+,",
+          click: () => mainWindow?.webContents.send("menu:open-settings"),
         },
         {
-          label: "Open File...",
-          accelerator: "CmdOrCtrl+O",
+          label: "Set as Default Markdown Editor",
           click: async () => {
-            const { canceled, filePaths } = await dialog.showOpenDialog(
-              mainWindow,
-              {
-                title: "Open Markdown File",
-                filters: [{ name: "Markdown", extensions: ["md"] }],
-                properties: ["openFile"],
-              },
-            );
-            if (!canceled && filePaths[0]) {
-              mainWindow?.webContents.send("menu:open-file", filePaths[0]);
-            }
-          },
-        },
-        {
-          label: "Open Workspace...",
-          accelerator: "CmdOrCtrl+Shift+O",
-          click: async () => {
-            const result = await dialog.showOpenDialog(mainWindow, {
-              properties: ["openDirectory", "createDirectory"],
-              title: "Open or create a Canonic workspace",
-            });
-            if (!result.canceled && result.filePaths[0]) {
-              mainWindow?.webContents.send(
-                "menu:open-workspace",
-                result.filePaths[0],
-              );
-            }
+            await setDefaultEditor(true);
           },
         },
         { type: "separator" },
-        ...(process.platform !== "darwin"
-          ? [
-              {
-                label: "Settings...",
-                accelerator: "Ctrl+,",
-                click: () => {
-                  mainWindow?.webContents.send("menu:open-settings");
-                },
-              },
-              { type: "separator" },
-            ]
-          : []),
-        {
-          label: "Open Config File",
-          click: async () => {
-            const err = await shell.openPath(configService.CONFIG_PATH);
-            if (err) {
-              dialog.showErrorBox("Open Config Failed", err);
-            }
-          },
-        },
-        {
-          label: "Reload Config",
-          click: () => {
-            mainWindow?.webContents.send("menu:reload-config");
-          },
-        },
+        { role: "services" },
         { type: "separator" },
-        { role: "close" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
       ],
     },
-    {
-      label: "Edit",
-      submenu: [
-        { role: "undo" },
-        { role: "redo" },
-        { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
-      ],
-    },
-    {
-      label: "View",
-      submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        { role: "toggleDevTools" },
-        { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
-        { type: "separator" },
-        { role: "togglefullscreen" },
-        { type: "separator" },
-        {
-          label: "Theme",
-          submenu: [
-            {
-              label: "HAL 2001 (Dark)",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "hal2001");
-              },
-            },
-            {
-              label: "Nord",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "nord");
-              },
-            },
-            {
-              label: "Dracula",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "dracula");
-              },
-            },
-            {
-              label: "Mocha",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "mocha");
-              },
-            },
-            {
-              label: "Macchiato",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "macchiato");
-              },
-            },
-            {
-              label: "Latte",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "latte");
-              },
-            },
-            {
-              label: "Tokyo",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "tokyo");
-              },
-            },
-            {
-              label: "Solarized",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "solarized");
-              },
-            },
-            {
-              label: "Gruvbox",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-theme", "gruvbox");
-              },
-            },
-            { type: "separator" },
-            {
-              label: "Open Config File",
-              click: async () => {
-                const err = await shell.openPath(configService.CONFIG_PATH);
-                if (err) dialog.showErrorBox("Open Config Failed", err);
-              },
-            },
-            {
-              label: "Reload Config",
-              click: () => {
-                mainWindow?.webContents.send("menu:reload-config");
-              },
-            },
-          ],
-        },
-        {
-          label: "Typography",
-          submenu: [
-            {
-              label: "Sans-serif",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-font", "sans");
-              },
-            },
-            {
-              label: "Serif",
-              click: () => {
-                mainWindow?.webContents.send("menu:change-font", "serif");
-              },
-            },
-          ],
-        },
-      ],
-    },
-    {
-      label: "Window",
-      submenu: [
-        { role: "minimize" },
-        { role: "zoom" },
-        ...(process.platform === "darwin"
-          ? [
-              { type: "separator" },
-              { role: "front" },
-              { type: "separator" },
-              { role: "window" },
-            ]
-          : [{ role: "close" }]),
-      ],
-    },
-    {
-      role: "help",
-      submenu: [
-        {
-          label: "Learn More",
-          click: async () => {
-            await shell.openExternal("https://canonic.local");
-          },
-        },
-      ],
-    },
+    { role: "editMenu" },
+    { role: "windowMenu" },
   ];
 
   const menu = Menu.buildFromTemplate(template);
@@ -1204,6 +984,15 @@ function setupIpcHandlers() {
     return defaultPath;
   });
 
+  // Durable recent-workspace history (see electron/recents.js).
+  ipcMain.handle("workspace:recent-list", () => recentsService.list());
+  ipcMain.handle("workspace:recent-add", (_, workspacePath, name) =>
+    recentsService.add(workspacePath, name),
+  );
+  ipcMain.handle("workspace:recent-remove", (_, workspacePath) =>
+    recentsService.remove(workspacePath),
+  );
+
   ipcMain.handle("files:open-dialog", async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: "Open Markdown File",
@@ -1216,6 +1005,31 @@ function setupIpcHandlers() {
 
   ipcMain.handle("app:version", () => {
     return app.getVersion() || require("../package.json").version;
+  });
+
+  // Open the config file in the OS default app (hamburger → Config → Open config).
+  ipcMain.handle("app:open-config", async () => {
+    const err = await shell.openPath(configService.CONFIG_PATH);
+    if (err) dialog.showErrorBox("Open Config Failed", err);
+    return !err;
+  });
+
+  // Run a standard edit command on the focused webContents (hamburger → Edit).
+  // Mirrors the native Edit menu roles so the items work with the menu removed.
+  ipcMain.handle("app:edit-action", (_, action) => {
+    const wc = mainWindow?.webContents;
+    if (!wc) return false;
+    const actions = {
+      undo: () => wc.undo(),
+      redo: () => wc.redo(),
+      cut: () => wc.cut(),
+      copy: () => wc.copy(),
+      paste: () => wc.paste(),
+      selectAll: () => wc.selectAll(),
+    };
+    if (!actions[action]) return false;
+    actions[action]();
+    return true;
   });
 
   ipcMain.handle("app:is-default-md", async () => {

@@ -18,6 +18,21 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the app launches
   then: the Setup screen is skipped and the Workspace screen loads directly
 
+* scenario: recent workspaces persist across launches
+  given: the user has opened one or more workspaces
+  when: the app is closed and relaunched
+  then: the recent-workspace list is restored from the main-process store (`~/.config/canonic/workspaces.json`), newest first, capped at 8 — not from renderer localStorage
+
+* scenario: last workspace reopens automatically
+  given: config exists and the recent-workspace list is non-empty
+  when: the app launches and no workspace is already open
+  then: the most recently opened workspace is reopened automatically; if it can't be opened an error is shown and the Setup screen remains
+
+* scenario: the demo workspace is never recorded as recent
+  given: the user opens the demo from the Setup screen
+  when: the demo workspace loads
+  then: it does not appear in the recent-workspace list
+
 * scenario: setup screen fields
   given: the Setup screen is open
   when: the user views it
@@ -72,6 +87,42 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the user opens the config file or Settings
   when: the API key is stored
   then: a warning is shown that the config file contains sensitive data stored in plain text
+
+***
+
+## Application Menu (MENU)
+
+> Top-level app actions live in an in-app hamburger menu (the ☰ in the titlebar) on every platform, so the window stays clean. The native menu bar is removed on Windows/Linux; macOS keeps a minimal app menu (App + Edit + Window) so standard keyboard shortcuts still work.
+
+* scenario: hamburger menu groups
+  given: a workspace is open
+  when: the user clicks the ☰ menu in the titlebar
+  then: a dropdown shows File (New workspace, Open workspace, Open file), Edit (Undo, Redo, Cut, Copy, Paste, Select all), and Config (Settings, Set as default, Open config, Reload config)
+
+* scenario: native menu bar removed on Windows and Linux
+  given: the app is running on Windows or Linux
+  when: the window is shown
+  then: there is no native menu bar; every menu action is reached through the hamburger
+
+* scenario: macOS keeps a minimal native menu
+  given: the app is running on macOS
+  when: the menu bar is shown
+  then: only the App, Edit, and Window menus are present, so standard accelerators (Cmd+C/V/X/Z/A, Cmd+comma, Cmd+Q) keep working
+
+* scenario: edit actions operate on the focused field
+  given: the hamburger menu is open
+  when: the user clicks an Edit action such as Copy
+  then: it runs against the focused editor or input via the window's webContents
+
+* scenario: menu popover stays opaque in transparency mode
+  given: window transparency is enabled
+  when: the hamburger menu is opened
+  then: its popover background is fully opaque so the items stay readable over content
+
+* scenario: compact layout exposes the menu as an expandable tree
+  given: the window is below the small-screen threshold
+  when: the user opens the compact menu and taps "Menu"
+  then: it expands in place to the same File / Edit / Config actions (no separate hamburger) and tapping an action runs it and closes the menu
 
 ***
 
@@ -1175,17 +1226,17 @@ Source of truth for product requirements. When a requirement changes, update thi
 * scenario: open a reference pane
   given: a document is open in the editor and at least one other document exists
   when: the user clicks the Split button
-  then: a read-only reference pane opens beside the editor showing another document
+  then: an editable pane opens beside the editor showing another document
 
 * scenario: switch a pane's document with quicksearch
   given: a reference pane is open
   when: the user clicks the pane's document switcher and picks a document from the search list
   then: the pane loads and displays the chosen document
 
-* scenario: activate a reference pane
-  given: a reference pane shows document B while document A is the active editor
-  when: the user clicks the reference pane
-  then: document B becomes the active editable document and document A moves into the reference pane
+* scenario: focus a reference pane
+  given: a reference pane shows document B while the primary editor shows document A
+  when: the user clicks into the reference pane
+  then: the pane becomes the active editing target (highlighted border), the primary editor stays on document A, and Cmd+S saves the focused pane's document
 
 * scenario: close a reference pane
   given: a reference pane is open
@@ -1207,10 +1258,10 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user drags a document from the file tree and drops it on the editor pane
   then: the dropped document opens as the active editable document
 
-* scenario: reference panes are read-only
+* scenario: reference panes are editable
   given: a reference pane is showing a document
-  when: the user views the pane
-  then: the content cannot be edited; only the active editor pane accepts edits
+  when: the user types in the pane
+  then: the pane accepts edits; a save-state indicator (Edited / Saved) appears in the topbar; edits are auto-saved after 800ms of inactivity
 
 * scenario: opening a referenced doc removes the duplicate pane
   given: document B is shown in a reference pane
@@ -1232,6 +1283,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user unchecks "Stack split panels" in the theme menu
   then: the panes are arranged side by side, and the choice persists across restarts
 
+* scenario: third pane splits in the opposite direction
+  given: two reference panes are open alongside the primary editor
+  when: the user views the layout
+  then: if stacked, the two reference panes are arranged side-by-side below the primary editor; if side-by-side, the two reference panes are stacked to the right of the primary editor
+
 ## Editor Topbar (TOP)
 
 > The editor topbar shows the current document title alongside Save, Version and Split actions. The title is clickable to rename the document in place.
@@ -1250,6 +1306,31 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the title input is editing
   when: the user presses Escape
   then: the input reverts to the original title and no rename occurs
+
+* scenario: open document action menu
+  given: a document is open in the editor
+  when: the user clicks the More button (⋯) in the topbar
+  then: a dropdown appears with Copy Full Path, Copy Relative Path, Move to Folder, and Delete actions
+
+* scenario: copy full path from action menu
+  given: the action menu is open
+  when: the user clicks Copy Full Path
+  then: the absolute filesystem path of the document is copied to the clipboard and the menu closes
+
+* scenario: copy relative path from action menu
+  given: the action menu is open
+  when: the user clicks Copy Relative Path
+  then: the workspace-relative path of the document is copied to the clipboard and the menu closes
+
+* scenario: move document to folder from action menu
+  given: the action menu is open
+  when: the user clicks Move to Folder and picks a directory
+  then: the document is moved to the chosen directory and the menu closes
+
+* scenario: delete document from action menu
+  given: the action menu is open
+  when: the user clicks Delete and confirms the prompt
+  then: the document is moved to the trash and the menu closes
 
 ## Editor Tabs (TAB)
 
@@ -1731,4 +1812,103 @@ Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (s
   when: the Agent panel mounts
   then: Claude Code appears as a configured agent with resumable terminal-kind session history entries
 
-*Last updated: 2026-05-28*
+### File Tree Browser
+
+> Keyboard-driven file browser inspired by yazi. ASCII tree rendering with collapsed folders by default.
+
+* scenario: keyboard traversal — right opens folder
+  given: a folder is focused in the file tree
+  when: the user presses the Right Arrow key
+  then: the folder expands to show its children
+
+* scenario: keyboard traversal — left closes folder
+  given: an expanded folder is focused in the file tree
+  when: the user presses the Left Arrow key
+  then: the folder collapses, hiding its children
+
+* scenario: keyboard traversal — left on file moves to parent
+  given: a file inside a folder is focused in the file tree
+  when: the user presses the Left Arrow key
+  then: focus moves to the parent folder
+
+* scenario: keyboard traversal — up/down arrows navigate
+  given: the file tree has focus
+  when: the user presses Up or Down Arrow keys
+  then: focus moves to the previous or next visible item
+
+* scenario: keyboard traversal — enter opens file
+  given: a file is focused in the file tree
+  when: the user presses Enter
+  then: the file is opened in the editor
+
+* scenario: ctrl+f quick filter shows filter input
+  given: the file tree has focus
+  when: the user presses Ctrl+F
+  then: a filter input appears at the top of the tree, and typing filters visible files/folders by name
+
+* scenario: ctrl+f filter — escape clears
+  given: the filter input is active with text
+  when: the user presses Escape
+  then: the filter is cleared and the input closes
+
+* scenario: ctrl+t focuses the file tree
+  given: the file tree is not currently focused
+  when: the user presses Ctrl+T from anywhere in the app
+  then: focus moves to the file tree
+
+* scenario: ctrl+= creates a new document
+  given: the file tree has focus
+  when: the user presses Ctrl+= (Ctrl++)
+  then: the new document modal opens
+
+* scenario: ctrl+d moves to trash
+  given: a file or folder is focused in the file tree
+  when: the user presses Ctrl+D
+  then: the item is moved to the trash
+
+* scenario: ctrl+z undoes last trash
+  given: an item was recently moved to trash via Ctrl+D
+  when: the user presses Ctrl+Z with the tree focused
+  then: the most recently trashed item is restored from trash
+
+* scenario: ctrl+m opens move dialog
+  given: a file or folder is focused in the file tree
+  when: the user presses Ctrl+M
+  then: a move-to-folder dropdown appears for the focused item
+
+* scenario: drag and drop moves files into folders
+  given: a file is being dragged
+  when: the user drops it onto a directory node
+  then: the file is moved into that directory
+
+* scenario: drag and drop onto editor opens file
+  given: a file is dragged from the tree
+  when: the user drops it onto the editor pane
+  then: the file opens in the editor
+
+* scenario: dwell duration reveals actions
+  given: a file or folder node is hovered
+  when: the cursor remains on the node for 600ms
+  then: the rename, move, and delete action buttons appear
+
+* scenario: dwell actions hide on mouse leave
+  given: action buttons are visible after dwell
+  when: the cursor leaves the node
+  then: the action buttons hide immediately
+
+* scenario: ASCII tree rendering style
+  given: the file tree is visible
+  when: the user views the tree
+  then: items are rendered with ASCII tree-drawing characters (├── └── │) rather than indented lines
+
+* scenario: folders collapsed by default
+  given: a workspace is loaded with folders
+  when: the file tree first renders
+  then: all folders are collapsed unless manually opened by the user
+
+* scenario: demo mode shows file tree with ASCII style
+  given: demo mode is active
+  when: the file tree renders
+  then: demo files are shown with ASCII tree characters and folders collapsed by default
+
+*Last updated: 2026-05-31*

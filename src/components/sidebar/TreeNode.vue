@@ -8,29 +8,44 @@
                     'active',
                 isDragOver && 'drag-over',
                 item.type === 'directory' && isEmpty && 'empty',
+                item.type === 'directory' && 'tree-node--dir',
+                isFocused && 'focused',
             ]"
-            :style="{ paddingLeft: `${12 + depth * 16}px` }"
+            :style="{ paddingLeft: `${4 + depth * 14}px` }"
             :draggable="!store.isCompactLayout"
+            role="treeitem"
+            :aria-label="`${item.type === 'directory' ? 'Folder' : 'File'}: ${item.name}`"
+            :aria-expanded="item.type === 'directory' ? item._open : undefined"
+            :aria-selected="isFocused"
             @click="handleClick"
-            @mouseenter="hovered = true"
-            @mouseleave="hovered = false"
+            @mouseenter="onMouseEnter"
+            @mouseleave="onMouseLeave"
             @dragstart="handleDragStart"
             @dragover.prevent="handleDragOver"
             @dragleave="handleDragLeave"
             @drop="handleDrop"
         >
-            <ChevronRight
+            <!-- ASCII tree lines for children -->
+            <span v-if="depth > 0" class="tree-lines" v-text="treeLines" />
+
+            <!-- Chevron / expand indicator (ASCII) -->
+            <span
                 v-if="item.type === 'directory'"
-                :size="12"
-                class="chevron"
-                :class="open && 'open'"
+                class="chevron-ascii"
+                v-text="item._open ? '▼' : '▶'"
             />
+
+            <!-- Icon (folder) -->
             <Folder
-                v-if="item.type === 'directory'"
-                :size="12"
+                v-if="item.type === 'directory' && !item._open"
+                :size="13"
                 class="dir-icon"
             />
-            <FileText v-else :size="12" class="file-icon" />
+            <FolderOpen
+                v-else-if="item.type === 'directory' && item._open"
+                :size="13"
+                class="dir-icon dir-icon--open"
+            />
 
             <!-- Inline rename input -->
             <input
@@ -50,8 +65,8 @@
                 class="dirty-dot"
             />
 
-            <!-- Hover actions -->
-            <div v-if="hovered && !renaming" class="node-actions" @click.stop>
+            <!-- Dwell actions (appear after 600ms hover) -->
+            <div v-if="showActions && !renaming" class="node-actions" @click.stop>
                 <button
                     v-if="item.type === 'directory'"
                     class="node-btn"
@@ -115,7 +130,7 @@
         <div
             v-if="creatingFolder"
             class="inline-create"
-            :style="{ paddingLeft: `${12 + (depth + 1) * 16 + 18}px` }"
+            :style="{ paddingLeft: `${4 + (depth + 1) * 14 + 18}px` }"
         >
             <input
                 ref="folderInput"
@@ -129,11 +144,11 @@
             />
         </div>
 
-        <!-- New file inline input (for root-level new file in dir) -->
+        <!-- New file inline input -->
         <div
             v-if="creatingFile"
             class="inline-create"
-            :style="{ paddingLeft: `${12 + (depth + 1) * 16 + 18}px` }"
+            :style="{ paddingLeft: `${4 + (depth + 1) * 14 + 18}px` }"
         >
             <input
                 ref="fileInput"
@@ -147,49 +162,58 @@
             />
         </div>
 
-        <!-- Children -->
-        <template v-if="item.type === 'directory' && open">
+        <!-- Children (only when directory is open) -->
+        <template v-if="item.type === 'directory' && item._open">
             <TreeNode
-                v-for="child in item.children"
+                v-for="(child, ci) in item.children"
                 :key="child.path"
                 :item="child"
                 :depth="depth + 1"
+                :is-last="ci === item.children.length - 1"
             />
         </template>
     </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from "vue";
+import { ref, computed, nextTick, watch, onBeforeUnmount } from "vue";
 import { useAppStore } from "../../store";
 import {
-    ChevronRight,
-    FileText,
-    Folder,
     FilePlus,
     FolderPlus,
     Pencil,
     Trash2,
     ArrowRightFromLine,
+    Folder,
+    FolderOpen,
 } from "lucide-vue-next";
 
-const props = defineProps({ item: Object, depth: Number });
+const props = defineProps({
+    item: Object,
+    depth: Number,
+    isLast: { type: Boolean, default: false },
+});
 
 const store = useAppStore();
 
 function hasMarkdownFiles(item) {
-    if (item.type === 'file') return true  // only .md files appear in the tree
-    if (!item.children?.length) return false
-    return item.children.some(child => hasMarkdownFiles(child))
+    if (item.type === 'file') return true;
+    if (!item.children?.length) return false;
+    return item.children.some(child => hasMarkdownFiles(child));
 }
 
 const isEmpty = computed(() =>
     props.item.type === 'directory' && !hasMarkdownFiles(props.item)
-)
+);
 
-// Start empty folders collapsed
-const open = ref(props.item.type !== 'directory' || hasMarkdownFiles(props.item));
+// Initialize _open on directories (collapsed by default)
+if (props.item.type === 'directory' && props.item._open === undefined) {
+    props.item._open = false;
+}
+
 const hovered = ref(false);
+const showActions = ref(false);
+const dwellTimer = ref(null);
 const renaming = ref(false);
 const renameValue = ref("");
 const renameInput = ref(null);
@@ -201,6 +225,35 @@ const creatingFile = ref(false);
 const fileName = ref("");
 const fileInput = ref(null);
 const isDragOver = ref(false);
+
+// Compute whether this node is keyboard-focused
+const isFocused = computed(() => {
+    if (!store.treeFocused) return false;
+    const list = store.flatVisibleTree;
+    const idx = store.treeFocusIndex;
+    if (idx < 0 || idx >= list.length) return false;
+    return list[idx].path === props.item.path;
+});
+
+// ASCII tree lines - just the connector, no continuation prefix.
+// Depth is shown via paddingLeft; isLast controls ├── vs └──.
+const treeLines = computed(() => {
+    if (props.depth === 0) return '';
+    return props.isLast ? '└── ' : '├── ';
+});
+
+// Watch for focus changes to scroll into view
+watch(isFocused, (val) => {
+    // Scroll into view handled by FileTree container
+});
+
+// Watch for move command from keyboard (Ctrl+M)
+watch(() => store.treeShowMoveFor, (val) => {
+    if (val === props.item.path) {
+        showMove.value = true;
+        store.treeShowMoveFor = null;
+    }
+});
 
 const isDirty = computed(
     () =>
@@ -222,7 +275,6 @@ const availableDirs = computed(() => {
     const walk = (items) => {
         for (const it of items) {
             if (it.type === "directory") {
-                // Don't allow moving a directory into itself or its children
                 if (
                     props.item.type === "directory" &&
                     (it.path === props.item.path ||
@@ -239,10 +291,33 @@ const availableDirs = computed(() => {
     return dirs;
 });
 
+// ── Dwell timer for actions ──
+function onMouseEnter() {
+    hovered.value = true;
+    dwellTimer.value = setTimeout(() => {
+        showActions.value = true;
+    }, 600);
+}
+
+function onMouseLeave() {
+    hovered.value = false;
+    showActions.value = false;
+    if (dwellTimer.value) {
+        clearTimeout(dwellTimer.value);
+        dwellTimer.value = null;
+    }
+}
+
+onBeforeUnmount(() => {
+    if (dwellTimer.value) {
+        clearTimeout(dwellTimer.value);
+    }
+});
+
 function handleClick() {
     if (renaming.value) return;
     if (props.item.type === "directory") {
-        open.value = !open.value;
+        props.item._open = !props.item._open;
     } else {
         store.openFile(props.item.path);
     }
@@ -257,8 +332,6 @@ function handleDragStart(e) {
 function handleDragOver(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-
-    // Don't allow dropping on itself or descendants
     const draggedPath = e.dataTransfer.types.includes(
         "application/canonic-path",
     );
@@ -290,7 +363,7 @@ async function handleDrop(e) {
 async function startRename() {
     renameValue.value = props.item.name.replace(/\.md$/, "");
     renaming.value = true;
-    hovered.value = false;
+    showActions.value = false;
     await nextTick();
     renameInput.value?.focus();
     renameInput.value?.select();
@@ -307,7 +380,6 @@ async function confirmRename() {
     if (props.item.type === "file") {
         await store.renameFile(props.item.path, newName);
     } else {
-        // Rename directory: move it
         const parentDir = props.item.path.includes("/")
             ? props.item.path.split("/").slice(0, -1).join("/")
             : "";
@@ -322,7 +394,7 @@ async function confirmRename() {
 }
 
 async function confirmDelete() {
-    hovered.value = false;
+    showActions.value = false;
     if (props.item.type === "file") {
         await store.deleteFile(props.item.path);
     } else {
@@ -332,15 +404,15 @@ async function confirmDelete() {
 
 async function doMove(targetDir) {
     showMove.value = false;
-    hovered.value = false;
+    showActions.value = false;
     await store.moveFile(props.item.path, targetDir);
 }
 
 async function newFileHere() {
-    open.value = true;
+    props.item._open = true;
     creatingFile.value = true;
     fileName.value = "";
-    hovered.value = false;
+    showActions.value = false;
     await nextTick();
     fileInput.value?.focus();
 }
@@ -360,10 +432,10 @@ async function confirmNewFile() {
 }
 
 async function newFolderHere() {
-    open.value = true;
+    props.item._open = true;
     creatingFolder.value = true;
     folderName.value = "";
-    hovered.value = false;
+    showActions.value = false;
     await nextTick();
     folderInput.value?.focus();
 }
@@ -380,11 +452,11 @@ async function confirmNewFolder() {
 .tree-node {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 8px 5px 12px;
+    gap: 3px;
+    padding: 3px 6px 3px 4px;
     cursor: pointer;
-    border-radius: 4px;
-    margin: 0 4px;
+    border-radius: 3px;
+    margin: 0 2px;
     font-size: 0.8125rem;
     color: var(--text-secondary);
     transition: background 0.1s;
@@ -401,31 +473,51 @@ async function confirmNewFolder() {
     background: var(--bg-active);
     color: var(--text-primary);
 }
+.tree-node.focused {
+    background: var(--bg-active);
+    outline: 1px solid var(--accent-muted);
+    outline-offset: -1px;
+}
 .tree-node.drag-over {
     background: var(--bg-active);
     box-shadow: inset 0 0 0 1px var(--accent);
 }
-.tree-node.empty {
-    opacity: 0.4;
+.tree-node.tree-node--dir {
+    color: var(--secondary);
+}
+
+.tree-node.tree-node--dir:hover {
+    color: var(--secondary);
 }
 .tree-node.empty:hover {
     opacity: 0.65;
 }
 
-.chevron {
-    flex-shrink: 0;
-    transition: transform 0.15s;
-}
-.chevron.open {
-    transform: rotate(90deg);
-}
-.file-icon {
+.tree-lines {
     flex-shrink: 0;
     color: var(--text-muted);
+    font-size: 0.6875rem;
+    letter-spacing: 0;
+    white-space: pre;
+    opacity: 0.4;
 }
+
+.chevron-ascii {
+    flex-shrink: 0;
+    font-size: 0.5625rem;
+    width: 10px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
 .dir-icon {
     flex-shrink: 0;
-    color: var(--text-muted);
+    color: var(--secondary);
+}
+
+.dir-icon--open {
+    color: var(--secondary);
+    opacity: 0.85;
 }
 
 .node-name {

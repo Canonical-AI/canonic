@@ -14,6 +14,10 @@
                 <span class="app-name"
                     >canonic<span class="accent">.ai</span></span
                 >
+                <AppMenu
+                    @open-settings="showSettings = true"
+                    @reload-config="reloadConfig"
+                />
             </div>
             <div class="titlebar-center"></div>
             <div class="titlebar-right">
@@ -186,6 +190,36 @@
                 ref="mobileMenuDropdownRef"
             >
                 <div class="dropdown-section">
+                    <button class="dropdown-item" @click="toggleAppMenu">
+                        <Menu :size="14" />
+                        <span>Menu</span>
+                        <ChevronRight
+                            :size="14"
+                            class="app-menu-chevron"
+                            :class="{ open: appMenuExpanded }"
+                        />
+                    </button>
+                    <template v-if="appMenuExpanded">
+                        <template
+                            v-for="group in appMenuGroups"
+                            :key="group.label"
+                        >
+                            <div class="dropdown-subgroup-label">
+                                {{ group.label }}
+                            </div>
+                            <button
+                                v-for="item in group.items"
+                                :key="item.label"
+                                class="dropdown-item dropdown-item--nested"
+                                @click="runAppMenuItem(item)"
+                            >
+                                <span>{{ item.label }}</span>
+                            </button>
+                        </template>
+                    </template>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-section">
                     <div class="dropdown-section-title">Navigation</div>
                     <button
                         class="dropdown-item"
@@ -339,22 +373,41 @@
                         :class="{ 'split-row--stacked': store.splitStacked }"
                     >
                         <div
-                            class="split-pane split-pane--active"
+                            class="split-pane"
                             :class="{
+                                'split-pane--active':
+                                    store.refPanes.length === 0 ||
+                                    store.activePane === 'main',
                                 'split-pane--dragover': activeDragOver,
                             }"
+                            @focusin="store.setActivePane('main')"
                             @dragover.capture="onActiveDragOver"
                             @dragleave="activeDragOver = false"
                             @drop.capture="onActiveDrop"
                         >
                             <Editor />
                         </div>
-                        <RefDocPane
-                            v-for="(p, i) in store.refPanes"
-                            :key="p + ':' + i"
-                            :file-path="p"
-                            :index="i"
-                        />
+                        <template v-if="store.refPanes.length === 2">
+                            <div
+                                class="split-row split-row--nested"
+                                :class="{ 'split-row--stacked': !store.splitStacked }"
+                            >
+                                <RefDocPane
+                                    v-for="(p, i) in store.refPanes"
+                                    :key="p + ':' + i"
+                                    :file-path="p"
+                                    :index="i"
+                                />
+                            </div>
+                        </template>
+                        <template v-else>
+                            <RefDocPane
+                                v-for="(p, i) in store.refPanes"
+                                :key="p + ':' + i"
+                                :file-path="p"
+                                :index="i"
+                            />
+                        </template>
                     </div>
                     <EditorTabs
                         v-if="store.tabsEnabled && store.tabsPosition !== 'top'"
@@ -571,6 +624,7 @@ import {
     Share2,
     ArrowUpCircle,
     Menu,
+    ChevronRight,
     Eye,
     EyeOff,
 } from "lucide-vue-next";
@@ -591,10 +645,12 @@ import SharePanel from "../panels/SharePanel.vue";
 import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
 import ConfirmModal from "../modals/ConfirmModal.vue";
+import AppMenu from "./AppMenu.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
+import { useAppMenu } from "../../composables/useAppMenu.js";
 
 const store = useAppStore();
 const router = useRouter();
@@ -920,21 +976,13 @@ onMounted(async () => {
         });
 
         if (window.canonic.menu.onReloadConfig) {
-            window.canonic.menu.onReloadConfig(async () => {
-                try {
-                    await store.loadConfig();
-                    if (store.config?.themes) {
-                        registerConfigThemes(store.config.themes);
-                    }
-                    applyAutoTheme();
-                } catch (err) {
-                    console.error("Failed to reload config from menu:", err);
-                }
-            });
+            window.canonic.menu.onReloadConfig(reloadConfig);
         }
     }
 
     if (!store.workspacePath && !store.currentFile) {
+        // The main process owns the recent list; refresh it before auto-opening.
+        await store.loadRecents();
         const last = store.recentWorkspaces[0];
         if (last) {
             try {
@@ -948,8 +996,39 @@ onMounted(async () => {
     }
 });
 
+// Reload config from disk and re-apply themes/appearance. Shared by the native
+// macOS menu (menu:reload-config) and the in-app hamburger (AppMenu).
+async function reloadConfig() {
+    try {
+        await store.loadConfig();
+        if (store.config?.themes) {
+            registerConfigThemes(store.config.themes);
+        }
+        applyAutoTheme();
+    } catch (err) {
+        console.error("Failed to reload config:", err);
+    }
+}
+
 function onGlobalKeydown(e) {
     const hk = store.findHotkeys;
+
+    // Ctrl+T — focus the file tree
+    if ((e.ctrlKey || e.metaKey) && e.key === "t" && !e.shiftKey) {
+        // Don't steal focus from inputs/editors
+        const tag = document.activeElement?.tagName;
+        const isInput = tag === "INPUT" || tag === "TEXTAREA" || document.activeElement?.isContentEditable;
+        if (!isInput) {
+            e.preventDefault();
+            store.focusTree();
+            nextTick(() => {
+                const tree = document.querySelector(".file-tree");
+                if (tree) tree.focus();
+            });
+            return;
+        }
+    }
+
     if (matchesHotkey(e, hk.findInWorkspace)) {
         e.preventDefault();
         store.searchViewOpen = true;
@@ -1071,6 +1150,31 @@ function onResizeStart(e) {
 const mobileMenuOpen = ref(false);
 const menuBtnRef = ref(null);
 const mobileMenuDropdownRef = ref(null);
+
+// App menu (File/Edit/Config) shared with the desktop hamburger; in compact
+// layout it's surfaced as an expandable "Menu" tree inside the mobile menu.
+const { groups: appMenuGroups, refreshDefault: refreshAppMenuDefault } =
+    useAppMenu({
+        onOpenSettings: () => {
+            mobileMenuOpen.value = false;
+            showSettings.value = true;
+        },
+        onReloadConfig: reloadConfig,
+    });
+const appMenuExpanded = ref(false);
+function toggleAppMenu() {
+    appMenuExpanded.value = !appMenuExpanded.value;
+    if (appMenuExpanded.value) refreshAppMenuDefault();
+}
+async function runAppMenuItem(item) {
+    mobileMenuOpen.value = false;
+    appMenuExpanded.value = false;
+    try {
+        await item.run();
+    } catch (err) {
+        if (import.meta.env.DEV) console.error("[AppMenu] action failed:", err);
+    }
+}
 
 function openMobileTab(side, tab) {
     mobileMenuOpen.value = false;
@@ -1250,7 +1354,7 @@ function toggleDistractionFree() {
     background: var(--bg-editor);
 }
 
-/* Split panels — active editor + read-only reference panes side by side */
+/* Split panels — primary editor + reference panes side by side */
 .split-row {
     display: flex;
     flex: 1;
@@ -1262,7 +1366,37 @@ function toggleDistractionFree() {
     flex-direction: column;
 }
 
-.split-pane--active {
+/* Bento-box: when 3 panes are open the 2 ref panes nest in the opposite
+   direction — row-nested inside a stacked layout, column-nested inside
+   a side-by-side layout. */
+.split-row--nested {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Outer border on the nested container (edge between primary + ref area). */
+.split-row--stacked > .split-row--nested {
+    border-top: 1px solid var(--border);
+}
+.split-row:not(.split-row--stacked) > .split-row--nested {
+    border-left: 1px solid var(--border);
+}
+
+/* Nested ref panes strip inherited outer-edge borders; the container handles it. */
+.split-row--nested :deep(.ref-pane) {
+    border-top: none;
+    border-left: none;
+}
+/* Row-nested (stacked outer): side-by-side ref panes → divider between them. */
+.split-row--nested:not(.split-row--stacked) :deep(.ref-pane + .ref-pane) {
+    border-left: 1px solid var(--border);
+}
+/* Column-nested (side-by-side outer): stacked ref panes → divider between them. */
+.split-row--nested.split-row--stacked :deep(.ref-pane + .ref-pane) {
+    border-top: 1px solid var(--border);
+}
+
+.split-pane {
     flex: 1;
     min-width: 0;
     display: flex;
@@ -1271,8 +1405,16 @@ function toggleDistractionFree() {
     position: relative;
 }
 
+/* Active-pane highlight (only meaningful while reference panes are open). */
+.split-row:has(.ref-pane) .split-pane--active {
+    box-shadow: inset 2px 0 0 var(--accent);
+}
+.split-row--stacked:has(.ref-pane) .split-pane--active {
+    box-shadow: inset 0 2px 0 var(--accent);
+}
+
 .split-pane--dragover {
-    box-shadow: inset 0 0 0 2px var(--accent);
+    box-shadow: inset 0 0 0 2px var(--accent) !important;
 }
 
 .empty-state {
@@ -1792,6 +1934,29 @@ function toggleDistractionFree() {
     height: 1px;
     background: var(--border-light);
     margin: 6px 4px;
+}
+
+.app-menu-chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+}
+.app-menu-chevron.open {
+    transform: rotate(90deg);
+}
+
+.dropdown-subgroup-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 6px 8px 2px 14px;
+    font-weight: 600;
+}
+
+.dropdown-item--nested {
+    padding-left: 22px;
+    font-size: 0.78rem;
 }
 
 /* Overrides for sidebar and right panel in compact mode */

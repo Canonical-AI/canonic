@@ -429,6 +429,7 @@ export const useAppStore = defineStore("app", () => {
   // ── DEMO MODE ──
   // ==========================================
   const isDemoMode = ref(false);
+  const demoWorkspaceDir = ref(null); // throwaway demo dir, cleaned on exit/leave
   const demoPeers = ref([]);
   const demoFiles = ref({});
   const _demoComments = ref({});
@@ -1267,7 +1268,9 @@ export const useAppStore = defineStore("app", () => {
     }
 
     const diskContent = await api.files.read(workspacePath.value, filePath);
-    console.log("[Store] File content read, setting currentFile to:", filePath);
+    if (import.meta.env.DEV) {
+      console.log("[Store] File content read, setting currentFile to:", filePath);
+    }
     currentFile.value = filePath;
     addTab(filePath);
 
@@ -1679,6 +1682,9 @@ export const useAppStore = defineStore("app", () => {
     const defaultPath = await api.workspace.getDefault();
     const parent = defaultPath.replace(/\/[^/]+$/, "");
     const demoPath = `${parent}/${cfg.workspaceName}`;
+    demoWorkspaceDir.value = demoPath;
+    // Tell main to delete this scratch dir on quit so demo files never linger.
+    api.demo?.register?.(demoPath);
 
     _demoComments.value = cfg.comments || {};
     demoPeers.value = cfg.peers || [];
@@ -1714,6 +1720,11 @@ export const useAppStore = defineStore("app", () => {
     controlHistory.value = []
     configuredAgents.value = []
     activeAgentId.value = null
+    // Remove the throwaway demo dir now that we're leaving demo mode.
+    if (demoWorkspaceDir.value) {
+      api.demo?.cleanup?.();
+      demoWorkspaceDir.value = null;
+    }
   }
 
   async function startShare(options) {

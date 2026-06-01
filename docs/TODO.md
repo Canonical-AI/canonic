@@ -125,7 +125,7 @@ when complete move stuff to complete. its just that easy
 
 * \[x] Search with workspace isolation
 
-* \[x] Demo mode with config-driven peer data (`public/demo/config.json`)
+* \[x] Demo mode with config-driven peer data (`src/demo/config.json`)
 
 * \[x] Comprehensive test suite (unit + integration, 60 tests)
 

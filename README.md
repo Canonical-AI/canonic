@@ -214,7 +214,7 @@ Quick rules:
 
 * Every new feature gets a Given / When / Then spec in `docs/specs/REQUIREMENTS.md`
 
-* Every new feature must work in demo mode (`public/demo/config.json`)
+* Every new feature must work in demo mode (`src/demo/config.json`)
 
 ***
 

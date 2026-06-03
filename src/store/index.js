@@ -26,6 +26,35 @@ export const useAppStore = defineStore("app", () => {
   const treeFocusIndex = ref(0);
   const treeUndoStack = ref([]); // { id, originalPath, isDirectory } — for Ctrl+Z undo
 
+  // ── Persisted open directories ──
+  const TREE_OPEN_KEY = "canonic:treeOpenDirs";
+  const treeOpenDirs = ref(
+    new Set(JSON.parse(storage.getItem(TREE_OPEN_KEY) || "[]"))
+  );
+
+  // Walk the file tree and apply _open state from the persisted set
+  function applyOpenDirs(items) {
+    if (!items) return;
+    const openSet = treeOpenDirs.value;
+    for (const item of items) {
+      if (item.type === "directory") {
+        item._open = openSet.has(item.path);
+        if (item.children) applyOpenDirs(item.children);
+      }
+    }
+  }
+
+  // Persist and apply a directory's open/closed state
+  function setTreeDirOpen(path, open) {
+    if (open) {
+      treeOpenDirs.value.add(path);
+    } else {
+      treeOpenDirs.value.delete(path);
+    }
+    storage.setItem(TREE_OPEN_KEY, JSON.stringify([...treeOpenDirs.value]));
+    applyOpenDirs(files.value);
+  }
+
   // Flat list of visible tree nodes (respects collapsed state) for keyboard nav.
   // Uses original item references so _open mutations propagate back to files.value.
   const flatVisibleTree = computed(() => {
@@ -140,11 +169,11 @@ export const useAppStore = defineStore("app", () => {
     if (item.type !== "directory") return;
 
     if (action === "expand" && !item._open) {
-      item._open = true;
+      setTreeDirOpen(item.path, true);
     } else if (action === "collapse" && item._open) {
-      item._open = false;
+      setTreeDirOpen(item.path, false);
     } else if (action === "toggle") {
-      item._open = !item._open;
+      setTreeDirOpen(item.path, !item._open);
     }
   }
 
@@ -167,7 +196,7 @@ export const useAppStore = defineStore("app", () => {
     const item = list[idx];
     if (item.type === "directory" && item._open) {
       // Collapse expanded directory
-      item._open = false;
+      setTreeDirOpen(item.path, false);
     } else if (item.type === "file" || (item.type === "directory" && !item._open)) {
       // Move to parent directory
       const parentPath = item.path.includes("/") ? item.path.split("/").slice(0, -1).join("/") : "";
@@ -191,7 +220,7 @@ export const useAppStore = defineStore("app", () => {
     const item = list[idx];
     if (item.type === "directory") {
       if (!item._open) {
-        item._open = true;
+        setTreeDirOpen(item.path, true);
       } else {
         // Move to first child if any
         const nextIdx = idx + 1;
@@ -1153,6 +1182,7 @@ export const useAppStore = defineStore("app", () => {
   async function refreshFiles() {
     if (!workspacePath.value) return;
     files.value = await api.files.list(workspacePath.value);
+    applyOpenDirs(files.value);
   }
 
   function clearUnsaved(filePath) {
@@ -3398,6 +3428,8 @@ export const useAppStore = defineStore("app", () => {
     trashFocused,
     undoLastTrash,
     setTreeFilter,
+    setTreeDirOpen,
+    treeOpenDirs,
     treeShowMoveFor,
     moveFocused,
     treeFilterMatches,

@@ -223,6 +223,16 @@ describe("file tree keyboard navigation", () => {
     mockFiles["Strategy/Nested/deep.md"] = "# Deep";
     mockFiles["Design/wireframes.md"] = "# Wireframes";
 
+    // Fresh localStorage so treeOpenDirs initializes clean — other test files
+    // may have left a window.localStorage stub in the shared worker.
+    const mockLocalStorage = {
+      store: {},
+      getItem(key) { return this.store[key] || null; },
+      setItem(key, val) { this.store[key] = String(val); },
+      removeItem(key) { delete this.store[key]; },
+    };
+    vi.stubGlobal("localStorage", mockLocalStorage);
+
     // Construct the flat mockApi that the store will destructure
     const fullApi = { ...mockApi };
     // The store accesses api.files.list etc. through destructuring
@@ -230,6 +240,7 @@ describe("file tree keyboard navigation", () => {
 
     // Provide the mock API
     vi.stubGlobal("canonic", fullApi);
+    vi.stubGlobal("window", { canonic: fullApi, localStorage: mockLocalStorage });
 
     store = useAppStore();
     store.workspacePath = "/ws";

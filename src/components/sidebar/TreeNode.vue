@@ -317,7 +317,7 @@ onBeforeUnmount(() => {
 function handleClick() {
     if (renaming.value) return;
     if (props.item.type === "directory") {
-        props.item._open = !props.item._open;
+        store.setTreeDirOpen(props.item.path, !props.item._open);
     } else {
         store.openFile(props.item.path);
     }
@@ -409,7 +409,7 @@ async function doMove(targetDir) {
 }
 
 async function newFileHere() {
-    props.item._open = true;
+    store.setTreeDirOpen(props.item.path, true);
     creatingFile.value = true;
     fileName.value = "";
     showActions.value = false;
@@ -432,7 +432,7 @@ async function confirmNewFile() {
 }
 
 async function newFolderHere() {
-    props.item._open = true;
+    store.setTreeDirOpen(props.item.path, true);
     creatingFolder.value = true;
     folderName.value = "";
     showActions.value = false;

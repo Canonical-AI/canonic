@@ -60,6 +60,21 @@ Full usage guide, keyboard shortcuts, and feature walkthroughs:
 
 ## Install
 
+### One-liner (macOS & Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Canonical-AI/canonic/main/install.sh | sh
+```
+
+Detects your OS and architecture, downloads the right build, and installs it.
+
+- **macOS** (Apple Silicon) → `/Applications/Canonic.app`
+- **Linux** (x64 / arm64) → `~/.local/bin/canonic` (AppImage)
+
+To pin a specific version: `curl -fsSL ... | sh -s -- --version v0.1.2-alpha`
+
+<br />
+
 ### macOS (Homebrew)
 
 ```bash

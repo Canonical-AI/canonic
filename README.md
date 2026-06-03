@@ -24,6 +24,8 @@
 
 <div align="center">
 
+![Canonic demo](docs/canonic-demo.gif)
+
 ![Canonic Editor](docs/screenshot.png)
 
 </div>

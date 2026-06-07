@@ -26,8 +26,6 @@
 
 ![Canonic demo](docs/canonic-demo.gif)
 
-![Canonic Editor](docs/screenshot.png)
-
 </div>
 
 ***
@@ -266,5 +264,13 @@ MIT — see [LICENSE](LICENSE).
 <div align="center">
 
 Built with care for people who think before they build.
+
+</div>
+
+***
+
+<div align="center">
+
+![Canonic Editor](docs/screenshot.png)
 
 </div>

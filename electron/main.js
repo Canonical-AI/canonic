@@ -132,9 +132,7 @@ function startNetworkWatcher() {
       discoveredPeers.length = 0;
       clearInterval(networkWatcherInterval);
       networkWatcherInterval = null;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("share:network-changed");
-      }
+      safeSend("share:network-changed");
     }
   }, 30000);
 }
@@ -230,6 +228,16 @@ if (!fs.existsSync(path.join(CANONIC_DIR, "comments"))) {
 
 let mainWindow;
 let updateDownloaded = false;
+
+// Safe sender: skip if mainWindow has been destroyed (e.g. user closed the window while
+// an agent/updater/discovery callback was still in flight). Guards against the bare
+// `mainWindow?.webContents.send` race where the ref is non-null but webContents is already
+// destroyed → "Object has been destroyed".
+function safeSend(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
 
 // Track file passed via OS "open-file" event (macOS) or CLI (Win/Linux)
 let fileToOpenOnStartup =
@@ -434,6 +442,13 @@ function createWindow() {
     }
   });
 
+  mainWindow.on("closed", () => {
+    // Null out the reference so safeSend and other guards return early —
+    // prevents "Object has been destroyed" when late async callbacks
+    // try to send IPC to a destroyed webContents.
+    mainWindow = null;
+  });
+
   // Allow opening DevTools via keyboard shortcut in dev
   if (isDev) {
     mainWindow.webContents.on("before-input-event", (event, input) => {
@@ -458,9 +473,9 @@ function handleDeepLink(url) {
     const u = new URL(url);
     if (u.hostname === "open") {
       const docUrl = u.searchParams.get("url");
-      if (docUrl && mainWindow) {
+      if (docUrl && mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.focus();
-        mainWindow.webContents.send("share:open-peer", { url: docUrl });
+        safeSend("share:open-peer", { url: docUrl });
       }
     }
   } catch (e) {
@@ -625,7 +640,7 @@ function createMenu() {
         {
           label: "Settings...",
           accelerator: "CmdOrCtrl+,",
-          click: () => mainWindow?.webContents.send("menu:open-settings"),
+          click: () => safeSend("menu:open-settings"),
         },
         {
           label: "Set as Default Markdown Editor",
@@ -837,7 +852,7 @@ app.whenReady().then(async () => {
         if (sid) callerAppBySession.delete(sid);
         if (caller) refocusApp(caller);
       }
-      mainWindow?.webContents.send(`agent:${event.type}`, event.data);
+      safeSend(`agent:${event.type}`, event.data);
     })
     .then((port) => {
       // Server is up on a fresh random port — re-point any already-registered
@@ -882,20 +897,20 @@ function setupAutoUpdater() {
       return;
     }
 
-    mainWindow?.webContents.send("update:available", info);
+    safeSend("update:available", info);
   });
 
   autoUpdater.on("download-progress", (progressObj) => {
-    mainWindow?.webContents.send("update:progress", progressObj);
+    safeSend("update:progress", progressObj);
   });
 
   autoUpdater.on("update-downloaded", (info) => {
     updateDownloaded = true;
-    mainWindow?.webContents.send("update:downloaded", info);
+    safeSend("update:downloaded", info);
   });
 
   autoUpdater.on("error", (err) => {
-    mainWindow?.webContents.send("update:error", err.message);
+    safeSend("update:error", err.message);
   });
 }
 
@@ -920,12 +935,12 @@ function setupIpcHandlers() {
 
   // Forward share stats events to renderer
   shareService.emitter.on("stats", (stats) => {
-    mainWindow?.webContents.send("share:stats", stats);
+    safeSend("share:stats", stats);
   });
 
   // Forward incoming peer comments to renderer
   shareService.emitter.on("comments:received", ({ filePath, comments }) => {
-    mainWindow?.webContents.send("comments:received", { filePath, comments });
+    safeSend("comments:received", { filePath, comments });
   });
 
   // Start mDNS discovery and wire peer events
@@ -944,13 +959,13 @@ function setupIpcHandlers() {
     else peers.push({ ...peer, favorited: false, lastSeen: Date.now() });
     fs.writeFileSync(PEERS_FILE, JSON.stringify(peers, null, 2), "utf-8");
 
-    mainWindow?.webContents.send("peers:found", peer);
+    safeSend("peers:found", peer);
   });
 
   discoveryService.emitter.on("peer:lost", ({ id }) => {
     const idx = discoveredPeers.findIndex((p) => p.id === id);
     if (idx >= 0) discoveredPeers.splice(idx, 1);
-    mainWindow?.webContents.send("peers:lost", { id });
+    safeSend("peers:lost", { id });
   });
 
   // Start 60s comment sync interval
@@ -985,9 +1000,9 @@ function setupIpcHandlers() {
         const result = await gitService.initWorkspace(workspacePath, template);
         startWatcher(workspacePath, (index, gitChanged) => {
           if (gitChanged) {
-            mainWindow?.webContents.send("git:branch-updated");
+            safeSend("git:branch-updated");
           } else {
-            mainWindow?.webContents.send("files:index-update", index);
+            safeSend("files:index-update", index);
           }
         });
         return result;
@@ -2189,22 +2204,22 @@ function setupIpcHandlers() {
   function agentControlCallbacks(cwd) {
     return {
       onStdout: (sid, text) => {
-        mainWindow?.webContents.send('agent-control:stdout', { sessionId: sid, text });
+        safeSend('agent-control:stdout', { sessionId: sid, text });
       },
       onStderr: (sid, text) => {
-        mainWindow?.webContents.send('agent-control:stderr', { sessionId: sid, text });
+        safeSend('agent-control:stderr', { sessionId: sid, text });
       },
       onExit: (sid, code, signal) => {
         // Drain any comments the agent queued to the inbox file, then tell the renderer
         // to reload so they appear in the comments panel.
         const created = ingestCommentInbox(cwd);
         if (created > 0) {
-          mainWindow?.webContents.send('agent-control:comments-ingested', { sessionId: sid, count: created });
+          safeSend('agent-control:comments-ingested', { sessionId: sid, count: created });
         }
-        mainWindow?.webContents.send('agent-control:exit', { sessionId: sid, code, signal });
+        safeSend('agent-control:exit', { sessionId: sid, code, signal });
       },
       onError: (sid, error) => {
-        mainWindow?.webContents.send('agent-control:error', { sessionId: sid, error });
+        safeSend('agent-control:error', { sessionId: sid, error });
       }
     };
   }
@@ -2326,14 +2341,14 @@ function setupIpcHandlers() {
         { sessionId, agentId, binary: customBinary, args: customArgs, cwd, cols, rows, mcpPort: livePort, systemPrompt, colorScheme },
         {
           onData: (sid, data) => {
-            mainWindow?.webContents.send('pty:data', { sessionId: sid, data });
+            safeSend('pty:data', { sessionId: sid, data });
           },
           onExit: (sid, code, signal) => {
             const created = ingestCommentInbox(cwd);
             if (created > 0) {
-              mainWindow?.webContents.send('agent-control:comments-ingested', { sessionId: sid, count: created });
+              safeSend('agent-control:comments-ingested', { sessionId: sid, count: created });
             }
-            mainWindow?.webContents.send('pty:exit', { sessionId: sid, code, signal });
+            safeSend('pty:exit', { sessionId: sid, code, signal });
           }
         }
       );
@@ -2439,9 +2454,7 @@ function setupIpcHandlers() {
     clipboard.writeText(cmd);
 
     // Notify renderer
-    if (mainWindow) {
-      mainWindow.webContents.send('agent-control:terminal-command', { command: cmd });
-    }
+    safeSend('agent-control:terminal-command', { command: cmd });
 
     return { ok: true, command: cmd };
   });

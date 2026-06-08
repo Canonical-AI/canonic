@@ -8,12 +8,10 @@
         }"
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
-        <div v-if="!store.isCompactLayout" class="titlebar">
+        <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
             <div class="titlebar-left">
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
-                <span class="app-name"
-                    >canonic<span class="accent">.ai</span></span
-                >
+                <span class="app-name">canonic</span>
                 <AppMenu
                     @open-settings="showSettings = true"
                     @reload-config="reloadConfig"
@@ -160,9 +158,7 @@
                     <Menu :size="16" />
                 </button>
                 <img src="/canonical-logo.svg" alt="" class="mobile-logo" />
-                <span class="app-name"
-                    >canonic<span class="accent">.ai</span></span
-                >
+                <span class="app-name">canonic</span>
             </div>
             <div class="mobile-header-right">
                 <!-- Focus mode toggle button in header to exit Focus Mode if manually entered -->
@@ -751,11 +747,23 @@ function applyTheme(name) {
     }
 }
 
-function setTheme(name) {
+async function setTheme(name) {
     activeTheme.value = name;
     storage.setItem(THEME_KEY, name);
     applyTheme(name);
     themeOpen.value = false;
+
+    // Save choice to backend config so it doesn't get lost when Settings modal opens
+    const currentConfig = store.config || {};
+    const newConfig = {
+        ...currentConfig,
+        theme: {
+            ...currentConfig.theme,
+            auto: false,
+            name: name,
+        },
+    };
+    await store.saveConfig(newConfig);
 }
 
 function registerConfigThemes(themes) {
@@ -788,15 +796,21 @@ function getSystemScheme() {
         : "light";
 }
 
-function applyAutoTheme() {
+function applyConfigTheme() {
     const cfg = store.config;
-    if (!cfg?.theme?.auto) return;
-    const scheme = getSystemScheme();
-    const themeName = scheme === "dark" ? cfg.theme.dark : cfg.theme.light;
-    if (themeName) {
-        activeTheme.value = themeName;
-        storage.setItem(THEME_KEY, themeName);
-        applyTheme(themeName);
+    if (!cfg?.theme) return;
+    if (cfg.theme.auto) {
+        const scheme = getSystemScheme();
+        const themeName = scheme === "dark" ? cfg.theme.dark : cfg.theme.light;
+        if (themeName) {
+            activeTheme.value = themeName;
+            storage.setItem(THEME_KEY, themeName);
+            applyTheme(themeName);
+        }
+    } else if (cfg.theme.name) {
+        activeTheme.value = cfg.theme.name;
+        storage.setItem(THEME_KEY, cfg.theme.name);
+        applyTheme(cfg.theme.name);
     }
 }
 
@@ -805,16 +819,16 @@ let systemSchemeQuery = null;
 function watchSystemScheme() {
     if (typeof window === "undefined") return;
     if (systemSchemeQuery)
-        systemSchemeQuery.removeEventListener("change", applyAutoTheme);
+        systemSchemeQuery.removeEventListener("change", applyConfigTheme);
     systemSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    systemSchemeQuery.addEventListener("change", applyAutoTheme);
+    systemSchemeQuery.addEventListener("change", applyConfigTheme);
 }
 
-// Re-apply auto-theme when config changes (e.g. user updates theme settings)
+// Re-apply theme when config changes (e.g. user updates theme settings)
 watch(
     () => store.config?.theme,
     () => {
-        applyAutoTheme();
+        applyConfigTheme();
     },
     { deep: true },
 );
@@ -919,7 +933,7 @@ onMounted(async () => {
 
     // Start watching system color scheme for auto-theme switching
     watchSystemScheme();
-    applyAutoTheme();
+    applyConfigTheme();
 
     document.addEventListener("click", onDocClick, true);
     document.addEventListener("mouseup", handleGlobalMouseUp);
@@ -1231,7 +1245,16 @@ function toggleDistractionFree() {
     border-bottom: 1px solid var(--border);
     -webkit-app-region: drag;
     flex-shrink: 0;
+}
+
+.layout-mac .titlebar {
     padding-left: 80px; /* room for macOS traffic lights */
+}
+
+.titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .titlebar-logo {

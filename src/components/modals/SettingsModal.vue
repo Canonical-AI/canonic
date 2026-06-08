@@ -3,9 +3,7 @@
         <div class="modal">
             <aside class="modal-sidebar">
                 <div class="sidebar-header">
-                    <span class="app-name"
-                        >canonic<span class="accent">.ai</span></span
-                    >
+                    <span class="app-name">canonic</span>
                     <h3 class="modal-title">Settings</h3>
                 </div>
                 <nav class="sidebar-tabs">
@@ -900,7 +898,33 @@
                             </div>
                         </div>
                         <div
-                            v-show="shouldShow('themeLight', 'appearance')"
+                            v-show="shouldShow('themeName', 'appearance') && !form.theme.auto"
+                            id="setting-themeName"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name">Theme</span>
+                                <span class="set-desc">
+                                    The active appearance theme.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model="form.theme.name"
+                                    class="set-select"
+                                >
+                                    <option
+                                        v-for="t in builtinThemeNames"
+                                        :key="t"
+                                        :value="t"
+                                    >
+                                        {{ t }}
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div
+                            v-show="shouldShow('themeLight', 'appearance') && form.theme.auto"
                             id="setting-themeLight"
                             class="set-row"
                         >
@@ -926,7 +950,7 @@
                             </div>
                         </div>
                         <div
-                            v-show="shouldShow('themeDark', 'appearance')"
+                            v-show="shouldShow('themeDark', 'appearance') && form.theme.auto"
                             id="setting-themeDark"
                             class="set-row"
                         >
@@ -1465,6 +1489,7 @@
 import { ref, reactive, onMounted, computed, watch, toRaw } from "vue";
 import { useRouter } from "vue-router";
 import { useAppStore } from "../../store";
+import { storage } from "../../utils/storage.js";
 import {
     useHints,
     markDefaultEditorActive,
@@ -1558,7 +1583,8 @@ const form = reactive({
     theme: {
         light: "paper",
         dark: "hal2001",
-        auto: true,
+        auto: !storage.getItem("canonic:theme"),
+        name: storage.getItem("canonic:theme") || "hal2001",
     },
     clipboard: {
         copyOnSelect: false,
@@ -1621,8 +1647,11 @@ watch(
     form,
     (newVal) => {
         if (!initialState) return;
-        isDirty.value = JSON.stringify(newVal) !== JSON.stringify(initialState);
-        store.saveConfig(JSON.parse(JSON.stringify(newVal)));
+        const dirty = JSON.stringify(newVal) !== JSON.stringify(initialState);
+        isDirty.value = dirty;
+        if (dirty) {
+            store.saveConfig(JSON.parse(JSON.stringify(newVal)));
+        }
     },
     { deep: true },
 );
@@ -1785,6 +1814,12 @@ const allSettingsMetadata = [
         id: "themeAuto",
         label: "Match system theme",
         desc: "Auto-switch light and dark themes based on system preference.",
+        tab: "appearance",
+    },
+    {
+        id: "themeName",
+        label: "Theme",
+        desc: "The active appearance theme.",
         tab: "appearance",
     },
     {

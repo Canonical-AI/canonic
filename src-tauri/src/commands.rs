@@ -462,6 +462,7 @@ pub fn workspace_init(path: String, template: String) -> Result<Value, String> {
     Ok(json!({
         "path": path,
         "alreadyExists": already_exists,
+        "isExternal": already_exists,
         "filesCreated": files_created
     }))
 }

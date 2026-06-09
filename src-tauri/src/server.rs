@@ -607,16 +607,53 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
     }
 }
 
+// Does this share serve `file_path`? Used to route live updates to the right
+// viewers instead of broadcasting every doc to every connected client.
+fn is_excluded(share: &ActiveShare, file_path: &str) -> bool {
+    share.excluded_paths.iter().any(|ex| file_path.starts_with(ex))
+}
+
+fn share_covers(share: &ActiveShare, file_path: &str) -> bool {
+    if is_excluded(share, file_path) {
+        return false;
+    }
+    match share.scope.as_str() {
+        "directory" => {
+            file_path == share.key || file_path.starts_with(&format!("{}/", share.key))
+        }
+        "workspace" | "all-workspaces" => true,
+        // "file" and anything unexpected: exact file match only.
+        _ => share.key == file_path,
+    }
+}
+
 pub fn push_update(file_path: &str, content: &str) {
+    // Notify only the sockets of shares that actually cover this file. The ws-client
+    // map is keyed by share key, so collect the covering keys (releasing the shares
+    // lock before taking the clients lock) and push to just those.
+    let keys: Vec<String> = match get_active_shares() {
+        Ok(shares) => shares
+            .values()
+            .filter(|s| share_covers(s, file_path))
+            .map(|s| s.key.clone())
+            .collect(),
+        Err(_) => return,
+    };
+    if keys.is_empty() {
+        return;
+    }
+    let payload = json!({
+        "type": "update",
+        "filePath": file_path,
+        "content": content
+    })
+    .to_string();
     if let Ok(clients) = get_ws_clients().lock() {
-        for list in clients.values() {
-            let payload = json!({
-                "type": "update",
-                "filePath": file_path,
-                "content": content
-            }).to_string();
-            for tx in list {
-                let _ = tx.send(Message::Text(payload.clone().into()));
+        for key in &keys {
+            if let Some(list) = clients.get(key) {
+                for tx in list {
+                    let _ = tx.send(Message::Text(payload.clone().into()));
+                }
             }
         }
     }
@@ -722,5 +759,44 @@ mod tests {
     #[test]
     fn escape_html_escapes_metacharacters() {
         assert_eq!(escape_html("<a>&\"</a>"), "&lt;a&gt;&amp;&quot;&lt;/a&gt;");
+    }
+
+    fn test_share(key: &str, scope: &str, excluded: Vec<String>) -> ActiveShare {
+        ActiveShare {
+            key: key.to_string(),
+            port: 0,
+            token: String::new(),
+            local_url: String::new(),
+            permission: "view".to_string(),
+            scope: scope.to_string(),
+            workspaces: vec![],
+            excluded_paths: excluded,
+            tagged_only: false,
+            reads: std::sync::atomic::AtomicU64::new(0),
+            shutdown_tx: std::sync::Mutex::new(None),
+        }
+    }
+
+    #[test]
+    fn share_covers_file_scope_is_exact() {
+        let s = test_share("Specs/a.md", "file", vec![]);
+        assert!(share_covers(&s, "Specs/a.md"));
+        assert!(!share_covers(&s, "Specs/b.md"));
+    }
+
+    #[test]
+    fn share_covers_directory_scope_is_prefix() {
+        let s = test_share("Specs", "directory", vec![]);
+        assert!(share_covers(&s, "Specs"));
+        assert!(share_covers(&s, "Specs/a.md"));
+        assert!(!share_covers(&s, "SpecsX/a.md")); // sibling dir sharing a prefix
+        assert!(!share_covers(&s, "Other/a.md"));
+    }
+
+    #[test]
+    fn share_covers_workspace_respects_exclusions() {
+        let s = test_share("__workspace__", "workspace", vec!["Private/".to_string()]);
+        assert!(share_covers(&s, "Specs/a.md"));
+        assert!(!share_covers(&s, "Private/secret.md"));
     }
 }

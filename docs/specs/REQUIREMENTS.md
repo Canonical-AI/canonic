@@ -1923,14 +1923,19 @@ where the AppImage cannot — most importantly musl-libc distros like Alpine, pl
 Arch, Fedora, and others. One `.flatpak` artifact covers every distro because the
 GNOME runtime carries glibc and webkit2gtk inside the sandbox.
 
-* scenario: Flatpak bundle attached to each release
+* scenario: Flatpak bundles attached to each release
   given: a release build of every platform succeeds
   when: the release is finalized and published
-  then: a single `canonic_<version>_amd64.flatpak` is attached to the GitHub release
+  then: both `canonic_<version>_x86_64.flatpak` and `canonic_<version>_aarch64.flatpak` are attached to the GitHub release
+
+* scenario: arm64 Flatpak built natively
+  given: the aarch64 leg of the flatpak matrix runs
+  when: it builds the bundle
+  then: it runs on an arm64 runner against the arm64 .deb with no cross-compilation or emulation
 
 * scenario: install on a musl distro (Alpine)
-  given: a user on Alpine Linux with flatpak and the flathub remote configured
-  when: they run `flatpak install ./canonic_<version>_amd64.flatpak`
+  given: a user on Alpine Linux (x86_64 or aarch64) with flatpak and the flathub remote configured
+  when: they run `flatpak install ./canonic_<version>_<arch>.flatpak` matching their CPU
   then: Canonic installs and launches via `flatpak run ai.canonic.app` despite Alpine using musl libc
 
 * scenario: workspace files are accessible from the sandbox

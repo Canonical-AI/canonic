@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>ai.canonic.app</id>
+
+  <name>Canonic</name>
+  <summary>Local-first git-powered markdown editor for product teams</summary>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <developer id="ai.canonic">
+    <name>Canonic</name>
+  </developer>
+
+  <description>
+    <p>
+      Canonic is a local-first desktop document editor for product managers.
+      It pairs a clean markdown writing experience with git versioning, AI
+      assistance, inline comments, per-document branching, LAN sharing, and
+      peer discovery — all on your own machine, with no server required.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Git-backed version history for every document</li>
+      <li>AI writing assistance via OpenAI-compatible providers</li>
+      <li>Inline comments and per-document branches</li>
+      <li>Share documents over your LAN with fine-grained permissions</li>
+      <li>Automatic peer discovery on the local network (mDNS)</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">ai.canonic.app.desktop</launchable>
+
+  <categories>
+    <category>Office</category>
+    <category>TextEditor</category>
+  </categories>
+
+  <keywords>
+    <keyword>markdown</keyword>
+    <keyword>editor</keyword>
+    <keyword>git</keyword>
+    <keyword>documents</keyword>
+    <keyword>notes</keyword>
+  </keywords>
+
+  <url type="homepage">https://canonic.ai</url>
+  <url type="bugtracker">https://github.com/Canonical-AI/canonic/issues</url>
+  <url type="vcs-browser">https://github.com/Canonical-AI/canonic</url>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.2.0" date="2026-06-09">
+      <description>
+        <p>Flatpak packaging for Linux (Alpine, Arch, and any distro with Flatpak).</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -204,6 +204,60 @@ jobs:
             src-tauri/target/**/release/bundle/appimage/*.AppImage
             src-tauri/target/**/release/bundle/rpm/*.rpm
 
+  build-flatpak:
+    # Wrap the amd64 .deb from the `build` job into a single distro-agnostic
+    # .flatpak bundle (installs on Alpine, Arch, Fedora, Ubuntu, …). Runs inside
+    # the flatpak-builder container so the GNOME runtime + SDK are preinstalled;
+    # the container's `gnome-47` tag MUST match `runtime-version` in
+    # flatpak/ai.canonic.app.yml.
+    needs:
+      - compute-version
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download Linux x64 build (.deb)
+        uses: actions/download-artifact@v4
+        with:
+          name: release-linux-x64
+          path: linux-x64
+
+      - name: Stage .deb for the manifest
+        # The manifest's `path: canonic.deb` is relative to flatpak/, so the
+        # built .deb must sit there before flatpak-builder runs.
+        run: |
+          deb=$(find linux-x64 -name '*_amd64.deb' | head -n1)
+          test -n "$deb" || { echo "no amd64 .deb found in artifact"; exit 1; }
+          cp "$deb" flatpak/canonic.deb
+
+      - name: Sync metainfo release version
+        # Keep the AppStream <release> in step with the version being shipped.
+        env:
+          V: ${{ needs.compute-version.outputs.version }}
+        run: |
+          sed -i "0,/<release version=\"[^\"]*\"/s//<release version=\"$V\"/" \
+            flatpak/ai.canonic.app.metainfo.xml
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: canonic_${{ needs.compute-version.outputs.version }}_amd64.flatpak
+          manifest-path: flatpak/ai.canonic.app.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-flatpak
+          if-no-files-found: error
+          path: canonic_${{ needs.compute-version.outputs.version }}_amd64.flatpak
+
   finalize:
     # Only reached if every build job succeeded. This is the single point that
     # mutates main: commit the bump, tag, and publish — so a failed build leaves
@@ -211,6 +265,7 @@ jobs:
     needs:
       - compute-version
       - build
+      - build-flatpak
     runs-on: ubuntu-latest
     permissions:
       contents: write

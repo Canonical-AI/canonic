@@ -44,6 +44,8 @@ rand = "0.8"
 window-vibrancy = "0.5.2"
 notify = "8.2.0"
 pulldown-cmark = "0.10"
+ammonia = "4.0.1"
+rustc-hash = "2.1.2"
 
 
 

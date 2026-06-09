@@ -8,8 +8,13 @@
         }"
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
-        <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
-            <div class="titlebar-left">
+        <div
+            v-if="!store.isCompactLayout"
+            class="titlebar"
+            data-tauri-drag-region
+            @mousedown="onTitlebarMouseDown"
+        >
+            <div class="titlebar-left" data-tauri-drag-region>
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name">canonic</span>
                 <AppMenu
@@ -17,8 +22,8 @@
                     @reload-config="reloadConfig"
                 />
             </div>
-            <div class="titlebar-center"></div>
-            <div class="titlebar-right">
+            <div class="titlebar-center" data-tauri-drag-region></div>
+            <div class="titlebar-right" @mousedown="onTitlebarRightMouseDown">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
                     <button
@@ -147,8 +152,10 @@
             v-if="store.isCompactLayout"
             class="mobile-header"
             :class="{ 'mobile-header--mac': isMac }"
+            data-tauri-drag-region
+            @mousedown="onTitlebarMouseDown"
         >
-            <div class="mobile-header-left">
+            <div class="mobile-header-left" @mousedown="onTitlebarRightMouseDown">
                 <button
                     class="mobile-menu-btn"
                     @click="mobileMenuOpen = !mobileMenuOpen"
@@ -160,7 +167,7 @@
                 <img src="/canonical-logo.svg" alt="" class="mobile-logo" />
                 <span class="app-name">canonic</span>
             </div>
-            <div class="mobile-header-right">
+            <div class="mobile-header-right" @mousedown="onTitlebarRightMouseDown">
                 <!-- Focus mode toggle button in header to exit Focus Mode if manually entered -->
                 <button
                     v-if="store.distractionFreeMode"
@@ -624,6 +631,7 @@ import {
     Eye,
     EyeOff,
 } from "lucide-vue-next";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import FileTree from "../sidebar/FileTree.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
 import SearchView from "../panels/SearchView.vue";
@@ -652,12 +660,34 @@ const store = useAppStore();
 const router = useRouter();
 const searchViewRef = ref(null);
 
+// ── Titlebar drag & focus ───────────────────────────────────────────────────
+const currentWindow = getCurrentWindow();
+const INTERACTIVE_SELECTOR =
+    'button, input, select, textarea, a, [role="button"], [contenteditable="true"]';
+
+function onTitlebarMouseDown(e) {
+    // Only react to primary (left) mouse button
+    if (e.button !== 0) return;
+    // Focus the window on mousedown in the titlebar
+    currentWindow.setFocus();
+    // Only start dragging on non-interactive elements
+    if (e.target.closest(INTERACTIVE_SELECTOR)) return;
+    currentWindow.startDragging();
+}
+
+function onTitlebarRightMouseDown(e) {
+    // Focus but don't drag from the button area
+    currentWindow.setFocus();
+    e.stopPropagation();
+}
+
 // Drag a doc from the file tree onto the active editor pane to open it there.
 // Capture phase so we intercept before the ProseMirror editor's own drop handler.
+const hasType = (types, type) => types && (types.includes ? types.includes(type) : types.contains(type));
 const activeDragOver = ref(false);
 function onActiveDragOver(e) {
     if (store.isCompactLayout) return;
-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     activeDragOver.value = true;
@@ -665,7 +695,7 @@ function onActiveDragOver(e) {
 }
 function onActiveDrop(e) {
     if (store.isCompactLayout) return;
-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     activeDragOver.value = false;
@@ -745,6 +775,12 @@ function applyTheme(name) {
     } else {
         document.documentElement.setAttribute("data-theme", name);
     }
+    // Pin the native macOS window appearance (vibrancy/titlebar/menus) to the
+    // active theme's scheme rather than the OS system appearance. Every theme
+    // path (setTheme, applyConfigTheme, startup) funnels through here. The light
+    // built-in themes are paper and latte; everything else (incl. hal2001) is dark.
+    const scheme = name === "paper" || name === "latte" ? "light" : "dark";
+    window.canonic?.app?.setWindowTheme?.(scheme);
 }
 
 async function setTheme(name) {
@@ -1243,7 +1279,7 @@ function toggleDistractionFree() {
     height: 44px;
     background: var(--bg-titlebar);
     border-bottom: 1px solid var(--border);
-    -webkit-app-region: drag;
+    user-select: none;
     flex-shrink: 0;
 }
 
@@ -1263,12 +1299,14 @@ function toggleDistractionFree() {
     object-fit: contain;
     margin-right: 4px;
     flex-shrink: 0;
+    pointer-events: none;
 }
 
 .app-name {
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: -0.01em;
+    pointer-events: none;
 }
 
 .accent {
@@ -1278,7 +1316,6 @@ function toggleDistractionFree() {
 .titlebar-right {
     display: flex;
     gap: 4px;
-    -webkit-app-region: no-drag;
 }
 
 .icon-btn {
@@ -1626,7 +1663,6 @@ function toggleDistractionFree() {
     cursor: pointer;
     animation: update-pulse 2s ease-in-out infinite;
     white-space: nowrap;
-    -webkit-app-region: no-drag;
 }
 
 .update-ready-btn:hover {
@@ -1657,7 +1693,6 @@ function toggleDistractionFree() {
     cursor: pointer;
     transition: background 0.15s;
     white-space: nowrap;
-    -webkit-app-region: no-drag;
 }
 
 .update-available-btn:hover {
@@ -1828,7 +1863,6 @@ function toggleDistractionFree() {
     flex-shrink: 0;
     z-index: 100;
     position: relative;
-    -webkit-app-region: drag;
 }
 
 .mobile-header--mac {
@@ -1838,7 +1872,6 @@ function toggleDistractionFree() {
 .mobile-menu-btn,
 .mobile-icon-btn,
 .mobile-menu-dropdown {
-    -webkit-app-region: no-drag;
 }
 
 .mobile-header-left {

@@ -176,8 +176,10 @@ async function close() {
 }
 
 // Capture phase so we intercept before the ProseMirror view.
+const hasType = (types, type) => types && (types.includes ? types.includes(type) : types.contains(type));
+
 function onDragOver(e) {
-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     dragOver.value = true;
@@ -185,7 +187,7 @@ function onDragOver(e) {
 }
 
 async function onDrop(e) {
-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     dragOver.value = false;

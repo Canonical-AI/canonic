@@ -68,6 +68,13 @@ pub fn get_lan_ip() -> String {
     "127.0.0.1".to_string()
 }
 
+// CSP for the served share pages. They are static formatted markdown — no script of
+// our own — so we forbid all script execution outright (defense in depth on top of the
+// ammonia sanitize). Inline <style> in the page template needs style-src 'unsafe-inline';
+// doc images may be remote, hence img-src *.
+const SHARE_CSP: &str =
+    "default-src 'none'; img-src * data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'";
+
 // Helper to escape HTML
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -80,10 +87,14 @@ fn escape_html(s: &str) -> String {
 fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> String {
     let deep_link = format!("canonic://open?url={}", urlencoding::encode(doc_url));
     
-    // Parse markdown using pulldown-cmark
+    // Parse markdown using pulldown-cmark, then sanitize. pulldown-cmark passes raw
+    // inline HTML through verbatim, so an unsanitized doc body is a stored-XSS vector
+    // for anyone viewing the share over the LAN. ammonia strips <script>, on* handlers,
+    // javascript: URLs, etc., while keeping standard formatting/tables/images.
     let parser = pulldown_cmark::Parser::new(content);
-    let mut html_output = String::new();
-    pulldown_cmark::html::push_html(&mut html_output, parser);
+    let mut raw_html = String::new();
+    pulldown_cmark::html::push_html(&mut raw_html, parser);
+    let html_output = ammonia::clean(&raw_html);
 
     format!(
         r#"<!DOCTYPE html>
@@ -277,7 +288,7 @@ async fn handle_comments(
         fs::read_to_string(&comments_file)
             .ok()
             .and_then(|c| serde_json::from_str(&c).ok())
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_default()
     } else {
         vec![]
     };
@@ -318,20 +329,11 @@ async fn handle_manifest(
     }
     let files = collect_markdown_files(&share.workspaces, &share.excluded_paths);
     let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
-    
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let hours = (now % 86400) / 3600;
-    let minutes = (now % 3600) / 60;
-    let seconds = now % 60;
-    let time_str = format!("2026-06-08T{:02}:{:02}:{:02}Z", hours, minutes, seconds);
 
     (StatusCode::OK, Json(json!({
         "scope": share.scope,
         "files": files,
-        "sharedAt": time_str,
+        "sharedAt": crate::mcp::chrono_iso8601(),
         "author": author,
         "taggedOnly": share.tagged_only
     }))).into_response()
@@ -422,7 +424,15 @@ async fn handle_file(
         let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
         let doc_url = format!("http://127.0.0.1:{}/file?path={}&token={}", share.port, urlencoding::encode(&query_path), share.token);
         let html = render_doc_page(&title, &content, &author, &doc_url);
-        return (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response();
+        return (
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+                (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
+            ],
+            Html(html),
+        )
+            .into_response();
     }
 
     (StatusCode::OK, Json(json!({
@@ -504,7 +514,15 @@ async fn handle_browse(
         if files.is_empty() { r#"<p class="empty">No documents found.</p>"#.to_string() } else { file_links }
     );
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response()
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+            (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
+        ],
+        Html(html),
+    )
+        .into_response()
 }
 
 async fn ws_handler(
@@ -534,7 +552,7 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
                     "content": content,
                     "author": author
                 }).to_string();
-                let _ = ws_tx.send(Message::Text(msg.into())).await;
+                let _ = ws_tx.send(Message::Text(msg)).await;
             }
         }
     } else {
@@ -542,7 +560,7 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
             "type": "manifest",
             "author": author
         }).to_string();
-        let _ = ws_tx.send(Message::Text(msg.into())).await;
+        let _ = ws_tx.send(Message::Text(msg)).await;
     }
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
@@ -580,19 +598,73 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
     }
 }
 
+// Does this share serve `file_path`? Used to route live updates to the right
+// viewers instead of broadcasting every doc to every connected client.
+fn is_excluded(share: &ActiveShare, file_path: &str) -> bool {
+    share.excluded_paths.iter().any(|ex| file_path.starts_with(ex))
+}
+
+fn share_covers(share: &ActiveShare, file_path: &str) -> bool {
+    if is_excluded(share, file_path) {
+        return false;
+    }
+    match share.scope.as_str() {
+        "directory" => {
+            file_path == share.key || file_path.starts_with(&format!("{}/", share.key))
+        }
+        "workspace" | "all-workspaces" => true,
+        // "file" and anything unexpected: exact file match only.
+        _ => share.key == file_path,
+    }
+}
+
 pub fn push_update(file_path: &str, content: &str) {
+    // Notify only the sockets of shares that actually cover this file. The ws-client
+    // map is keyed by share key, so collect the covering keys (releasing the shares
+    // lock before taking the clients lock) and push to just those.
+    let keys: Vec<String> = match get_active_shares() {
+        Ok(shares) => shares
+            .values()
+            .filter(|s| share_covers(s, file_path))
+            .map(|s| s.key.clone())
+            .collect(),
+        Err(_) => return,
+    };
+    if keys.is_empty() {
+        return;
+    }
+    let payload = json!({
+        "type": "update",
+        "filePath": file_path,
+        "content": content
+    })
+    .to_string();
     if let Ok(clients) = get_ws_clients().lock() {
-        for list in clients.values() {
-            let payload = json!({
-                "type": "update",
-                "filePath": file_path,
-                "content": content
-            }).to_string();
-            for tx in list {
-                let _ = tx.send(Message::Text(payload.clone().into()));
+        for key in &keys {
+            if let Some(list) = clients.get(key) {
+                for tx in list {
+                    let _ = tx.send(Message::Text(payload.clone()));
+                }
             }
         }
     }
+}
+
+// Bind a share-server socket on a random high port, retrying on collision.
+fn bind_share_listener() -> Result<std::net::TcpListener, String> {
+    use std::net::{SocketAddr, TcpListener};
+    let mut last_err = String::new();
+    for _ in 0..10 {
+        let port = 13800 + (rand::random::<u16>() % 10000);
+        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        match TcpListener::bind(addr) {
+            Ok(listener) => return Ok(listener),
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+    Err(format!(
+        "Failed to bind a share port after 10 attempts: {last_err}"
+    ))
 }
 
 pub fn start_sharing_server(
@@ -606,8 +678,12 @@ pub fn start_sharing_server(
     // Stop existing share with the same key
     let _ = stop_sharing_server(&key);
 
-    // Pick a random port
-    let port = 13800 + (rand::random::<u16>() % 10000);
+    // Bind synchronously so a bind failure is returned to the caller instead of
+    // being swallowed in a detached thread (which left the share registered but
+    // serving nothing). Retry a few ports on collision.
+    let listener = bind_share_listener()?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
     let token = uuid::Uuid::new_v4().to_string();
     let lan_ip = get_lan_ip();
     let is_workspace = key == "__workspace__" || key == "__all_workspaces__";
@@ -648,11 +724,21 @@ pub fn start_sharing_server(
         .with_state(share_clone);
 
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                log::error!("share server: failed to start runtime: {e}");
+                return;
+            }
+        };
         rt.block_on(async {
-            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            
+            let listener = match tokio::net::TcpListener::from_std(listener) {
+                Ok(l) => l,
+                Err(e) => {
+                    log::error!("share server: failed to adopt listener: {e}");
+                    return;
+                }
+            };
             let server = axum::serve(listener, app);
             tokio::select! {
                 _ = server => {}
@@ -673,5 +759,66 @@ pub fn stop_sharing_server(key: &str) -> Result<u16, String> {
         Ok(share.port)
     } else {
         Err("No active share found for this key".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_doc_page_strips_active_content() {
+        let md = "# Title\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(2)>\n\n[link](javascript:alert(3))";
+        let html = render_doc_page("Title", md, "Author", "http://127.0.0.1/doc");
+        assert!(!html.contains("<script"), "script tag survived: {html}");
+        assert!(
+            !html.to_lowercase().contains("onerror"),
+            "event handler survived: {html}"
+        );
+        assert!(!html.contains("javascript:"), "javascript: url survived: {html}");
+    }
+
+    #[test]
+    fn escape_html_escapes_metacharacters() {
+        assert_eq!(escape_html("<a>&\"</a>"), "&lt;a&gt;&amp;&quot;&lt;/a&gt;");
+    }
+
+    fn test_share(key: &str, scope: &str, excluded: Vec<String>) -> ActiveShare {
+        ActiveShare {
+            key: key.to_string(),
+            port: 0,
+            token: String::new(),
+            local_url: String::new(),
+            permission: "view".to_string(),
+            scope: scope.to_string(),
+            workspaces: vec![],
+            excluded_paths: excluded,
+            tagged_only: false,
+            reads: std::sync::atomic::AtomicU64::new(0),
+            shutdown_tx: std::sync::Mutex::new(None),
+        }
+    }
+
+    #[test]
+    fn share_covers_file_scope_is_exact() {
+        let s = test_share("Specs/a.md", "file", vec![]);
+        assert!(share_covers(&s, "Specs/a.md"));
+        assert!(!share_covers(&s, "Specs/b.md"));
+    }
+
+    #[test]
+    fn share_covers_directory_scope_is_prefix() {
+        let s = test_share("Specs", "directory", vec![]);
+        assert!(share_covers(&s, "Specs"));
+        assert!(share_covers(&s, "Specs/a.md"));
+        assert!(!share_covers(&s, "SpecsX/a.md")); // sibling dir sharing a prefix
+        assert!(!share_covers(&s, "Other/a.md"));
+    }
+
+    #[test]
+    fn share_covers_workspace_respects_exclusions() {
+        let s = test_share("__workspace__", "workspace", vec!["Private/".to_string()]);
+        assert!(share_covers(&s, "Specs/a.md"));
+        assert!(!share_covers(&s, "Private/secret.md"));
     }
 }

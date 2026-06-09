@@ -54,6 +54,7 @@ pub fn run() {
       commands::app_set_default_md,
       commands::app_open_config,
       commands::app_edit_action,
+      commands::set_window_theme,
       commands::telemetry_log,
       commands::dialog_confirm,
       commands::dialog_open_directory,

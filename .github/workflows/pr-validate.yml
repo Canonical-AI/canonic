@@ -12,7 +12,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  validate:
+  test:
     # Run on pull_request events or when a review is submitted and approved
     if: github.event_name == 'pull_request' || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved')
     # Tests are cheap and catch cross-platform bugs (path separators, races,
@@ -38,3 +38,48 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  rust:
+    # Lint + test the Tauri backend. Compile failures and clippy warnings here
+    # are what `npm test` (JS only) can't catch.
+    if: github.event_name == 'pull_request' || (github.event_name == 'pull_request_review' && github.event.review.state == 'approved')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          # toolchain input is required when the action is pinned to a SHA.
+          toolchain: stable
+          components: clippy
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.9.1
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf \
+            build-essential
+
+      # NOTE: `cargo fmt --check` is intentionally not enforced — the backend is
+      # authored with 2-space indentation, not rustfmt's default. Revisit if the
+      # project adopts a rustfmt.toml.
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test

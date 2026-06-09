@@ -25,7 +25,7 @@
             @dragover.prevent="handleDragOver"
             @dragleave="handleDragLeave"
             @dragend="handleDragEnd"
-            @drop="handleDrop"
+            @drop.prevent.stop="handleDrop"
         >
             <!-- ASCII tree lines for children -->
             <span v-if="depth > 0" class="tree-lines" v-text="treeLines" />
@@ -335,70 +335,93 @@ function handleDragStart(e) {
 
 function handleDragEnd() {
     store.draggedPath = null;
+    // Safety: a drop on this node may not fire dragleave symmetrically, so make
+    // sure our own highlight state is always cleared when the drag ends.
+    dragCounter = 0;
+    isDragOver.value = false;
+}
+
+// dragenter/dragleave fire for every child element of the row, so a single
+// boolean flickers as the pointer crosses the folder name, icon, etc. We track
+// a depth counter instead: enter increments, leave decrements, and the highlight
+// only clears once the counter returns to zero (pointer truly left the row).
+let dragCounter = 0;
+
+// A directory is a valid drop target unless we'd be moving it into itself or one
+// of its own descendants. draggedPath is set on dragstart for in-app drags.
+function isValidDropTarget() {
+    if (props.item.type !== "directory") return false;
+    const src = store.draggedPath;
+    if (src && (props.item.path === src || props.item.path.startsWith(src + "/"))) {
+        return false;
+    }
+    return true;
 }
 
 function handleDragEnter(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-    const hasDraggedPath = store.draggedPath || 
-        e.dataTransfer.types.includes("application/canonic-path") ||
-        e.dataTransfer.types.includes("text/plain");
-    if (hasDraggedPath) {
-        // Prevent moving a folder into itself or its own descendant
-        const targetPath = props.item.path;
-        const sourcePath = store.draggedPath;
-        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
-            return;
-        }
+    dragCounter++;
+    if (isValidDropTarget()) {
         isDragOver.value = true;
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
     }
 }
 
 function handleDragOver(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-    const hasDraggedPath = store.draggedPath || 
-        e.dataTransfer.types.includes("application/canonic-path") ||
-        e.dataTransfer.types.includes("text/plain");
-    if (hasDraggedPath) {
-        // Prevent moving a folder into itself or its own descendant
-        const targetPath = props.item.path;
-        const sourcePath = store.draggedPath;
-        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
-            return;
-        }
+    // The template's @dragover.prevent already calls preventDefault (required to
+    // allow a drop); here we just reflect the drop effect for the cursor.
+    if (isValidDropTarget()) {
         isDragOver.value = true;
-        e.dataTransfer.dropEffect = "move";
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    } else if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "none";
     }
 }
 
 function handleDragLeave(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-    
-    // Only clear highlight if we actually left the parent container
-    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
-        return;
+    // Symmetric with handleDragEnter (both gated only on directory type) so the
+    // counter stays balanced; clear the highlight only when we've fully left.
+    dragCounter--;
+    if (dragCounter <= 0) {
+        dragCounter = 0;
+        isDragOver.value = false;
     }
-    isDragOver.value = false;
 }
 
 async function handleDrop(e) {
     if (store.isCompactLayout) return;
+    dragCounter = 0;
     isDragOver.value = false;
+
     if (props.item.type !== "directory") return;
 
-    const draggedPath = store.draggedPath || 
-        e.dataTransfer.getData("application/canonic-path") ||
-        e.dataTransfer.getData("text/plain");
+    let draggedPath = store.draggedPath;
+    if (!draggedPath && e.dataTransfer) {
+        draggedPath = e.dataTransfer.getData("application/canonic-path") || e.dataTransfer.getData("text/plain");
+    }
+
     store.draggedPath = null;
-    
-    if (!draggedPath || draggedPath === props.item.path) return;
 
-    // Prevent moving a folder into its own descendant
-    if (props.item.path.startsWith(draggedPath + "/")) return;
+    if (!draggedPath || draggedPath === props.item.path) {
+        return;
+    }
 
-    await store.moveFile(draggedPath, props.item.path);
+    // Guard against dropping a folder into itself or one of its descendants.
+    if (props.item.path.startsWith(draggedPath + "/")) {
+        return;
+    }
+
+    try {
+        await store.moveFile(draggedPath, props.item.path);
+    } catch (err) {
+        console.error("Move file failed:", err);
+        alert("Move file failed: " + err.message);
+    }
 }
 
 async function startRename() {

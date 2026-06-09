@@ -259,7 +259,7 @@ jobs:
             flatpak/ai.canonic.app.metainfo.xml
 
       - name: Build Flatpak bundle
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        uses: flatpak/flatpak-github-actions/flatpak-builder@401fe28a8384095fc1531b9d320b292f0ee45adb # v6.7
         with:
           bundle: canonic_${{ needs.compute-version.outputs.version }}_${{ matrix.arch }}.flatpak
           manifest-path: flatpak/ai.canonic.app.yml

@@ -204,6 +204,76 @@ jobs:
             src-tauri/target/**/release/bundle/appimage/*.AppImage
             src-tauri/target/**/release/bundle/rpm/*.rpm
 
+  build-flatpak:
+    # Wrap each architecture's .deb from the `build` job into a distro-agnostic
+    # .flatpak bundle (installs on Alpine, Arch, Fedora, Ubuntu, …). Each arch
+    # builds natively: x86_64 on an x64 runner, aarch64 on an arm64 runner — the
+    # flatpak-builder container's runtime matches the host arch, so no emulation.
+    # The `gnome-47` tag MUST match `runtime-version` in flatpak/ai.canonic.app.yml.
+    needs:
+      - compute-version
+      - build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            artifact: release-linux-x64
+            deb_glob: "*_amd64.deb"
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            artifact: release-linux-arm64
+            deb_glob: "*_arm64.deb"
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download Linux build (.deb)
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: linux-deb
+
+      - name: Stage .deb for the manifest
+        # The manifest's `path: canonic.deb` is relative to flatpak/, so the
+        # built .deb must sit there before flatpak-builder runs.
+        env:
+          DEB_GLOB: ${{ matrix.deb_glob }}
+        run: |
+          deb=$(find linux-deb -name "$DEB_GLOB" | head -n1)
+          test -n "$deb" || { echo "no .deb matching $DEB_GLOB found in artifact"; exit 1; }
+          cp "$deb" flatpak/canonic.deb
+
+      - name: Sync metainfo release version
+        # Keep the AppStream <release> in step with the version being shipped.
+        env:
+          V: ${{ needs.compute-version.outputs.version }}
+        run: |
+          sed -i "0,/<release version=\"[^\"]*\"/s//<release version=\"$V\"/" \
+            flatpak/ai.canonic.app.metainfo.xml
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@401fe28a8384095fc1531b9d320b292f0ee45adb # v6.7
+        with:
+          bundle: canonic_${{ needs.compute-version.outputs.version }}_${{ matrix.arch }}.flatpak
+          manifest-path: flatpak/ai.canonic.app.yml
+          # Per-arch cache so the two matrix legs don't clobber each other.
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Unique per arch — same artifact name across matrix legs collides.
+          name: release-flatpak-${{ matrix.arch }}
+          if-no-files-found: error
+          path: canonic_${{ needs.compute-version.outputs.version }}_${{ matrix.arch }}.flatpak
+
   finalize:
     # Only reached if every build job succeeded. This is the single point that
     # mutates main: commit the bump, tag, and publish — so a failed build leaves
@@ -211,6 +281,7 @@ jobs:
     needs:
       - compute-version
       - build
+      - build-flatpak
     runs-on: ubuntu-latest
     permissions:
       contents: write

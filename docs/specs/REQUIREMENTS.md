@@ -1916,4 +1916,41 @@ Plain HTTP routes on the same local server, bound to 127.0.0.1 and token-free (s
   when: the file tree renders
   then: demo files are shown with ASCII tree characters and folders collapsed by default
 
-*Last updated: 2026-05-31*
+## Linux Packaging — Flatpak (PKG-FPK)
+
+Canonic ships a distro-agnostic Flatpak bundle so it runs on Linux distributions
+where the AppImage cannot — most importantly musl-libc distros like Alpine, plus
+Arch, Fedora, and others. One `.flatpak` artifact covers every distro because the
+GNOME runtime carries glibc and webkit2gtk inside the sandbox.
+
+* scenario: Flatpak bundles attached to each release
+  given: a release build of every platform succeeds
+  when: the release is finalized and published
+  then: both `canonic_<version>_x86_64.flatpak` and `canonic_<version>_aarch64.flatpak` are attached to the GitHub release
+
+* scenario: arm64 Flatpak built natively
+  given: the aarch64 leg of the flatpak matrix runs
+  when: it builds the bundle
+  then: it runs on an arm64 runner against the arm64 .deb with no cross-compilation or emulation
+
+* scenario: install on a musl distro (Alpine)
+  given: a user on Alpine Linux (x86_64 or aarch64) with flatpak and the flathub remote configured
+  when: they run `flatpak install ./canonic_<version>_<arch>.flatpak` matching their CPU
+  then: Canonic installs and launches via `flatpak run ai.canonic.app` despite Alpine using musl libc
+
+* scenario: workspace files are accessible from the sandbox
+  given: Canonic is installed as a Flatpak
+  when: the user opens or edits a markdown workspace in their home directory
+  then: the app can read and write those files (the manifest grants `--filesystem=home`)
+
+* scenario: LAN sharing and peer discovery work inside the sandbox
+  given: Canonic is running as a Flatpak with an active share
+  when: another peer on the local network browses for workspaces
+  then: discovery and sharing succeed (the manifest grants `--share=network`)
+
+* scenario: a failed Flatpak build blocks the release
+  given: the Flatpak build job fails during a release
+  when: the pipeline reaches finalize
+  then: no version bump, tag, or release is published (finalize depends on the Flatpak job)
+
+*Last updated: 2026-06-09*

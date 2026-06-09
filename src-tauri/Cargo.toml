@@ -42,6 +42,7 @@ if-addrs = "0.7"
 urlencoding = "2.1"
 rand = "0.8"
 window-vibrancy = "0.5.2"
+notify = "8.2.0"
 
 
 

@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tauri::Manager;
+use notify::Watcher;
 
 pub fn app_handle() -> Option<tauri::AppHandle> {
     static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
@@ -459,6 +460,11 @@ pub fn workspace_init(path: String, template: String) -> Result<Value, String> {
         }
     }
 
+    // Start filesystem watcher
+    if let Err(e) = start_watcher_rust(path.clone()) {
+        log::error!("[workspace_init] failed to start watcher: {:?}", e);
+    }
+
     Ok(json!({
         "path": path,
         "alreadyExists": already_exists,
@@ -886,9 +892,172 @@ pub fn files_move(workspace_path: String, old_path: String, new_path: String) ->
     std::fs::rename(safe_old, safe_new).map_err(|e| e.to_string())
 }
 
+static ACTIVE_WATCHER: std::sync::Mutex<Option<notify::RecommendedWatcher>> = std::sync::Mutex::new(None);
+
+fn build_index_rust(workspace_path: &str) -> serde_json::Map<String, Value> {
+    let mut index = serde_json::Map::new();
+    let root = Path::new(workspace_path);
+    
+    fn walk(dir: &Path, prefix: &str, index: &mut serde_json::Map<String, Value>, root: &Path) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                if name.starts_with('.') || name == "node_modules" {
+                    continue;
+                }
+                
+                let rel = if prefix.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{}/{}", prefix, name)
+                };
+                
+                if path.is_dir() {
+                    walk(&path, &rel, index, root);
+                } else if name.ends_with(".md") {
+                    let basename = name.trim_end_matches(".md").to_string();
+                    let depth = rel.split('/').count();
+                    
+                    let should_insert = match index.get(&basename) {
+                        None => true,
+                        Some(val) => {
+                            if let Some(existing_path) = val.as_str() {
+                                depth < existing_path.split('/').count()
+                            } else {
+                                true
+                            }
+                        }
+                    };
+                    
+                    if should_insert {
+                        index.insert(basename, Value::String(rel));
+                    }
+                }
+            }
+        }
+    }
+    
+    walk(root, "", &mut index, root);
+    index
+}
+
+fn stop_watcher_rust() {
+    if let Ok(mut lock) = ACTIVE_WATCHER.lock() {
+        *lock = None;
+    }
+}
+
+fn start_watcher_rust(workspace_path: String) -> Result<(), String> {
+    stop_watcher_rust();
+    
+    let initial_index = build_index_rust(&workspace_path);
+    if let Some(app) = app_handle() {
+        use tauri::Emitter;
+        let _ = app.emit("files:index-update", Value::Object(initial_index));
+    }
+    
+    let path_clone = workspace_path.clone();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<bool>(100);
+    
+    let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        match res {
+            Ok(event) => {
+                let mut git_changed = false;
+                let mut should_refresh = false;
+                
+                for path in event.paths {
+                    let path_str = path.to_string_lossy();
+                    
+                    if path_str.contains("node_modules") {
+                        continue;
+                    }
+                    
+                    if path_str.contains(".git") {
+                        if path_str.ends_with("HEAD") || path_str.contains(".git/HEAD") || path_str.contains(".git\\HEAD") {
+                            git_changed = true;
+                            should_refresh = true;
+                            break;
+                        }
+                        continue;
+                    }
+                    
+                    if let Some(file_name) = path.file_name() {
+                        if file_name.to_string_lossy().starts_with('.') {
+                            continue;
+                        }
+                    }
+                    
+                    if path.is_dir() || path_str.ends_with(".md") {
+                        should_refresh = true;
+                    }
+                }
+                
+                if should_refresh {
+                    let _ = tx.blocking_send(git_changed);
+                }
+            }
+            Err(e) => {
+                log::error!("[watcher] notify error: {:?}", e);
+            }
+        }
+    }).map_err(|e| format!("Failed to create watcher: {}", e))?;
+    
+    watcher.watch(Path::new(&workspace_path), notify::RecursiveMode::Recursive)
+        .map_err(|e| format!("Failed to watch directory: {}", e))?;
+    
+    if let Ok(mut lock) = ACTIVE_WATCHER.lock() {
+        *lock = Some(watcher);
+    }
+    
+    tokio::spawn(async move {
+        let mut debounce_timer: Option<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>> = None;
+        let mut pending_git_changed = false;
+        
+        loop {
+            tokio::select! {
+                res = rx.recv() => {
+                    match res {
+                        Some(git_changed) => {
+                            pending_git_changed |= git_changed;
+                            debounce_timer = Some(Box::pin(tokio::time::sleep(std::time::Duration::from_millis(100))));
+                        }
+                        None => break,
+                    }
+                }
+                _ = async {
+                    if let Some(timer) = &mut debounce_timer {
+                        timer.await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                } => {
+                    debounce_timer = None;
+                    let git_changed = pending_git_changed;
+                    pending_git_changed = false;
+                    
+                    if let Some(app) = app_handle() {
+                        use tauri::Emitter;
+                        if git_changed {
+                            let _ = app.emit("git:branch-updated", ());
+                        } else {
+                            let new_index = build_index_rust(&path_clone);
+                            let _ = app.emit("files:index-update", Value::Object(new_index));
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    Ok(())
+}
+
 #[tauri::command]
 pub fn files_index() -> Result<Value, String> {
-    Ok(json!({}))
+    let workspace = get_active_workspace()?;
+    let index = build_index_rust(&workspace);
+    Ok(Value::Object(index))
 }
 
 #[tauri::command]

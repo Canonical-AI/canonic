@@ -1,5 +1,5 @@
 <template>
-    <div class="app-menu" ref="rootRef">
+    <div class="app-menu" ref="rootRef" @mousedown.stop>
         <button
             class="icon-btn app-menu-trigger"
             title="Menu"
@@ -73,7 +73,6 @@ onBeforeUnmount(() => {
 .app-menu {
     position: relative;
     display: inline-flex;
-    -webkit-app-region: no-drag;
 }
 
 .icon-btn {

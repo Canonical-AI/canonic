@@ -329,20 +329,11 @@ async fn handle_manifest(
     }
     let files = collect_markdown_files(&share.workspaces, &share.excluded_paths);
     let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
-    
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-    let hours = (now % 86400) / 3600;
-    let minutes = (now % 3600) / 60;
-    let seconds = now % 60;
-    let time_str = format!("2026-06-08T{:02}:{:02}:{:02}Z", hours, minutes, seconds);
 
     (StatusCode::OK, Json(json!({
         "scope": share.scope,
         "files": files,
-        "sharedAt": time_str,
+        "sharedAt": crate::mcp::chrono_iso8601(),
         "author": author,
         "taggedOnly": share.tagged_only
     }))).into_response()
@@ -659,6 +650,23 @@ pub fn push_update(file_path: &str, content: &str) {
     }
 }
 
+// Bind a share-server socket on a random high port, retrying on collision.
+fn bind_share_listener() -> Result<std::net::TcpListener, String> {
+    use std::net::{SocketAddr, TcpListener};
+    let mut last_err = String::new();
+    for _ in 0..10 {
+        let port = 13800 + (rand::random::<u16>() % 10000);
+        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        match TcpListener::bind(addr) {
+            Ok(listener) => return Ok(listener),
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+    Err(format!(
+        "Failed to bind a share port after 10 attempts: {last_err}"
+    ))
+}
+
 pub fn start_sharing_server(
     key: String,
     scope: String,
@@ -670,8 +678,12 @@ pub fn start_sharing_server(
     // Stop existing share with the same key
     let _ = stop_sharing_server(&key);
 
-    // Pick a random port
-    let port = 13800 + (rand::random::<u16>() % 10000);
+    // Bind synchronously so a bind failure is returned to the caller instead of
+    // being swallowed in a detached thread (which left the share registered but
+    // serving nothing). Retry a few ports on collision.
+    let listener = bind_share_listener()?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
     let token = uuid::Uuid::new_v4().to_string();
     let lan_ip = get_lan_ip();
     let is_workspace = key == "__workspace__" || key == "__all_workspaces__";
@@ -712,11 +724,21 @@ pub fn start_sharing_server(
         .with_state(share_clone);
 
     std::thread::spawn(move || {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                log::error!("share server: failed to start runtime: {e}");
+                return;
+            }
+        };
         rt.block_on(async {
-            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            
+            let listener = match tokio::net::TcpListener::from_std(listener) {
+                Ok(l) => l,
+                Err(e) => {
+                    log::error!("share server: failed to adopt listener: {e}");
+                    return;
+                }
+            };
             let server = axum::serve(listener, app);
             tokio::select! {
                 _ = server => {}

@@ -38,6 +38,9 @@ window.canonic = {
     setDefaultEditor: (value) => invoke('app_set_default_md', { value }),
     openConfig: () => invoke('app_open_config'),
     editAction: (action) => invoke('app_edit_action', { action }),
+    // Pin the native macOS window appearance to the active theme's scheme
+    // ("dark" | "light") so vibrancy/titlebar/menus follow the theme, not the OS.
+    setWindowTheme: (scheme) => invoke('set_window_theme', { scheme }),
   },
 
   // Telemetry

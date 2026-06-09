@@ -8,6 +8,13 @@
 
 /* ── HAL2001 theme (default) — dark blue-black with warm beige text ── */
 :root {
+    /* Drive native/UA colors (CanvasText default, scrollbars, form controls) from
+       the active theme, not the OS appearance. Without this, WKWebView resolves
+       default text color against the system scheme, so a dark theme on a light
+       system renders dark text in chrome that doesn't set an explicit color (e.g.
+       the titlebar/menu). color-scheme inherits, so dark themes get this and only
+       the light themes below override it. */
+    color-scheme: dark;
     /* Backgrounds — from HAL2001 surface hierarchy */
     --bg-base: #0c0e12; /* background */
     --bg-titlebar: #111519; /* just above base */
@@ -30,7 +37,9 @@
     /* Text — warm beige tones, not cold gray */
     --text-primary: #d6cfcb; /* on-surface-variant — warm off-white */
     --text-secondary: #a899ad; /* medium emphasis — muted lavender-beige */
-    --text-muted: #5a5560; /* low emphasis */
+    --text-muted: #8a8490; /* low emphasis — lightened from #5a5560 so muted
+       labels (e.g. .section-label, titlebar) stay legible on the dark vibrancy
+       backdrop instead of reading as near-invisible dark-on-dark */
 
     /* Accent — HAL2001 primary blue */
     --accent: #4a7a9b;
@@ -63,7 +72,7 @@
     --border-mid: rgba(168, 153, 173, 0.2);
     --text-primary: #c6b2b5;
     --text-secondary: #9a8a8e;
-    --text-muted: #5a4a50;
+    --text-muted: #8a7a82; /* lightened from #5a4a50 for legibility (see :root) */
     --accent: #4a7a9b;
     --accent-light: #6a97b5;
     --accent-muted: rgba(74, 122, 155, 0.18);
@@ -76,6 +85,7 @@
 
 /* ── Paper theme — light ── */
 [data-theme="paper"] {
+    color-scheme: light;
     --bg-base: #f6f4f7;
     --bg-titlebar: #ede9ef;
     --bg-sidebar: #dcd5df;
@@ -148,6 +158,7 @@
 
 /* ── Catppuccin Latte theme ── */
 [data-theme="latte"] {
+    color-scheme: light;
     --bg-base: #eff1f5;
     --bg-titlebar: #dce0e8;
     --bg-sidebar: #e6e9ef;

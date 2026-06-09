@@ -195,16 +195,26 @@ fn tool_write_doc(args: &Value) -> Value {
                 }
             }
 
-            // If the user has unsaved changes, save them first then make the changes.
+            // If the user has unsaved changes, persist AND snapshot them into git
+            // history before the agent overwrites the file — otherwise their work is
+            // only recoverable if the watcher's debounced auto-commit happens to win
+            // the race against the agent write below (it usually doesn't).
             if let Some(unsaved) = get_unsaved_content(path) {
                 if let Err(e) = std::fs::write(&fp, &unsaved) {
                     log::error!("Failed to write unsaved changes for {:?}: {}", fp, e);
-                } else {
-                    if let Ok(rel) = rel_doc_path(path) {
-                        if let Some(app) = crate::commands::app_handle() {
-                            use tauri::Emitter;
-                            let _ = app.emit("agent:file-saved", json!({ "path": rel }));
+                } else if let Ok(rel) = rel_doc_path(path) {
+                    if let Ok(ws) = workspace_path() {
+                        if let Err(e) = crate::commands::git_commit(
+                            ws,
+                            rel.clone(),
+                            "Auto-save before agent edit".to_string(),
+                        ) {
+                            log::warn!("Auto-save commit before agent edit failed for {rel}: {e}");
                         }
+                    }
+                    if let Some(app) = crate::commands::app_handle() {
+                        use tauri::Emitter;
+                        let _ = app.emit("agent:file-saved", json!({ "path": rel }));
                     }
                 }
             }

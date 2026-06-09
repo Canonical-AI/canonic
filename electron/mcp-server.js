@@ -16,6 +16,7 @@ let _eventCallback = null   // (event) => void — forwarded to renderer
 // user is actually looking at — the focused doc and the open tray — instead of guessing.
 let _focusedDoc = null      // relative path of the doc the user currently has focused, or null
 let _openDocs = []          // relative paths of all docs open in the tray (focused last)
+let _unsavedChanges = {}    // map of relative path -> unsaved content
 
 // SSE clients currently connected
 const sseClients = new Set()
@@ -23,9 +24,10 @@ const sseClients = new Set()
 function setWorkspacePath(wsPath) { _workspacePath = wsPath }
 function getWorkspacePath() { return _workspacePath }
 function setEventCallback(cb) { _eventCallback = cb }
-function setEditorState({ focusedDoc, openDocs } = {}) {
+function setEditorState({ focusedDoc, openDocs, unsavedChanges } = {}) {
   _focusedDoc = focusedDoc || null
   _openDocs = Array.isArray(openDocs) ? openDocs : []
+  _unsavedChanges = unsavedChanges || {}
 }
 function getEditorState() {
   return { focusedDoc: _focusedDoc, openDocs: _openDocs }
@@ -134,6 +136,23 @@ const tools = {
     },
     handler: async (args) => {
       const fp = resolvePath(args.path)
+      const rel = relDocPath(args.path)
+
+      // If the user has unsaved changes, save them first then make the changes
+      if (_unsavedChanges[rel] !== undefined) {
+        const unsavedContent = _unsavedChanges[rel]
+        fs.mkdirSync(path.dirname(fp), { recursive: true })
+        fs.writeFileSync(fp, unsavedContent, 'utf-8')
+
+        // Notify the renderer that we saved the file
+        if (_eventCallback) {
+          _eventCallback({
+            type: 'file-saved',
+            data: { path: rel }
+          })
+        }
+      }
+
       fs.mkdirSync(path.dirname(fp), { recursive: true })
       fs.writeFileSync(fp, args.content, 'utf-8')
       // File watcher (fileIndex.js) picks this up via fs.watch → editor repaints

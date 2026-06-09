@@ -3,12 +3,13 @@ import http from 'http'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { createRequire } from 'module'
 
 // Isolate config dir per test file so parallel workers don't share one lockfile.
 process.env.CANONIC_CONFIG_DIR = path.join(os.tmpdir(), `canonic-test-mcp-${process.pid}`)
 const LOCKFILE = path.join(process.env.CANONIC_CONFIG_DIR, 'api.lock')
 const apiServer = await import('../../electron/api-server.js')
-const mcp = await import('../../electron/mcp-server.js')
+const mcp = createRequire(import.meta.url)('../../electron/mcp-server.js')
 const gitService = await import('../../electron/git.js')
 
 let port, token
@@ -219,6 +220,49 @@ describe('MCP server tools with workspace set', () => {
     // Verify on disk
     const disk = fs.readFileSync(path.join(tmpDir, 'new-doc.md'), 'utf-8')
     expect(disk).toBe(newContent)
+  })
+
+  it('write_doc saves unsaved changes first if they exist', async () => {
+    const filePath = 'unsaved-doc.md'
+    const unsavedContent = '# User Unsaved Content'
+    const finalContent = '# Final MCP Content'
+
+    // Set the editor state with unsaved changes
+    mcp.setEditorState({
+      focusedDoc: filePath,
+      openDocs: [filePath],
+      unsavedChanges: {
+        [filePath]: unsavedContent
+      }
+    })
+
+    // Set up an event tracker callback
+    const events = []
+    mcp.setEventCallback((event) => {
+      events.push(event)
+    })
+
+    // Call write_doc
+    const res = await mcpRequest('tools/call', {
+      name: 'write_doc',
+      arguments: { path: filePath, content: finalContent }
+    })
+    const text = res.body.result.content[0].text
+    expect(JSON.parse(text).ok).toBe(true)
+
+    // Verify event was emitted
+    expect(events.length).toBeGreaterThanOrEqual(1)
+    const fileSavedEvent = events.find(e => e.type === 'file-saved')
+    expect(fileSavedEvent).toBeDefined()
+    expect(fileSavedEvent.data.path).toBe(filePath)
+
+    // Verify the final content is written
+    const disk = fs.readFileSync(path.join(tmpDir, filePath), 'utf-8')
+    expect(disk).toBe(finalContent)
+
+    // Clean up
+    mcp.setEditorState({ focusedDoc: null, openDocs: [] })
+    mcp.setEventCallback(() => {})
   })
 
   it('create_doc creates new file with content', async () => {

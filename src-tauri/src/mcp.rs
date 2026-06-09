@@ -36,21 +36,36 @@ pub fn get_port() -> Option<u16> {
     mcp_state().get().map(|s| s.port)
 }
 
-// Live editor view, pushed from the renderer (mcp_set_editor_state). Lets agents see
-// what the user is actually looking at instead of guessing a path.
-fn editor_state() -> &'static Mutex<(Option<String>, Vec<String>)> {
-    static E: OnceLock<Mutex<(Option<String>, Vec<String>)>> = OnceLock::new();
-    E.get_or_init(|| Mutex::new((None, Vec::new())))
+#[derive(Clone, Debug, Default)]
+struct EditorState {
+    focused: Option<String>,
+    open: Vec<String>,
+    unsaved: std::collections::HashMap<String, String>,
 }
 
-pub fn set_editor_state(focused: Option<String>, open: Vec<String>) {
+// Live editor view, pushed from the renderer (mcp_set_editor_state). Lets agents see
+// what the user is actually looking at instead of guessing a path.
+fn editor_state() -> &'static Mutex<EditorState> {
+    static E: OnceLock<Mutex<EditorState>> = OnceLock::new();
+    E.get_or_init(|| Mutex::new(EditorState::default()))
+}
+
+pub fn set_editor_state(focused: Option<String>, open: Vec<String>, unsaved: std::collections::HashMap<String, String>) {
     if let Ok(mut g) = editor_state().lock() {
-        *g = (focused, open);
+        *g = EditorState { focused, open, unsaved };
     }
 }
 
 fn get_editor_state() -> (Option<String>, Vec<String>) {
-    editor_state().lock().map(|g| g.clone()).unwrap_or((None, Vec::new()))
+    editor_state()
+        .lock()
+        .map(|g| (g.focused.clone(), g.open.clone()))
+        .unwrap_or_else(|_| (None, Vec::new()))
+}
+
+fn get_unsaved_content(path: &str) -> Option<String> {
+    let rel = rel_doc_path(path).ok()?;
+    editor_state().lock().ok()?.unsaved.get(&rel).cloned()
 }
 
 // ── Path / comment helpers (mirror electron, must match the editor's filename scheme) ──
@@ -173,6 +188,21 @@ fn tool_write_doc(args: &Value) -> Value {
                     return json!({ "error": e.to_string() });
                 }
             }
+
+            // If the user has unsaved changes, save them first then make the changes.
+            if let Some(unsaved) = get_unsaved_content(path) {
+                if let Err(e) = std::fs::write(&fp, &unsaved) {
+                    log::error!("Failed to write unsaved changes for {:?}: {}", fp, e);
+                } else {
+                    if let Ok(rel) = rel_doc_path(path) {
+                        if let Some(app) = crate::commands::app_handle() {
+                            use tauri::Emitter;
+                            let _ = app.emit("agent:file-saved", json!({ "path": rel }));
+                        }
+                    }
+                }
+            }
+
             match std::fs::write(&fp, content) {
                 // Push to any live share viewers, same as files_write.
                 Ok(_) => {

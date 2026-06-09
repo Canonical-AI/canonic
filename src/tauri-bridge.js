@@ -236,6 +236,7 @@ window.canonic = {
     onActivity: (cb) => addListener('agent:activity', cb),
     onSessionCancel: (cb) => addListener('agent:session-cancel', cb),
     onSessionDone: (cb) => addListener('agent:session-done', cb),
+    onFileSaved: (cb) => addListener('agent:file-saved', cb),
     submit: (params) => invoke('agent_submit', { params }),
     cancel: (sessionId) => invoke('agent_cancel', { sessionId }),
     removeListeners: () => {
@@ -243,6 +244,7 @@ window.canonic = {
       removeListener('agent:comment');
       removeListener('agent:session-cancel');
       removeListener('agent:session-done');
+      removeListener('agent:file-saved');
     },
   },
 

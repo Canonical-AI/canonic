@@ -1010,7 +1010,7 @@ fn start_watcher_rust(workspace_path: String) -> Result<(), String> {
         *lock = Some(watcher);
     }
     
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut debounce_timer: Option<std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>> = None;
         let mut pending_git_changed = false;
         
@@ -3520,7 +3520,16 @@ pub fn mcp_set_editor_state(state: Value) -> Result<(), String> {
         .and_then(|o| o.as_array())
         .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_default();
-    crate::mcp::set_editor_state(focused, open);
+    let unsaved = state
+        .get("unsavedChanges")
+        .and_then(|u| u.as_object())
+        .map(|obj| {
+            obj.iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+    crate::mcp::set_editor_state(focused, open, unsaved);
     Ok(())
 }
 

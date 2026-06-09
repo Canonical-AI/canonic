@@ -79,7 +79,12 @@ fn escape_html(s: &str) -> String {
 // Helper to render HTML doc page
 fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> String {
     let deep_link = format!("canonic://open?url={}", urlencoding::encode(doc_url));
-    let parsed_html = format!("<pre>{}</pre>", escape_html(content)); // default fallback
+    
+    // Parse markdown using pulldown-cmark
+    let parser = pulldown_cmark::Parser::new(content);
+    let mut html_output = String::new();
+    pulldown_cmark::html::push_html(&mut html_output, parser);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -129,7 +134,25 @@ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> S
   .open-app-btn:hover {{ opacity: 0.85; }}
   h1 {{ font-size: 1.875rem; font-weight: 700; margin: 0 0 8px; color: #111; line-height: 1.25; }}
   h2 {{ font-size: 1.375rem; font-weight: 600; margin: 40px 0 12px; color: #111; }}
+  h3 {{ font-size: 1.125rem; font-weight: 600; margin: 32px 0 10px; color: #111; }}
+  h4 {{ font-size: 1rem; font-weight: 600; margin: 24px 0 8px; }}
   p {{ margin: 0 0 20px; }}
+  ul, ol {{ margin: 0 0 20px 24px; }}
+  li {{ margin-bottom: 4px; }}
+  blockquote {{
+    border-left: 3px solid #4A7A9B;
+    padding: 4px 0 4px 16px;
+    margin: 0 0 20px;
+    color: #555;
+    font-style: italic;
+  }}
+  code {{
+    font-family: 'JetBrains Mono', 'Menlo', 'Monaco', monospace;
+    font-size: 0.875em;
+    background: #ede9e5;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }}
   pre {{
     background: #1a1a1a;
     color: #e8e5e1;
@@ -139,6 +162,18 @@ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> S
     margin: 0 0 20px;
   }}
   pre code {{ background: none; padding: 0; color: inherit; font-size: 0.875rem; }}
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 20px;
+    font-size: 0.9rem;
+  }}
+  th, td {{ padding: 10px 14px; border: 1px solid #e0dbd5; text-align: left; }}
+  th {{ background: #f0ece8; font-weight: 600; }}
+  tr:nth-child(even) {{ background: #faf8f6; }}
+  a {{ color: #4A7A9B; }}
+  img {{ max-width: 100%; height: auto; border-radius: 6px; }}
+  hr {{ border: none; border-top: 1px solid #e8e5e1; margin: 32px 0; }}
 </style>
 </head>
 <body>
@@ -156,7 +191,7 @@ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> S
         escape_html(title),
         escape_html(author),
         deep_link,
-        parsed_html
+        html_output
     )
 }
 
@@ -201,7 +236,7 @@ struct TokenQuery {
 #[derive(Deserialize)]
 struct FileQuery {
     token: String,
-    path: String,
+    path: Option<String>,
     workspace: Option<String>,
     oid: Option<String>,
 }
@@ -311,6 +346,17 @@ async fn handle_file(
         return (StatusCode::FORBIDDEN, "Invalid token").into_response();
     }
 
+    let query_path = match query.path.as_ref().filter(|p| !p.is_empty()) {
+        Some(p) => p.clone(),
+        None => {
+            if share.scope == "file" {
+                share.key.clone()
+            } else {
+                return (StatusCode::BAD_REQUEST, "Missing path parameter").into_response();
+            }
+        }
+    };
+
     let ws = if let Some(ws_name) = &query.workspace {
         share.workspaces.iter().find(|w| w.name == *ws_name)
     } else {
@@ -329,7 +375,7 @@ async fn handle_file(
 
     // Reject absolute paths / `..` traversal / symlink escapes before any read.
     // A plain join + starts_with check is insufficient (see commands::safe_join).
-    let target_path = match crate::commands::safe_join(&base_path, &query.path) {
+    let target_path = match crate::commands::safe_join(&base_path, &query_path) {
         Ok(p) => p,
         Err(_) => return (StatusCode::FORBIDDEN, "Path traversal blocked").into_response(),
     };
@@ -338,7 +384,7 @@ async fn handle_file(
 
     let content = match &query.oid {
         Some(oid) => {
-            match crate::commands::git_read_commit_internal(&ws.path, &query.path, oid) {
+            match crate::commands::git_read_commit_internal(&ws.path, &query_path, oid) {
                 Ok(c) => c,
                 Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
             }
@@ -359,7 +405,7 @@ async fn handle_file(
         .join(".config")
         .join("canonic")
         .join("comments")
-        .join(format!("{}.json", query.path.replace('/', "_")));
+        .join(format!("{}.json", query_path.replace('/', "_")));
 
     let comments: Value = if comments_file.exists() {
         fs::read_to_string(comments_file)
@@ -372,20 +418,93 @@ async fn handle_file(
 
     let accept = headers.get("accept").and_then(|h| h.to_str().ok()).unwrap_or("");
     if accept.contains("text/html") {
-        let title = Path::new(&query.path).file_stem().unwrap_or_default().to_string_lossy();
+        let title = Path::new(&query_path).file_stem().unwrap_or_default().to_string_lossy();
         let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
-        let doc_url = format!("http://127.0.0.1:{}/file?path={}&token={}", share.port, query.path, share.token);
+        let doc_url = format!("http://127.0.0.1:{}/file?path={}&token={}", share.port, urlencoding::encode(&query_path), share.token);
         let html = render_doc_page(&title, &content, &author, &doc_url);
         return (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response();
     }
 
     (StatusCode::OK, Json(json!({
-        "filePath": query.path,
+        "filePath": query_path,
         "workspace": ws.name,
         "content": content,
         "comments": comments,
         "oid": query.oid
     }))).into_response()
+}
+
+async fn handle_browse(
+    State(share): State<Arc<ActiveShare>>,
+    Query(query): Query<TokenQuery>,
+) -> impl IntoResponse {
+    if query.token != share.token {
+        return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+    }
+
+    share.reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    let files = collect_markdown_files(&share.workspaces, &share.excluded_paths);
+
+    let mut file_links = String::new();
+    for f in &files {
+        if let Some(path_str) = f.get("path").and_then(|p| p.as_str()) {
+            let title = Path::new(path_str).file_stem().unwrap_or_default().to_string_lossy();
+            let url = format!("/file?path={}&token={}", urlencoding::encode(path_str), share.token);
+            file_links.push_str(&format!(
+                r#"<a class="doc-link" href="{}">{}<span class="doc-path">{}</span></a>"#,
+                url, escape_html(&title), escape_html(path_str)
+            ));
+        }
+    }
+
+    let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workspace — {}</title>
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: #f9f8f7; color: #1a1a1a; padding: 0 16px; }}
+  .page {{ max-width: 640px; margin: 0 auto; padding: 48px 0 80px; }}
+  .header {{ margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #e8e5e1; }}
+  h1 {{ font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }}
+  .meta {{ font-size: 0.8125rem; color: #888; }}
+  .doc-link {{
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; padding: 12px 14px; border-radius: 8px;
+    text-decoration: none; color: #1a1a1a;
+    border: 1px solid #e8e5e1; margin-bottom: 6px;
+    transition: background 0.1s, border-color 0.1s;
+    font-size: 0.9375rem; font-weight: 500;
+  }}
+  .doc-link:hover {{ background: #f0ece8; border-color: #d0cac4; }}
+  .doc-path {{ font-size: 0.75rem; color: #999; font-weight: 400; font-family: monospace; }}
+  .empty {{ color: #888; font-size: 0.875rem; }}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>{}'s workspace</h1>
+    <p class="meta">{} document{} · view only</p>
+  </div>
+  {}
+</div>
+</body>
+</html>"#,
+        escape_html(&author),
+        escape_html(&author),
+        files.len(),
+        if files.len() != 1 { "s" } else { "" },
+        if files.is_empty() { r#"<p class="empty">No documents found.</p>"#.to_string() } else { file_links }
+    );
+
+    (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response()
 }
 
 async fn ws_handler(
@@ -491,7 +610,9 @@ pub fn start_sharing_server(
     let port = 13800 + (rand::random::<u16>() % 10000);
     let token = uuid::Uuid::new_v4().to_string();
     let lan_ip = get_lan_ip();
-    let local_url = format!("http://{}:{}/browse?token={}", lan_ip, port, token);
+    let is_workspace = key == "__workspace__" || key == "__all_workspaces__";
+    let path_prefix = if is_workspace { "browse" } else { "doc" };
+    let local_url = format!("http://{}:{}/{}?token={}", lan_ip, port, path_prefix, token);
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
@@ -521,6 +642,7 @@ pub fn start_sharing_server(
         .route("/manifest", get(handle_manifest))
         .route("/file", get(handle_file))
         .route("/doc", get(handle_file)) // doc acts same as file
+        .route("/browse", get(handle_browse))
         .route("/ws", get(ws_handler))
         .route("/", get(ws_handler))
         .with_state(share_clone);

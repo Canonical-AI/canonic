@@ -1,6 +1,6 @@
 {
   "name": "canonic",
-  "version": "0.0.23-alpha",
+  "version": "0.2.0",
   "description": "Local-first markdown document editor with git versioning",
   "author": "John Azzinaro <johnjAzzinaro@gmail.com>",
   "main": "electron/main.js",

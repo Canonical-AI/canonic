@@ -1,6 +1,5 @@
 node_modules/
 dist/
-dist-electron/
 .env
 *.log
 .DS_Store
@@ -10,10 +9,6 @@ dist-electron/
 CLAUDE.md
 CLAUDE/
 ANTIGRAVITY.md
-
-# Playwright artifacts
-test-results/
-playwright-report/
 
 # Local agent-session runtime data (history written at runtime, not source)
 .canonic/

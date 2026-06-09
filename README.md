@@ -189,7 +189,7 @@ npm install
 
 ### Run in development
 
-Starts Vite dev server + Electron with hot reload:
+Starts Tauri dev server with hot reload:
 
 ```bash
 npm run dev
@@ -199,23 +199,19 @@ npm run dev
 
 ```bash
 npm run build           # current platform
-npm run build:mac       # macOS .dmg + .zip
-npm run build:win       # Windows .exe
-npm run build:linux     # Linux .AppImage / .deb / .pacman / .flatpak / .tar.gz
 ```
 
-Output lands in `dist-electron/`. Canonic packages via [electron-builder](https://www.electron.build/) and distributes via GitHub Releases with background updates.
+Output lands in `src-tauri/target/release/bundle/`.
 
 ### Testing
 
-Two-tier suite:
+Run the test suite:
 
-| Command            | What                                                                     | Where                               | When                                |
-| ------------------ | ------------------------------------------------------------------------ | ----------------------------------- | ----------------------------------- |
-| `npm test`         | Vitest unit + integration (pure logic, store actions, mocked IPC)        | `tests/unit/`, `tests/integration/` | Every PR via CI                     |
-| `npm run test:e2e` | Playwright + real Electron (slash menu, table ops, real ProseMirror DOM) | `tests/e2e/`                        | Local only (requires built `dist/`) |
+```bash
+npm test                # run vitest unit and integration tests
+```
 
-Run `npm test` before committing — all unit tests must pass. E2e is opt-in and slower (\~25 s per test) but catches schema and integration issues unit tests can't.
+Run `npm test` before committing — all unit and integration tests must pass.
 
 ### Contributing
 
@@ -238,7 +234,7 @@ Quick rules:
 | Layer            | Technology                                                              |
 | ---------------- | ----------------------------------------------------------------------- |
 | UI Framework     | [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/)               |
-| Desktop Shell    | [Electron](https://www.electronjs.org/)                                 |
+| Desktop Shell    | [Tauri](https://tauri.app/) (Rust)                                      |
 | Editor           | [Milkdown](https://milkdown.dev/) (ProseMirror)                         |
 | Version Control  | [isomorphic-git](https://isomorphic-git.org/)                           |
 | State Management | [Pinia](https://pinia.vuejs.org/)                                       |

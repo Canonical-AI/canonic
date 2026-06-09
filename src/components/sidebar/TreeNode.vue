@@ -12,7 +12,7 @@
                 isFocused && 'focused',
             ]"
             :style="{ paddingLeft: `${4 + depth * 14}px` }"
-            :draggable="!store.isCompactLayout"
+            :draggable="!store.isCompactLayout ? 'true' : 'false'"
             role="treeitem"
             :aria-label="`${item.type === 'directory' ? 'Folder' : 'File'}: ${item.name}`"
             :aria-expanded="item.type === 'directory' ? item._open : undefined"
@@ -21,8 +21,10 @@
             @mouseenter="onMouseEnter"
             @mouseleave="onMouseLeave"
             @dragstart="handleDragStart"
+            @dragenter.prevent="handleDragEnter"
             @dragover.prevent="handleDragOver"
             @dragleave="handleDragLeave"
+            @dragend="handleDragEnd"
             @drop="handleDrop"
         >
             <!-- ASCII tree lines for children -->
@@ -325,24 +327,59 @@ function handleClick() {
 
 function handleDragStart(e) {
     if (store.isCompactLayout) return;
+    store.draggedPath = props.item.path;
+    e.dataTransfer.setData("text/plain", props.item.path);
     e.dataTransfer.setData("application/canonic-path", props.item.path);
     e.dataTransfer.effectAllowed = "move";
+}
+
+function handleDragEnd() {
+    store.draggedPath = null;
+}
+
+function handleDragEnter(e) {
+    if (store.isCompactLayout) return;
+    if (props.item.type !== "directory") return;
+    const hasDraggedPath = store.draggedPath || 
+        e.dataTransfer.types.includes("application/canonic-path") ||
+        e.dataTransfer.types.includes("text/plain");
+    if (hasDraggedPath) {
+        // Prevent moving a folder into itself or its own descendant
+        const targetPath = props.item.path;
+        const sourcePath = store.draggedPath;
+        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
+            return;
+        }
+        isDragOver.value = true;
+    }
 }
 
 function handleDragOver(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-    const draggedPath = e.dataTransfer.types.includes(
-        "application/canonic-path",
-    );
-    if (draggedPath) {
+    const hasDraggedPath = store.draggedPath || 
+        e.dataTransfer.types.includes("application/canonic-path") ||
+        e.dataTransfer.types.includes("text/plain");
+    if (hasDraggedPath) {
+        // Prevent moving a folder into itself or its own descendant
+        const targetPath = props.item.path;
+        const sourcePath = store.draggedPath;
+        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
+            return;
+        }
         isDragOver.value = true;
         e.dataTransfer.dropEffect = "move";
     }
 }
 
-function handleDragLeave() {
+function handleDragLeave(e) {
     if (store.isCompactLayout) return;
+    if (props.item.type !== "directory") return;
+    
+    // Only clear highlight if we actually left the parent container
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
+        return;
+    }
     isDragOver.value = false;
 }
 
@@ -351,7 +388,11 @@ async function handleDrop(e) {
     isDragOver.value = false;
     if (props.item.type !== "directory") return;
 
-    const draggedPath = e.dataTransfer.getData("application/canonic-path");
+    const draggedPath = store.draggedPath || 
+        e.dataTransfer.getData("application/canonic-path") ||
+        e.dataTransfer.getData("text/plain");
+    store.draggedPath = null;
+    
     if (!draggedPath || draggedPath === props.item.path) return;
 
     // Prevent moving a folder into its own descendant
@@ -463,6 +504,8 @@ async function confirmNewFolder() {
     white-space: nowrap;
     overflow: hidden;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .tree-node:hover {

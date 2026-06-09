@@ -19,6 +19,7 @@ export const useAppStore = defineStore("app", () => {
   const files = ref([]);
   const currentFile = ref(null);
   const currentContent = ref("");
+  const draggedPath = ref(null);
 
   // ── Tree keyboard navigation (yazi-style) ──
   const treeFocused = ref(false);
@@ -674,6 +675,13 @@ export const useAppStore = defineStore("app", () => {
       agentSession.value = null;
       agentActivity.value = null;
       actionPickerOpen.value = false;
+    });
+    api.agentSession.onFileSaved?.((data) => {
+      const filePath = data.path;
+      if (currentFile.value === filePath) {
+        isDirty.value = false;
+      }
+      clearUnsaved(filePath);
     });
   }
 
@@ -2979,12 +2987,28 @@ export const useAppStore = defineStore("app", () => {
   // Push the user's current editor view to the MCP server so agents can answer
   // "what am I looking at" (get_open_docs / get_workspace_info) without asking for a path.
   // focusedDoc = the active tab; openDocs = the whole open tray.
-  watch([currentFile, openTabs], () => {
-    api.agentControl?.setEditorState?.({
-      focusedDoc: currentFile.value,
-      openDocs: [...openTabs.value]
-    })
-  }, { deep: true, immediate: true })
+  let editorStateDebounce = null;
+  function syncEditorState() {
+    clearTimeout(editorStateDebounce);
+    editorStateDebounce = setTimeout(() => {
+      const unsavedChanges = {};
+      if (isDirty.value && currentFile.value) {
+        unsavedChanges[currentFile.value] = currentContent.value;
+      }
+      for (const path of Object.keys(unsavedBuffer)) {
+        if (unsavedBuffer[path] !== undefined && path !== currentFile.value) {
+          unsavedChanges[path] = unsavedBuffer[path];
+        }
+      }
+      api.agentControl?.setEditorState?.({
+        focusedDoc: currentFile.value,
+        openDocs: [...openTabs.value],
+        unsavedChanges
+      });
+    }, 200);
+  }
+
+  watch([currentFile, openTabs, isDirty, currentContent], syncEditorState, { deep: true, immediate: true })
 
   async function stopControlSession() {
     if (!controlSession.value) return
@@ -3211,6 +3235,7 @@ export const useAppStore = defineStore("app", () => {
     files,
     currentFile,
     currentContent,
+    draggedPath,
     branches,
     currentBranch,
     isExternalRepo,

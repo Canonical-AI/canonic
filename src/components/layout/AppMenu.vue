@@ -73,6 +73,7 @@ onBeforeUnmount(() => {
 .app-menu {
     position: relative;
     display: inline-flex;
+    -webkit-app-region: no-drag;
 }
 
 .icon-btn {

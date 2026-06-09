@@ -8,8 +8,8 @@
         }"
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
-        <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
-            <div class="titlebar-left" data-tauri-drag-region>
+        <div v-if="!store.isCompactLayout" class="titlebar">
+            <div class="titlebar-left">
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name">canonic</span>
                 <AppMenu
@@ -17,7 +17,7 @@
                     @reload-config="reloadConfig"
                 />
             </div>
-            <div class="titlebar-center" data-tauri-drag-region></div>
+            <div class="titlebar-center"></div>
             <div class="titlebar-right">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
@@ -147,7 +147,6 @@
             v-if="store.isCompactLayout"
             class="mobile-header"
             :class="{ 'mobile-header--mac': isMac }"
-            data-tauri-drag-region
         >
             <div class="mobile-header-left">
                 <button
@@ -1252,6 +1251,7 @@ function toggleDistractionFree() {
     background: var(--bg-titlebar);
     border-bottom: 1px solid var(--border);
     user-select: none;
+    -webkit-app-region: drag;
     flex-shrink: 0;
 }
 
@@ -1288,6 +1288,7 @@ function toggleDistractionFree() {
 .titlebar-right {
     display: flex;
     gap: 4px;
+    -webkit-app-region: no-drag;
 }
 
 .icon-btn {
@@ -1635,6 +1636,7 @@ function toggleDistractionFree() {
     cursor: pointer;
     animation: update-pulse 2s ease-in-out infinite;
     white-space: nowrap;
+    -webkit-app-region: no-drag;
 }
 
 .update-ready-btn:hover {
@@ -1665,6 +1667,7 @@ function toggleDistractionFree() {
     cursor: pointer;
     transition: background 0.15s;
     white-space: nowrap;
+    -webkit-app-region: no-drag;
 }
 
 .update-available-btn:hover {
@@ -1835,6 +1838,7 @@ function toggleDistractionFree() {
     flex-shrink: 0;
     z-index: 100;
     position: relative;
+    -webkit-app-region: drag;
 }
 
 .mobile-header--mac {
@@ -1844,6 +1848,7 @@ function toggleDistractionFree() {
 .mobile-menu-btn,
 .mobile-icon-btn,
 .mobile-menu-dropdown {
+    -webkit-app-region: no-drag;
 }
 
 .mobile-header-left {

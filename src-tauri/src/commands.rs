@@ -3392,8 +3392,10 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
     }
 
     if let Some(mcp) = params.mcp_port {
-        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp", mcp));
-        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse", mcp));
+        let token = crate::mcp::get_token().unwrap_or_default();
+        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
+        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
+        cmd.env("CANONIC_MCP_TOKEN", &token);
     }
     cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
     cmd.env("TERM", "xterm-256color");
@@ -3554,8 +3556,9 @@ fn home_dir() -> PathBuf {
 
 fn mcp_preset(agent_id: &str, port: u16) -> Option<McpPreset> {
     let home = home_dir();
-    let url = format!("http://127.0.0.1:{}/mcp", port);
-    let sse = format!("http://127.0.0.1:{}/sse", port);
+    let token = crate::mcp::get_token().unwrap_or_default();
+    let url = format!("http://127.0.0.1:{}/mcp?token={}", port, token);
+    let sse = format!("http://127.0.0.1:{}/sse?token={}", port, token);
     match agent_id {
         "claude-code" => Some(McpPreset {
             config_path: home.join(".claude.json"),

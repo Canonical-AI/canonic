@@ -45,7 +45,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ## Coding Standards
 
-We aim to follow the latest and greatest best practices for Vue, JavaScript/Node, and Electron development. Please ensure your code aligns with these standards:
+We aim to follow the latest and greatest best practices for Vue, JavaScript/Node, and Tauri/Rust development. Please ensure your code aligns with these standards:
 
 ### 1. General JavaScript
 

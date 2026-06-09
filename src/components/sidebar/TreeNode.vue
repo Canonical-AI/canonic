@@ -21,6 +21,7 @@
             @mouseenter="onMouseEnter"
             @mouseleave="onMouseLeave"
             @dragstart="handleDragStart"
+            @dragenter.prevent="handleDragEnter"
             @dragover.prevent="handleDragOver"
             @dragleave="handleDragLeave"
             @dragend="handleDragEnd"
@@ -327,6 +328,7 @@ function handleClick() {
 function handleDragStart(e) {
     if (store.isCompactLayout) return;
     store.draggedPath = props.item.path;
+    e.dataTransfer.setData("text/plain", props.item.path);
     e.dataTransfer.setData("application/canonic-path", props.item.path);
     e.dataTransfer.effectAllowed = "move";
 }
@@ -335,12 +337,29 @@ function handleDragEnd() {
     store.draggedPath = null;
 }
 
+function handleDragEnter(e) {
+    if (store.isCompactLayout) return;
+    if (props.item.type !== "directory") return;
+    const hasDraggedPath = store.draggedPath || 
+        e.dataTransfer.types.includes("application/canonic-path") ||
+        e.dataTransfer.types.includes("text/plain");
+    if (hasDraggedPath) {
+        // Prevent moving a folder into itself or its own descendant
+        const targetPath = props.item.path;
+        const sourcePath = store.draggedPath;
+        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
+            return;
+        }
+        isDragOver.value = true;
+    }
+}
+
 function handleDragOver(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-    const hasDraggedPath = store.draggedPath || e.dataTransfer.types.includes(
-        "application/canonic-path",
-    );
+    const hasDraggedPath = store.draggedPath || 
+        e.dataTransfer.types.includes("application/canonic-path") ||
+        e.dataTransfer.types.includes("text/plain");
     if (hasDraggedPath) {
         // Prevent moving a folder into itself or its own descendant
         const targetPath = props.item.path;
@@ -353,8 +372,14 @@ function handleDragOver(e) {
     }
 }
 
-function handleDragLeave() {
+function handleDragLeave(e) {
     if (store.isCompactLayout) return;
+    if (props.item.type !== "directory") return;
+    
+    // Only clear highlight if we actually left the parent container
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
+        return;
+    }
     isDragOver.value = false;
 }
 
@@ -363,7 +388,9 @@ async function handleDrop(e) {
     isDragOver.value = false;
     if (props.item.type !== "directory") return;
 
-    const draggedPath = store.draggedPath || e.dataTransfer.getData("application/canonic-path");
+    const draggedPath = store.draggedPath || 
+        e.dataTransfer.getData("application/canonic-path") ||
+        e.dataTransfer.getData("text/plain");
     store.draggedPath = null;
     
     if (!draggedPath || draggedPath === props.item.path) return;

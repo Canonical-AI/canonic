@@ -9,16 +9,16 @@
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
         <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
-            <div class="titlebar-left">
-                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
-                <span class="app-name">canonic</span>
+            <div class="titlebar-left" data-tauri-drag-region>
+                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" data-tauri-drag-region />
+                <span class="app-name" data-tauri-drag-region>canonic</span>
                 <AppMenu
                     @open-settings="showSettings = true"
                     @reload-config="reloadConfig"
                 />
             </div>
-            <div class="titlebar-center"></div>
-            <div class="titlebar-right">
+            <div class="titlebar-center" data-tauri-drag-region></div>
+            <div class="titlebar-right" data-tauri-drag-region>
                 <!-- Update indicator -->
                 <template v-if="updateReady">
                     <button

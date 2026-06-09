@@ -170,11 +170,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS signing + notarization. Re-add these repo secrets (they replace the
-          # old electron-builder CSC_* secrets): APPLE_CERTIFICATE is the base64 of the
-          # Developer-ID .p12. Build is unsigned/ad-hoc when they are absent.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # macOS signing + notarization. Reuses the existing electron-builder
+          # secrets — CSC_LINK is already the base64 of the Developer-ID .p12
+          # (identical to what tauri-action wants for APPLE_CERTIFICATE), and
+          # CSC_KEY_PASSWORD is its password — so no cert re-export is needed.
+          # APPLE_SIGNING_IDENTITY ("Developer ID Application: … (TEAMID)") is the
+          # only value electron-builder auto-discovered that tauri needs spelled
+          # out. Build is unsigned/ad-hoc if these are absent.
+          APPLE_CERTIFICATE: ${{ secrets.CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}

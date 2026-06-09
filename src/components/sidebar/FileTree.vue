@@ -102,7 +102,15 @@
                 @blur="confirmNewFolder"
             />
         </div>
-        <div class="tree-body">
+        <div
+            class="tree-body"
+            :class="{ 'tree-body--dragover': rootDragOver }"
+            @dragenter.prevent="onRootDragEnter"
+            @dragover.prevent="onRootDragOver"
+            @dragleave="onRootDragLeave"
+            @drop.prevent="onRootDrop"
+            @dragend="onRootDragEnd"
+        >
             <TreeNode
                 v-for="(item, idx) in store.files"
                 :key="item.path"
@@ -112,6 +120,13 @@
             />
             <div v-if="store.files.length === 0" class="empty-hint">
                 No documents yet. Create one to get started.
+            </div>
+            <!-- Always-present empty area below the nodes so there is a reliable
+                 drop target for "move to workspace root" even when the list is full. -->
+            <div class="tree-root-dropzone">
+                <span v-if="rootDragOver" class="tree-root-hint"
+                    >Drop to move to workspace root</span
+                >
             </div>
         </div>
         <TrashBin />
@@ -141,6 +156,73 @@ const filterActive = ref(false);
 const filterText = ref("");
 const filterHighlightIdx = ref(0);
 const sidebarTitle = computed(() => store.workspaceName || "Documents");
+
+// ── Drag-to-root ──
+// The tree body (incl. the empty area below the nodes) is a drop target that
+// moves the dragged item to the workspace root. Drops landing directly on a
+// folder/file row are handled by TreeNode (its @drop.stop stops propagation),
+// so this only fires for drops in the empty space.
+const rootDragOver = ref(false);
+let rootDragCounter = 0;
+
+function onRootDragEnter() {
+    if (store.isCompactLayout) return;
+    if (!store.draggedPath) return;
+    rootDragCounter++;
+}
+
+function onRootDragOver(e) {
+    if (store.isCompactLayout) return;
+    if (!store.draggedPath) return;
+    // Only highlight the root zone over empty space — when the pointer is over a
+    // node row, let that row own the highlight instead.
+    const overNode = !!(e.target.closest && e.target.closest(".tree-node"));
+    rootDragOver.value = !overNode;
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+}
+
+function onRootDragLeave() {
+    if (store.isCompactLayout) return;
+    // Symmetric with onRootDragEnter so the counter stays balanced across the
+    // child rows; clear only once the pointer has fully left the tree body.
+    rootDragCounter--;
+    if (rootDragCounter <= 0) {
+        rootDragCounter = 0;
+        rootDragOver.value = false;
+    }
+}
+
+// dragend bubbles from the source TreeNode (always inside .tree-body), so this
+// guarantees state is reset after every drag regardless of where it ended.
+function onRootDragEnd() {
+    rootDragCounter = 0;
+    rootDragOver.value = false;
+}
+
+async function onRootDrop(e) {
+    if (store.isCompactLayout) return;
+    rootDragCounter = 0;
+    rootDragOver.value = false;
+
+    let draggedPath = store.draggedPath;
+    if (!draggedPath && e.dataTransfer) {
+        draggedPath =
+            e.dataTransfer.getData("application/canonic-path") ||
+            e.dataTransfer.getData("text/plain");
+    }
+    store.draggedPath = null;
+
+    if (!draggedPath) return;
+    // Already at the root (no parent dir) → nothing to move.
+    if (!draggedPath.includes("/")) return;
+
+    try {
+        await store.moveFile(draggedPath, "");
+    } catch (err) {
+        console.error("Move to root failed:", err);
+        alert("Move to root failed: " + err.message);
+    }
+}
 
 async function selectBranch(branch) {
   if (branch === store.currentBranch) { branchOpen.value = false; return; }
@@ -475,6 +557,32 @@ watch(() => store.treeFocusIndex, () => {
     flex: 1;
     overflow-y: auto;
     padding: 4px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.tree-body--dragover {
+    box-shadow: inset 0 0 0 2px var(--accent-muted);
+    border-radius: 4px;
+}
+
+/* Grows to fill any space below the last node so there is always an empty
+   region to drop onto for "move to workspace root". */
+.tree-root-dropzone {
+    flex: 1;
+    min-height: 32px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 8px;
+}
+
+.tree-root-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+    pointer-events: none;
+    text-align: center;
 }
 
 .empty-hint {

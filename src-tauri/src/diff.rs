@@ -25,8 +25,8 @@ fn too_large(before: &str, after: &str) -> bool {
 // (added) and vice-versa (removed). Order-insensitive, so it's an approximation,
 // but it never allocates the quadratic matrix.
 fn coarse_counts(before: &str, after: &str) -> (usize, usize) {
-    use std::collections::HashMap;
-    let mut counts: HashMap<&str, i64> = HashMap::new();
+    use rustc_hash::FxHashMap;
+    let mut counts: FxHashMap<&str, i64> = FxHashMap::default();
     for l in before.split('\n') {
         *counts.entry(l).or_insert(0) += 1;
     }

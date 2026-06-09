@@ -3466,7 +3466,7 @@ fn take_utf8(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
             match e.error_len() {
                 // Incomplete trailing sequence: emit the valid prefix, keep the tail.
                 None => {
-                    let out = String::from_utf8_lossy(&carry[..valid]).to_string();
+                    let out = std::str::from_utf8(&carry[..valid]).unwrap().to_string();
                     carry.drain(..valid);
                     out
                 }
@@ -3567,6 +3567,11 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
         let mut carry: Vec<u8> = Vec::new();
         while let Ok(size) = reader.read(&mut buffer) {
             if size == 0 {
+                if !carry.is_empty() {
+                    let text = String::from_utf8_lossy(&carry).to_string();
+                    let _ = app_handle.emit("pty:data", json!({ "sessionId": session_id_clone, "data": text }));
+                    carry.clear();
+                }
                 break;
             }
             let text = take_utf8(&mut carry, &buffer[..size]);

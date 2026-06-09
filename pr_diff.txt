@@ -1,0 +1,1467 @@
+diff --git a/src-tauri/src/commands.rs b/src-tauri/src/commands.rs
+index d3af3b9..cbf66e7 100644
+--- a/src-tauri/src/commands.rs
++++ b/src-tauri/src/commands.rs
+@@ -17,12 +17,63 @@ pub fn set_app_handle(app: tauri::AppHandle) {
+ #[link(name = "objc")]
+ extern "C" {
+     fn sel_registerName(name: *const std::os::raw::c_char) -> *mut std::ffi::c_void;
++    fn objc_getClass(name: *const std::os::raw::c_char) -> *mut std::ffi::c_void;
+     fn objc_msgSend(
+         receiver: *mut std::ffi::c_void,
+         selector: *mut std::ffi::c_void,
+     ) -> isize;
+ }
+ 
++/// Pin the NSWindow's appearance to a specific aqua variant so the native
++/// vibrancy (NSVisualEffectView) renders against the active theme's scheme
++/// instead of following the OS system appearance. `dark` → NSAppearanceNameDarkAqua,
++/// otherwise NSAppearanceNameAqua. Equivalent ObjC:
++/// `[window setAppearance:[NSAppearance appearanceNamed:name]]`.
++#[cfg(target_os = "macos")]
++unsafe fn set_ns_window_appearance(ns_window: *mut std::ffi::c_void, dark: bool) {
++    use std::ffi::c_void;
++    use std::os::raw::c_char;
++
++    let appearance_class = objc_getClass(c"NSAppearance".as_ptr());
++    let string_class = objc_getClass(c"NSString".as_ptr());
++    if appearance_class.is_null() || string_class.is_null() {
++        return;
++    }
++
++    // objc_msgSend is variadic at the ABI level. Re-type the single declared symbol
++    // for the two call shapes we need (object-arg and C-string-arg) instead of
++    // redeclaring it, which would trip the clashing-extern-declarations lint.
++    type Base = unsafe extern "C" fn(*mut c_void, *mut c_void) -> isize;
++    type MsgSendObj = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void;
++    type MsgSendCStr = unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void;
++    let base: Base = objc_msgSend;
++    let msg_obj = std::mem::transmute::<Base, MsgSendObj>(base);
++    let msg_cstr = std::mem::transmute::<Base, MsgSendCStr>(base);
++
++    // NSString *name = [NSString stringWithUTF8String:"NSAppearanceName…"]
++    let name: &std::ffi::CStr = if dark {
++        c"NSAppearanceNameDarkAqua"
++    } else {
++        c"NSAppearanceNameAqua"
++    };
++    let sel_string_with = sel_registerName(c"stringWithUTF8String:".as_ptr());
++    let ns_name = msg_cstr(string_class, sel_string_with, name.as_ptr());
++    if ns_name.is_null() {
++        return;
++    }
++
++    // NSAppearance *appearance = [NSAppearance appearanceNamed:name]
++    let sel_named = sel_registerName(c"appearanceNamed:".as_ptr());
++    let appearance = msg_obj(appearance_class, sel_named, ns_name);
++    if appearance.is_null() {
++        return;
++    }
++
++    // [window setAppearance:appearance]
++    let sel_set = sel_registerName(c"setAppearance:".as_ptr());
++    let _ = msg_obj(ns_window, sel_set, appearance);
++}
++
+ #[cfg(target_os = "macos")]
+ extern "C" {
+     fn dlopen(path: *const std::os::raw::c_char, mode: std::os::raw::c_int) -> *mut std::ffi::c_void;
+@@ -66,6 +117,11 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
+         
+         if let Ok(ns_window) = window.ns_window() {
+             unsafe {
++                // Pin the appearance to dark by default so the first paint matches a
++                // dark theme (the default) before the frontend loads and calls
++                // set_window_theme with the actual active theme's scheme.
++                set_ns_window_appearance(ns_window, true);
++
+                 let sel = sel_registerName(b"windowNumber\0".as_ptr() as *const _);
+                 let window_number: isize = objc_msgSend(ns_window, sel);
+                 let radius = if blur { 20 } else { 0 };
+@@ -78,6 +134,29 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
+ #[cfg(not(target_os = "macos"))]
+ pub fn apply_window_effects(_window: &tauri::WebviewWindow) {}
+ 
++/// Pin the native macOS window appearance to the active theme's scheme
++/// ("dark" | "light"). This makes the vibrancy backdrop, titlebar and menus
++/// follow the chosen theme rather than the OS system appearance. The AppKit
++/// mutation is dispatched to the main thread. No-op off macOS.
++#[cfg(target_os = "macos")]
++#[tauri::command]
++pub fn set_window_theme(scheme: String) {
++    if let Some(app) = app_handle() {
++        let _ = app.run_on_main_thread(move || {
++            if let Some(window) = app_handle().and_then(|a| a.get_webview_window("main")) {
++                if let Ok(ns_window) = window.ns_window() {
++                    let dark = scheme != "light";
++                    unsafe { set_ns_window_appearance(ns_window, dark) };
++                }
++            }
++        });
++    }
++}
++
++#[cfg(not(target_os = "macos"))]
++#[tauri::command]
++pub fn set_window_theme(_scheme: String) {}
++
+ 
+ 
+ 
+@@ -2773,10 +2852,37 @@ pub async fn ai_chat(app: tauri::AppHandle, params: Value) -> Result<(), String>
+     }
+ 
+     let mut stream = response.bytes_stream();
+-    let mut buf = String::new();
++    // Raw bytes, not a String: a multibyte UTF-8 codepoint can straddle two TCP
++    // chunks, so decode only once a complete line has arrived (lines are \n-delimited,
++    // an ASCII byte, so a line boundary never splits a codepoint).
++    let mut buf: Vec<u8> = Vec::new();
+     let mut is_thinking = false;
+ 
+-    while let Some(item) = stream.next().await {
++    // Poll with a short timeout so cancellation is observed even when the upstream
++    // sends nothing, and abandon the request if it stalls (otherwise a hung
++    // connection leaks this task forever).
++    let poll_interval = std::time::Duration::from_millis(500);
++    let max_idle = std::time::Duration::from_secs(120);
++    let mut last_activity = std::time::Instant::now();
++
++    loop {
++        let item = match tokio::time::timeout(poll_interval, stream.next()).await {
++            Ok(Some(item)) => item,
++            Ok(None) => break, // stream ended
++            Err(_) => {
++                // No data this tick — check for cancellation / overall stall.
++                if AI_GEN.load(SeqCst) != my_gen {
++                    let _ = app.emit("ai:done", ());
++                    return Ok(());
++                }
++                if last_activity.elapsed() >= max_idle {
++                    let _ = app.emit("ai:error", "AI stream timed out (no data).");
++                    return Ok(());
++                }
++                continue;
++            }
++        };
++
+         if AI_GEN.load(SeqCst) != my_gen {
+             let _ = app.emit("ai:done", ());
+             return Ok(());
+@@ -2788,11 +2894,13 @@ pub async fn ai_chat(app: tauri::AppHandle, params: Value) -> Result<(), String>
+                 return Ok(());
+             }
+         };
+-        buf.push_str(&String::from_utf8_lossy(&bytes));
++        last_activity = std::time::Instant::now();
++        buf.extend_from_slice(&bytes);
+ 
+-        while let Some(nl) = buf.find('\n') {
+-            let line = buf[..nl].trim().to_string();
+-            buf = buf[nl + 1..].to_string();
++        while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
++            let line_bytes: Vec<u8> = buf.drain(..=pos).collect();
++            let decoded = String::from_utf8_lossy(&line_bytes[..line_bytes.len() - 1]);
++            let line = decoded.trim();
+             if !line.starts_with("data: ") {
+                 continue;
+             }
+@@ -3341,6 +3449,38 @@ pub fn pty_popout(params: Value) -> Result<Value, String> {
+     Ok(json!({ "ok": true }))
+ }
+ 
++/// Append `chunk` to `carry`, then return the longest decodable UTF-8 text from the
++/// front of `carry`, leaving an incomplete trailing codepoint behind for the next call.
++/// A codepoint split across reads is decoded whole instead of becoming a replacement
++/// char; genuinely invalid bytes are decoded lossily so `carry` never grows unbounded.
++fn take_utf8(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
++    carry.extend_from_slice(chunk);
++    match std::str::from_utf8(carry) {
++        Ok(s) => {
++            let out = s.to_string();
++            carry.clear();
++            out
++        }
++        Err(e) => {
++            let valid = e.valid_up_to();
++            match e.error_len() {
++                // Incomplete trailing sequence: emit the valid prefix, keep the tail.
++                None => {
++                    let out = String::from_utf8_lossy(&carry[..valid]).to_string();
++                    carry.drain(..valid);
++                    out
++                }
++                // Genuinely invalid bytes: decode everything lossily and reset.
++                Some(_) => {
++                    let out = String::from_utf8_lossy(carry).to_string();
++                    carry.clear();
++                    out
++                }
++            }
++        }
++    }
++}
++
+ #[tauri::command]
+ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value, String> {
+     use portable_pty::PtySystem;
+@@ -3392,8 +3532,10 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
+     }
+ 
+     if let Some(mcp) = params.mcp_port {
+-        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp", mcp));
+-        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse", mcp));
++        let token = crate::mcp::get_token().unwrap_or_default();
++        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
++        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
++        cmd.env("CANONIC_MCP_TOKEN", &token);
+     }
+     cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
+     cmd.env("TERM", "xterm-256color");
+@@ -3420,11 +3562,17 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
+     let app_handle = app.clone();
+     std::thread::spawn(move || {
+         let mut buffer = [0u8; 4096];
++        // Carry incomplete trailing bytes between reads so a multibyte UTF-8 codepoint
++        // split across two reads is decoded whole instead of becoming a replacement char.
++        let mut carry: Vec<u8> = Vec::new();
+         while let Ok(size) = reader.read(&mut buffer) {
+             if size == 0 {
+                 break;
+             }
+-            let text = String::from_utf8_lossy(&buffer[..size]).to_string();
++            let text = take_utf8(&mut carry, &buffer[..size]);
++            if text.is_empty() {
++                continue;
++            }
+             let _ = app_handle.emit("pty:data", json!({ "sessionId": session_id_clone, "data": text }));
+         }
+         if let Ok(mut c) = child_clone.lock() {
+@@ -3554,8 +3702,9 @@ fn home_dir() -> PathBuf {
+ 
+ fn mcp_preset(agent_id: &str, port: u16) -> Option<McpPreset> {
+     let home = home_dir();
+-    let url = format!("http://127.0.0.1:{}/mcp", port);
+-    let sse = format!("http://127.0.0.1:{}/sse", port);
++    let token = crate::mcp::get_token().unwrap_or_default();
++    let url = format!("http://127.0.0.1:{}/mcp?token={}", port, token);
++    let sse = format!("http://127.0.0.1:{}/sse?token={}", port, token);
+     match agent_id {
+         "claude-code" => Some(McpPreset {
+             config_path: home.join(".claude.json"),
+@@ -3773,3 +3922,75 @@ fn get_canonic_demo_files() -> Vec<(&'static str, &'static str)> {
+         ("Discovery/user-research.md", "# User Research\n\n> What we've learned directly from users.\n\n## Research Questions\n\n1. How do PMs currently manage document versions and track decisions over time?\n2. What does \"this document is ready to build from\" mean to them — and how do they signal it?\n\n## Methods Used\n\nFounder interviews (10 PMs at B2B SaaS companies, 20–400 employees), alongside survey of 40 PMs in a product community Slack.\n\n## Key Findings\n\n### Finding 1: Version history is the #1 unmet need\n\nEvery PM interviewed had a story about a decision they couldn't reconstruct. \"I know we changed this requirement but I can't find where we landed or why.\" None of them trusted their current tool's version history. Google Docs' history was described as \"too noisy to be useful.\"\n\n### Finding 2: The \"draft → review → approved\" ritual is informal and fragile\n\nMost teams have an implicit flow but no tooling that enforces it. Approval happens via a Slack message or a \"LGTM\" comment. There's no authoritative moment of \"this is the committed version.\"\n\n### Finding 3: PMs are open to Git concepts if explained in their language\n\n\"Branch\" and \"commit\" land if you call them \"draft\" and \"checkpoint.\" Three of ten PMs in initial interviews said they'd wanted something like this for years but assumed it didn't exist.\n\n### Finding 4: AI skepticism is high, but the framing matters\n\nMost PMs have tried AI writing tools and found them underwhelming — they produce generic output that still needs heavy editing. When we described AI that asks questions instead of writes answers, the reaction was universally positive. \"That's actually what I need.\"\n\n## What This Means for the Product\n\nThe core loop is: write → commit → review → approve. Everything we build should make that loop faster and more trustworthy. The AI should be inserted at the review step, not the writing step.\n")
+     ]
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    // safe_join is always called with an already-canonical base (sanitize_path
++    // canonicalizes first), so mirror that here.
++    fn canonical_tmp() -> std::path::PathBuf {
++        std::env::temp_dir().canonicalize().unwrap()
++    }
++
++    #[test]
++    fn safe_join_allows_nested_relative() {
++        let base = canonical_tmp();
++        let p = safe_join(&base, "sub/dir/file.md").unwrap();
++        assert!(p.starts_with(&base));
++        assert!(p.ends_with("sub/dir/file.md"));
++    }
++
++    #[test]
++    fn safe_join_blocks_parent_traversal() {
++        let base = canonical_tmp();
++        assert!(safe_join(&base, "../escape.md").is_err());
++        assert!(safe_join(&base, "a/../../escape.md").is_err());
++    }
++
++    #[test]
++    fn safe_join_blocks_absolute() {
++        let base = canonical_tmp();
++        assert!(safe_join(&base, "/etc/passwd").is_err());
++    }
++
++    #[test]
++    fn sanitize_path_handles_empty_and_dot() {
++        let base = canonical_tmp();
++        let base_str = base.to_string_lossy().to_string();
++        assert_eq!(sanitize_path(&base_str, "").unwrap(), base);
++        assert_eq!(sanitize_path(&base_str, ".").unwrap(), base);
++        assert!(sanitize_path(&base_str, "..").is_err());
++    }
++
++    #[test]
++    fn take_utf8_passes_clean_ascii() {
++        let mut carry = Vec::new();
++        assert_eq!(take_utf8(&mut carry, b"hello\n"), "hello\n");
++        assert!(carry.is_empty());
++    }
++
++    #[test]
++    fn take_utf8_carries_split_codepoint() {
++        // '€' is E2 82 AC. Split it across two reads — the first read must not emit a
++        // replacement char; the byte stays buffered until completed.
++        let mut carry = Vec::new();
++        let euro = "€".as_bytes(); // [0xE2, 0x82, 0xAC]
++        let first = take_utf8(&mut carry, &euro[..2]);
++        assert_eq!(first, "");
++        assert_eq!(carry.len(), 2);
++        let second = take_utf8(&mut carry, &euro[2..]);
++        assert_eq!(second, "€");
++        assert!(carry.is_empty());
++    }
++
++    #[test]
++    fn take_utf8_emits_valid_prefix_and_carries_tail() {
++        let mut carry = Vec::new();
++        let mut input = b"ab".to_vec();
++        input.extend_from_slice(&"€".as_bytes()[..1]); // trailing incomplete byte
++        let out = take_utf8(&mut carry, &input);
++        assert_eq!(out, "ab");
++        assert_eq!(carry.len(), 1);
++    }
++}
+diff --git a/src-tauri/src/diff.rs b/src-tauri/src/diff.rs
+index 7f79304..e311182 100644
+--- a/src-tauri/src/diff.rs
++++ b/src-tauri/src/diff.rs
+@@ -8,6 +8,41 @@ pub enum Op {
+     Del(String),
+ }
+ 
++// build_ops allocates a full (m+1)*(n+1) LCS matrix — O(m*n) memory. Two large
++// docs can blow up to gigabytes, so above this line count on either side we skip
++// the DP and report coarse, order-insensitive counts instead.
++const MAX_DIFF_LINES: usize = 5000;
++
++fn line_count(s: &str) -> usize {
++    s.split('\n').count()
++}
++
++fn too_large(before: &str, after: &str) -> bool {
++    line_count(before) > MAX_DIFF_LINES || line_count(after) > MAX_DIFF_LINES
++}
++
++// O(m+n) multiset difference: how many lines appear in `after` but not `before`
++// (added) and vice-versa (removed). Order-insensitive, so it's an approximation,
++// but it never allocates the quadratic matrix.
++fn coarse_counts(before: &str, after: &str) -> (usize, usize) {
++    use std::collections::HashMap;
++    let mut counts: HashMap<&str, i64> = HashMap::new();
++    for l in before.split('\n') {
++        *counts.entry(l).or_insert(0) += 1;
++    }
++    let mut added = 0usize;
++    for l in after.split('\n') {
++        let e = counts.entry(l).or_insert(0);
++        if *e > 0 {
++            *e -= 1;
++        } else {
++            added += 1;
++        }
++    }
++    let removed = counts.values().filter(|&&v| v > 0).map(|&v| v as usize).sum();
++    (added, removed)
++}
++
+ fn build_ops(before: &str, after: &str) -> Vec<Op> {
+     let a: Vec<&str> = before.split('\n').collect();
+     let b: Vec<&str> = after.split('\n').collect();
+@@ -45,6 +80,9 @@ fn build_ops(before: &str, after: &str) -> Vec<Op> {
+ }
+ 
+ pub fn count_diff(before: &str, after: &str) -> (usize, usize) {
++    if too_large(before, after) {
++        return coarse_counts(before, after);
++    }
+     let mut added = 0;
+     let mut removed = 0;
+     for op in build_ops(before, after) {
+@@ -58,6 +96,10 @@ pub fn count_diff(before: &str, after: &str) -> (usize, usize) {
+ }
+ 
+ pub fn generate_diff(before: &str, after: &str, context_lines: usize) -> String {
++    if too_large(before, after) {
++        let (added, removed) = coarse_counts(before, after);
++        return format!("(diff too large to render: ~{added} added, ~{removed} removed)");
++    }
+     let ops = build_ops(before, after);
+     let len = ops.len();
+ 
+@@ -95,3 +137,30 @@ pub fn generate_diff(before: &str, after: &str, context_lines: usize) -> String
+     }
+     lines.join("\n")
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn count_diff_basic() {
++        assert_eq!(count_diff("a\nb\nc", "a\nx\nc"), (1, 1));
++        assert_eq!(count_diff("same", "same"), (0, 0));
++    }
++
++    #[test]
++    fn generate_diff_marks_changes() {
++        let d = generate_diff("a\nb\nc", "a\nx\nc", 1);
++        assert!(d.contains("- b"));
++        assert!(d.contains("+ x"));
++    }
++
++    #[test]
++    fn large_input_falls_back_to_coarse() {
++        let big: String = (0..6000).map(|i| i.to_string()).collect::<Vec<_>>().join("\n");
++        let rendered = generate_diff(&big, "", 3);
++        assert!(rendered.contains("too large"), "got: {rendered}");
++        let (_added, removed) = count_diff(&big, "");
++        assert!(removed >= 5999, "removed={removed}");
++    }
++}
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index 3053967..025f4af 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -54,6 +54,7 @@ pub fn run() {
+       commands::app_set_default_md,
+       commands::app_open_config,
+       commands::app_edit_action,
++      commands::set_window_theme,
+       commands::telemetry_log,
+       commands::dialog_confirm,
+       commands::dialog_open_directory,
+diff --git a/src-tauri/src/mcp.rs b/src-tauri/src/mcp.rs
+index 93424fa..68be234 100644
+--- a/src-tauri/src/mcp.rs
++++ b/src-tauri/src/mcp.rs
+@@ -14,7 +14,7 @@ use axum::{
+     routing::{get, post},
+     Json, Router,
+ };
+-use futures_util::stream::{self, Stream, StreamExt};
++use futures_util::stream::{self, StreamExt};
+ use serde_json::{json, Value};
+ use std::path::{Path, PathBuf};
+ use std::sync::{Mutex, OnceLock};
+@@ -23,7 +23,6 @@ use tauri::Emitter;
+ // ── Global state ──────────────────────────────────────────────────────────────
+ struct McpState {
+     port: u16,
+-    #[allow(dead_code)]
+     token: String,
+ }
+ 
+@@ -36,6 +35,13 @@ pub fn get_port() -> Option<u16> {
+     mcp_state().get().map(|s| s.port)
+ }
+ 
++// The per-launch bearer token. Embedded as `?token=` in every MCP/SSE/REST URL
++// handed to agents (config files + CANONIC_MCP_URL env), and required by every
++// data-bearing handler. None until the server has started.
++pub fn get_token() -> Option<String> {
++    mcp_state().get().map(|s| s.token.clone())
++}
++
+ #[derive(Clone, Debug, Default)]
+ struct EditorState {
+     focused: Option<String>,
+@@ -189,17 +195,27 @@ fn tool_write_doc(args: &Value) -> Value {
+                 }
+             }
+ 
+-            // If the user has unsaved changes, save them first then make the changes.
++            // If the user has unsaved changes, persist AND snapshot them into git
++            // history before the agent overwrites the file — otherwise their work is
++            // only recoverable if the watcher's debounced auto-commit happens to win
++            // the race against the agent write below (it usually doesn't).
+             if let Some(unsaved) = get_unsaved_content(path) {
+                 if let Err(e) = std::fs::write(&fp, &unsaved) {
+                     log::error!("Failed to write unsaved changes for {:?}: {}", fp, e);
+-                } else {
+-                    if let Ok(rel) = rel_doc_path(path) {
+-                        if let Some(app) = crate::commands::app_handle() {
+-                            use tauri::Emitter;
+-                            let _ = app.emit("agent:file-saved", json!({ "path": rel }));
++                } else if let Ok(rel) = rel_doc_path(path) {
++                    if let Ok(ws) = workspace_path() {
++                        if let Err(e) = crate::commands::git_commit(
++                            ws,
++                            rel.clone(),
++                            "Auto-save before agent edit".to_string(),
++                        ) {
++                            log::warn!("Auto-save commit before agent edit failed for {rel}: {e}");
+                         }
+                     }
++                    if let Some(app) = crate::commands::app_handle() {
++                        use tauri::Emitter;
++                        let _ = app.emit("agent:file-saved", json!({ "path": rel }));
++                    }
+                 }
+             }
+ 
+@@ -517,6 +533,43 @@ fn has_foreign_origin(headers: &HeaderMap) -> bool {
+     host != "localhost" && host != "127.0.0.1"
+ }
+ 
++// ── Bearer-token gate ─────────────────────────────────────────────────────────
++// The origin check only stops browsers (which send Origin); any local process can
++// reach 127.0.0.1:<port> with no Origin. The token (minted per launch, embedded in
++// the URL agents are configured with) is the actual authorization.
++#[derive(serde::Deserialize)]
++struct AuthQuery {
++    token: Option<String>,
++}
++
++fn presented_token(headers: &HeaderMap, query_token: Option<&str>) -> Option<String> {
++    if let Some(t) = query_token {
++        if !t.is_empty() {
++            return Some(t.to_string());
++        }
++    }
++    headers
++        .get("authorization")
++        .and_then(|v| v.to_str().ok())
++        .and_then(|s| {
++            s.strip_prefix("Bearer ")
++                .or_else(|| s.strip_prefix("bearer "))
++        })
++        .map(|s| s.trim().to_string())
++}
++
++fn is_authorized(headers: &HeaderMap, query_token: Option<&str>) -> bool {
++    match get_token() {
++        // Server not started yet → deny rather than fail open.
++        None => false,
++        Some(expected) => presented_token(headers, query_token).is_some_and(|t| t == expected),
++    }
++}
++
++fn unauthorized() -> Response {
++    (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response()
++}
++
+ // ── JSON-RPC handler ──────────────────────────────────────────────────────────
+ fn rpc_error(id: &Value, code: i64, message: &str) -> Value {
+     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+@@ -525,10 +578,13 @@ fn rpc_result(id: &Value, result: Value) -> Value {
+     json!({ "jsonrpc": "2.0", "id": id, "result": result })
+ }
+ 
+-async fn handle_mcp(headers: HeaderMap, body: String) -> Response {
++async fn handle_mcp(headers: HeaderMap, Query(auth): Query<AuthQuery>, body: String) -> Response {
+     if has_foreign_origin(&headers) {
+         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+     }
++    if !is_authorized(&headers, auth.token.as_deref()) {
++        return unauthorized();
++    }
+     let parsed: Value = match serde_json::from_str(&body) {
+         Ok(v) => v,
+         Err(_) => return (StatusCode::BAD_REQUEST, Json(rpc_error(&Value::Null, -32700, "Parse error"))).into_response(),
+@@ -563,12 +619,18 @@ async fn handle_mcp(headers: HeaderMap, body: String) -> Response {
+ }
+ 
+ // ── SSE endpoint (minimal; Claude/Gemini use streamable-HTTP /mcp) ─────────────
+-async fn handle_sse() -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
++async fn handle_sse(headers: HeaderMap, Query(auth): Query<AuthQuery>) -> Response {
++    if has_foreign_origin(&headers) {
++        return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
++    }
++    if !is_authorized(&headers, auth.token.as_deref()) {
++        return unauthorized();
++    }
+     let connected = stream::once(async {
+         Ok::<Event, std::convert::Infallible>(Event::default().event("connected").data("{}"))
+     });
+     let s = connected.chain(stream::pending::<Result<Event, std::convert::Infallible>>());
+-    Sse::new(s).keep_alive(KeepAlive::default())
++    Sse::new(s).keep_alive(KeepAlive::default()).into_response()
+ }
+ 
+ async fn handle_health() -> impl IntoResponse {
+@@ -579,6 +641,7 @@ async fn handle_health() -> impl IntoResponse {
+ #[derive(serde::Deserialize)]
+ struct PathQuery {
+     path: Option<String>,
++    token: Option<String>,
+ }
+ 
+ #[derive(serde::Deserialize)]
+@@ -595,10 +658,13 @@ struct CommentPost {
+     anchor: Value,
+ }
+ 
+-async fn rest_workspace(headers: HeaderMap) -> Response {
++async fn rest_workspace(headers: HeaderMap, Query(auth): Query<AuthQuery>) -> Response {
+     if has_foreign_origin(&headers) {
+         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+     }
++    if !is_authorized(&headers, auth.token.as_deref()) {
++        return unauthorized();
++    }
+     let mut info = tool_get_workspace_info(&json!({}));
+     let files = tool_list_docs(&json!({}));
+     if let Some(obj) = info.as_object_mut() {
+@@ -615,6 +681,9 @@ async fn rest_doc_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Respons
+     if has_foreign_origin(&headers) {
+         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+     }
++    if !is_authorized(&headers, q.token.as_deref()) {
++        return unauthorized();
++    }
+     let path = match focused_or(q.path) {
+         Some(p) => p,
+         None => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "no doc focused" }))).into_response(),
+@@ -626,10 +695,17 @@ async fn rest_doc_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Respons
+     Json(json!({ "path": path, "content": result.get("content").cloned().unwrap_or(json!("")) })).into_response()
+ }
+ 
+-async fn rest_doc_post(headers: HeaderMap, Json(body): Json<DocPost>) -> Response {
++async fn rest_doc_post(
++    headers: HeaderMap,
++    Query(auth): Query<AuthQuery>,
++    Json(body): Json<DocPost>,
++) -> Response {
+     if has_foreign_origin(&headers) {
+         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+     }
++    if !is_authorized(&headers, auth.token.as_deref()) {
++        return unauthorized();
++    }
+     Json(tool_write_doc(&json!({ "path": body.path, "content": body.content }))).into_response()
+ }
+ 
+@@ -637,6 +713,9 @@ async fn rest_comment_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Res
+     if has_foreign_origin(&headers) {
+         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+     }
++    if !is_authorized(&headers, q.token.as_deref()) {
++        return unauthorized();
++    }
+     let path = match focused_or(q.path) {
+         Some(p) => p,
+         None => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "no doc focused" }))).into_response(),
+@@ -644,10 +723,17 @@ async fn rest_comment_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Res
+     Json(tool_read_comments(&json!({ "path": path }))).into_response()
+ }
+ 
+-async fn rest_comment_post(headers: HeaderMap, Json(body): Json<CommentPost>) -> Response {
++async fn rest_comment_post(
++    headers: HeaderMap,
++    Query(auth): Query<AuthQuery>,
++    Json(body): Json<CommentPost>,
++) -> Response {
+     if has_foreign_origin(&headers) {
+         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+     }
++    if !is_authorized(&headers, auth.token.as_deref()) {
++        return unauthorized();
++    }
+     let path = match focused_or(body.path) {
+         Some(p) => p,
+         None => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "no doc focused" }))).into_response(),
+@@ -731,3 +817,57 @@ fn epoch_to_iso(secs: i64) -> String {
+     let year = if month <= 2 { y + 1 } else { y };
+     format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z", year, month, d, h, m, s)
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn presented_token_prefers_nonempty_query() {
++        let h = HeaderMap::new();
++        assert_eq!(presented_token(&h, Some("abc")).as_deref(), Some("abc"));
++        // empty query token is ignored (treated as absent)
++        assert_eq!(presented_token(&h, Some("")), None);
++        assert_eq!(presented_token(&h, None), None);
++    }
++
++    #[test]
++    fn presented_token_parses_bearer_header() {
++        let mut h = HeaderMap::new();
++        h.insert("authorization", "Bearer xyz".parse().unwrap());
++        assert_eq!(presented_token(&h, None).as_deref(), Some("xyz"));
++
++        let mut lower = HeaderMap::new();
++        lower.insert("authorization", "bearer xyz".parse().unwrap());
++        assert_eq!(presented_token(&lower, None).as_deref(), Some("xyz"));
++    }
++
++    #[test]
++    fn is_authorized_denies_when_server_not_started() {
++        // The mcp_state OnceLock is unset under cargo test, so get_token() is None
++        // and every request must be denied (fail closed, never open).
++        let h = HeaderMap::new();
++        assert!(!is_authorized(&h, Some("anything")));
++        assert!(!is_authorized(&h, None));
++    }
++
++    #[test]
++    fn epoch_to_iso_known_value() {
++        // 1700000000 == 2023-11-14T22:13:20Z
++        assert_eq!(epoch_to_iso(1_700_000_000), "2023-11-14T22:13:20.000Z");
++    }
++
++    #[test]
++    fn normalize_lexical_resolves_dot_and_dotdot() {
++        assert_eq!(normalize_lexical(Path::new("a/b/../c")), PathBuf::from("a/c"));
++        assert_eq!(normalize_lexical(Path::new("a/./b")), PathBuf::from("a/b"));
++        // popping past the root just stays empty (can't escape lexically)
++        assert_eq!(normalize_lexical(Path::new("a/../../x")), PathBuf::from("x"));
++    }
++
++    #[test]
++    fn resolve_path_requires_open_workspace() {
++        // No workspace is set under cargo test, so containment can't be checked → Err.
++        assert!(resolve_path("foo.md").is_err());
++    }
++}
+diff --git a/src-tauri/src/server.rs b/src-tauri/src/server.rs
+index bfdc6cd..2841eb9 100644
+--- a/src-tauri/src/server.rs
++++ b/src-tauri/src/server.rs
+@@ -68,6 +68,13 @@ pub fn get_lan_ip() -> String {
+     "127.0.0.1".to_string()
+ }
+ 
++// CSP for the served share pages. They are static formatted markdown — no script of
++// our own — so we forbid all script execution outright (defense in depth on top of the
++// ammonia sanitize). Inline <style> in the page template needs style-src 'unsafe-inline';
++// doc images may be remote, hence img-src *.
++const SHARE_CSP: &str =
++    "default-src 'none'; img-src * data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'";
++
+ // Helper to escape HTML
+ fn escape_html(s: &str) -> String {
+     s.replace('&', "&amp;")
+@@ -80,10 +87,14 @@ fn escape_html(s: &str) -> String {
+ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> String {
+     let deep_link = format!("canonic://open?url={}", urlencoding::encode(doc_url));
+     
+-    // Parse markdown using pulldown-cmark
++    // Parse markdown using pulldown-cmark, then sanitize. pulldown-cmark passes raw
++    // inline HTML through verbatim, so an unsanitized doc body is a stored-XSS vector
++    // for anyone viewing the share over the LAN. ammonia strips <script>, on* handlers,
++    // javascript: URLs, etc., while keeping standard formatting/tables/images.
+     let parser = pulldown_cmark::Parser::new(content);
+-    let mut html_output = String::new();
+-    pulldown_cmark::html::push_html(&mut html_output, parser);
++    let mut raw_html = String::new();
++    pulldown_cmark::html::push_html(&mut raw_html, parser);
++    let html_output = ammonia::clean(&raw_html);
+ 
+     format!(
+         r#"<!DOCTYPE html>
+@@ -318,20 +329,11 @@ async fn handle_manifest(
+     }
+     let files = collect_markdown_files(&share.workspaces, &share.excluded_paths);
+     let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
+-    
+-    let now = std::time::SystemTime::now()
+-        .duration_since(std::time::UNIX_EPOCH)
+-        .unwrap_or_default()
+-        .as_secs();
+-    let hours = (now % 86400) / 3600;
+-    let minutes = (now % 3600) / 60;
+-    let seconds = now % 60;
+-    let time_str = format!("2026-06-08T{:02}:{:02}:{:02}Z", hours, minutes, seconds);
+ 
+     (StatusCode::OK, Json(json!({
+         "scope": share.scope,
+         "files": files,
+-        "sharedAt": time_str,
++        "sharedAt": crate::mcp::chrono_iso8601(),
+         "author": author,
+         "taggedOnly": share.tagged_only
+     }))).into_response()
+@@ -422,7 +424,15 @@ async fn handle_file(
+         let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
+         let doc_url = format!("http://127.0.0.1:{}/file?path={}&token={}", share.port, urlencoding::encode(&query_path), share.token);
+         let html = render_doc_page(&title, &content, &author, &doc_url);
+-        return (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response();
++        return (
++            StatusCode::OK,
++            [
++                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
++                (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
++            ],
++            Html(html),
++        )
++            .into_response();
+     }
+ 
+     (StatusCode::OK, Json(json!({
+@@ -504,7 +514,15 @@ async fn handle_browse(
+         if files.is_empty() { r#"<p class="empty">No documents found.</p>"#.to_string() } else { file_links }
+     );
+ 
+-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response()
++    (
++        StatusCode::OK,
++        [
++            (header::CONTENT_TYPE, "text/html; charset=utf-8"),
++            (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
++        ],
++        Html(html),
++    )
++        .into_response()
+ }
+ 
+ async fn ws_handler(
+@@ -580,21 +598,75 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
+     }
+ }
+ 
++// Does this share serve `file_path`? Used to route live updates to the right
++// viewers instead of broadcasting every doc to every connected client.
++fn is_excluded(share: &ActiveShare, file_path: &str) -> bool {
++    share.excluded_paths.iter().any(|ex| file_path.starts_with(ex))
++}
++
++fn share_covers(share: &ActiveShare, file_path: &str) -> bool {
++    if is_excluded(share, file_path) {
++        return false;
++    }
++    match share.scope.as_str() {
++        "directory" => {
++            file_path == share.key || file_path.starts_with(&format!("{}/", share.key))
++        }
++        "workspace" | "all-workspaces" => true,
++        // "file" and anything unexpected: exact file match only.
++        _ => share.key == file_path,
++    }
++}
++
+ pub fn push_update(file_path: &str, content: &str) {
++    // Notify only the sockets of shares that actually cover this file. The ws-client
++    // map is keyed by share key, so collect the covering keys (releasing the shares
++    // lock before taking the clients lock) and push to just those.
++    let keys: Vec<String> = match get_active_shares() {
++        Ok(shares) => shares
++            .values()
++            .filter(|s| share_covers(s, file_path))
++            .map(|s| s.key.clone())
++            .collect(),
++        Err(_) => return,
++    };
++    if keys.is_empty() {
++        return;
++    }
++    let payload = json!({
++        "type": "update",
++        "filePath": file_path,
++        "content": content
++    })
++    .to_string();
+     if let Ok(clients) = get_ws_clients().lock() {
+-        for list in clients.values() {
+-            let payload = json!({
+-                "type": "update",
+-                "filePath": file_path,
+-                "content": content
+-            }).to_string();
+-            for tx in list {
+-                let _ = tx.send(Message::Text(payload.clone().into()));
++        for key in &keys {
++            if let Some(list) = clients.get(key) {
++                for tx in list {
++                    let _ = tx.send(Message::Text(payload.clone().into()));
++                }
+             }
+         }
+     }
+ }
+ 
++// Bind a share-server socket on a random high port, retrying on collision.
++fn bind_share_listener() -> Result<std::net::TcpListener, String> {
++    use std::net::{SocketAddr, TcpListener};
++    let mut last_err = String::new();
++    for _ in 0..10 {
++        let port = 13800 + (rand::random::<u16>() % 10000);
++        let addr = SocketAddr::from(([0, 0, 0, 0], port));
++        match TcpListener::bind(addr) {
++            Ok(listener) => return Ok(listener),
++            Err(e) => last_err = e.to_string(),
++        }
++    }
++    Err(format!(
++        "Failed to bind a share port after 10 attempts: {last_err}"
++    ))
++}
++
+ pub fn start_sharing_server(
+     key: String,
+     scope: String,
+@@ -606,8 +678,12 @@ pub fn start_sharing_server(
+     // Stop existing share with the same key
+     let _ = stop_sharing_server(&key);
+ 
+-    // Pick a random port
+-    let port = 13800 + (rand::random::<u16>() % 10000);
++    // Bind synchronously so a bind failure is returned to the caller instead of
++    // being swallowed in a detached thread (which left the share registered but
++    // serving nothing). Retry a few ports on collision.
++    let listener = bind_share_listener()?;
++    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
++    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+     let token = uuid::Uuid::new_v4().to_string();
+     let lan_ip = get_lan_ip();
+     let is_workspace = key == "__workspace__" || key == "__all_workspaces__";
+@@ -648,11 +724,21 @@ pub fn start_sharing_server(
+         .with_state(share_clone);
+ 
+     std::thread::spawn(move || {
+-        let rt = tokio::runtime::Runtime::new().unwrap();
++        let rt = match tokio::runtime::Runtime::new() {
++            Ok(rt) => rt,
++            Err(e) => {
++                log::error!("share server: failed to start runtime: {e}");
++                return;
++            }
++        };
+         rt.block_on(async {
+-            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+-            
++            let listener = match tokio::net::TcpListener::from_std(listener) {
++                Ok(l) => l,
++                Err(e) => {
++                    log::error!("share server: failed to adopt listener: {e}");
++                    return;
++                }
++            };
+             let server = axum::serve(listener, app);
+             tokio::select! {
+                 _ = server => {}
+@@ -675,3 +761,64 @@ pub fn stop_sharing_server(key: &str) -> Result<u16, String> {
+         Err("No active share found for this key".to_string())
+     }
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn render_doc_page_strips_active_content() {
++        let md = "# Title\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(2)>\n\n[link](javascript:alert(3))";
++        let html = render_doc_page("Title", md, "Author", "http://127.0.0.1/doc");
++        assert!(!html.contains("<script"), "script tag survived: {html}");
++        assert!(
++            !html.to_lowercase().contains("onerror"),
++            "event handler survived: {html}"
++        );
++        assert!(!html.contains("javascript:"), "javascript: url survived: {html}");
++    }
++
++    #[test]
++    fn escape_html_escapes_metacharacters() {
++        assert_eq!(escape_html("<a>&\"</a>"), "&lt;a&gt;&amp;&quot;&lt;/a&gt;");
++    }
++
++    fn test_share(key: &str, scope: &str, excluded: Vec<String>) -> ActiveShare {
++        ActiveShare {
++            key: key.to_string(),
++            port: 0,
++            token: String::new(),
++            local_url: String::new(),
++            permission: "view".to_string(),
++            scope: scope.to_string(),
++            workspaces: vec![],
++            excluded_paths: excluded,
++            tagged_only: false,
++            reads: std::sync::atomic::AtomicU64::new(0),
++            shutdown_tx: std::sync::Mutex::new(None),
++        }
++    }
++
++    #[test]
++    fn share_covers_file_scope_is_exact() {
++        let s = test_share("Specs/a.md", "file", vec![]);
++        assert!(share_covers(&s, "Specs/a.md"));
++        assert!(!share_covers(&s, "Specs/b.md"));
++    }
++
++    #[test]
++    fn share_covers_directory_scope_is_prefix() {
++        let s = test_share("Specs", "directory", vec![]);
++        assert!(share_covers(&s, "Specs"));
++        assert!(share_covers(&s, "Specs/a.md"));
++        assert!(!share_covers(&s, "SpecsX/a.md")); // sibling dir sharing a prefix
++        assert!(!share_covers(&s, "Other/a.md"));
++    }
++
++    #[test]
++    fn share_covers_workspace_respects_exclusions() {
++        let s = test_share("__workspace__", "workspace", vec!["Private/".to_string()]);
++        assert!(share_covers(&s, "Specs/a.md"));
++        assert!(!share_covers(&s, "Private/secret.md"));
++    }
++}
+diff --git a/src/assets/main.css b/src/assets/main.css
+index 3bc2053..5d07c45 100644
+--- a/src/assets/main.css
++++ b/src/assets/main.css
+@@ -8,6 +8,13 @@
+ 
+ /* ── HAL2001 theme (default) — dark blue-black with warm beige text ── */
+ :root {
++    /* Drive native/UA colors (CanvasText default, scrollbars, form controls) from
++       the active theme, not the OS appearance. Without this, WKWebView resolves
++       default text color against the system scheme, so a dark theme on a light
++       system renders dark text in chrome that doesn't set an explicit color (e.g.
++       the titlebar/menu). color-scheme inherits, so dark themes get this and only
++       the light themes below override it. */
++    color-scheme: dark;
+     /* Backgrounds — from HAL2001 surface hierarchy */
+     --bg-base: #0c0e12; /* background */
+     --bg-titlebar: #111519; /* just above base */
+@@ -30,7 +37,9 @@
+     /* Text — warm beige tones, not cold gray */
+     --text-primary: #d6cfcb; /* on-surface-variant — warm off-white */
+     --text-secondary: #a899ad; /* medium emphasis — muted lavender-beige */
+-    --text-muted: #5a5560; /* low emphasis */
++    --text-muted: #8a8490; /* low emphasis — lightened from #5a5560 so muted
++       labels (e.g. .section-label, titlebar) stay legible on the dark vibrancy
++       backdrop instead of reading as near-invisible dark-on-dark */
+ 
+     /* Accent — HAL2001 primary blue */
+     --accent: #4a7a9b;
+@@ -63,7 +72,7 @@
+     --border-mid: rgba(168, 153, 173, 0.2);
+     --text-primary: #c6b2b5;
+     --text-secondary: #9a8a8e;
+-    --text-muted: #5a4a50;
++    --text-muted: #8a7a82; /* lightened from #5a4a50 for legibility (see :root) */
+     --accent: #4a7a9b;
+     --accent-light: #6a97b5;
+     --accent-muted: rgba(74, 122, 155, 0.18);
+@@ -76,6 +85,7 @@
+ 
+ /* ── Paper theme — light ── */
+ [data-theme="paper"] {
++    color-scheme: light;
+     --bg-base: #f6f4f7;
+     --bg-titlebar: #ede9ef;
+     --bg-sidebar: #dcd5df;
+@@ -148,6 +158,7 @@
+ 
+ /* ── Catppuccin Latte theme ── */
+ [data-theme="latte"] {
++    color-scheme: light;
+     --bg-base: #eff1f5;
+     --bg-titlebar: #dce0e8;
+     --bg-sidebar: #e6e9ef;
+diff --git a/src/components/editor/RefDocPane.vue b/src/components/editor/RefDocPane.vue
+index f340aa7..349c85f 100644
+--- a/src/components/editor/RefDocPane.vue
++++ b/src/components/editor/RefDocPane.vue
+@@ -176,8 +176,10 @@ async function close() {
+ }
+ 
+ // Capture phase so we intercept before the ProseMirror view.
++const hasType = (types, type) => types && (types.includes ? types.includes(type) : types.contains(type));
++
+ function onDragOver(e) {
+-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
++    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
+     e.preventDefault();
+     e.stopPropagation();
+     dragOver.value = true;
+@@ -185,7 +187,7 @@ function onDragOver(e) {
+ }
+ 
+ async function onDrop(e) {
+-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
++    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
+     e.preventDefault();
+     e.stopPropagation();
+     dragOver.value = false;
+diff --git a/src/components/layout/MainLayout.vue b/src/components/layout/MainLayout.vue
+index 264d09c..e5dd3c0 100644
+--- a/src/components/layout/MainLayout.vue
++++ b/src/components/layout/MainLayout.vue
+@@ -9,16 +9,16 @@
+     >
+         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
+         <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
+-            <div class="titlebar-left">
+-                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
+-                <span class="app-name">canonic</span>
++            <div class="titlebar-left" data-tauri-drag-region>
++                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" data-tauri-drag-region />
++                <span class="app-name" data-tauri-drag-region>canonic</span>
+                 <AppMenu
+                     @open-settings="showSettings = true"
+                     @reload-config="reloadConfig"
+                 />
+             </div>
+-            <div class="titlebar-center"></div>
+-            <div class="titlebar-right">
++            <div class="titlebar-center" data-tauri-drag-region></div>
++            <div class="titlebar-right" data-tauri-drag-region>
+                 <!-- Update indicator -->
+                 <template v-if="updateReady">
+                     <button
+@@ -654,10 +654,11 @@ const searchViewRef = ref(null);
+ 
+ // Drag a doc from the file tree onto the active editor pane to open it there.
+ // Capture phase so we intercept before the ProseMirror editor's own drop handler.
++const hasType = (types, type) => types && (types.includes ? types.includes(type) : types.contains(type));
+ const activeDragOver = ref(false);
+ function onActiveDragOver(e) {
+     if (store.isCompactLayout) return;
+-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
++    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
+     e.preventDefault();
+     e.stopPropagation();
+     activeDragOver.value = true;
+@@ -665,7 +666,7 @@ function onActiveDragOver(e) {
+ }
+ function onActiveDrop(e) {
+     if (store.isCompactLayout) return;
+-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
++    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
+     e.preventDefault();
+     e.stopPropagation();
+     activeDragOver.value = false;
+@@ -745,6 +746,12 @@ function applyTheme(name) {
+     } else {
+         document.documentElement.setAttribute("data-theme", name);
+     }
++    // Pin the native macOS window appearance (vibrancy/titlebar/menus) to the
++    // active theme's scheme rather than the OS system appearance. Every theme
++    // path (setTheme, applyConfigTheme, startup) funnels through here. The light
++    // built-in themes are paper and latte; everything else (incl. hal2001) is dark.
++    const scheme = name === "paper" || name === "latte" ? "light" : "dark";
++    window.canonic?.app?.setWindowTheme?.(scheme);
+ }
+ 
+ async function setTheme(name) {
+diff --git a/src/components/modals/SettingsModal.vue b/src/components/modals/SettingsModal.vue
+index 5d28b7f..f823712 100644
+--- a/src/components/modals/SettingsModal.vue
++++ b/src/components/modals/SettingsModal.vue
+@@ -2043,12 +2043,16 @@ async function confirmReset() {
+ <style scoped>
+ /* ── Variables & Resets ── */
+ :where(.modal, .modal-sidebar, .modal-main) {
++    /* Lead with -apple-system/BlinkMacSystemFont so macOS resolves the system UI
++       font via the working alias path. Leading with ui-sans-serif/system-ui makes
++       WebKit request SF Pro by its internal variable-font PostScript name (with
++       wdth/opsz/GRAD/wght axes), which CoreText rejects and falls back to Times New
++       Roman — the source of the ".SFNS-Regular_…" CoreText spam. */
+     font-family:
+-        ui-sans-serif,
+-        system-ui,
+         -apple-system,
+         BlinkMacSystemFont,
+         "Segoe UI",
++        system-ui,
+         Roboto,
+         "Helvetica Neue",
+         Arial,
+diff --git a/src/components/sidebar/FileTree.vue b/src/components/sidebar/FileTree.vue
+index 01f4f60..3127849 100644
+--- a/src/components/sidebar/FileTree.vue
++++ b/src/components/sidebar/FileTree.vue
+@@ -102,7 +102,15 @@
+                 @blur="confirmNewFolder"
+             />
+         </div>
+-        <div class="tree-body">
++        <div
++            class="tree-body"
++            :class="{ 'tree-body--dragover': rootDragOver }"
++            @dragenter.prevent="onRootDragEnter"
++            @dragover.prevent="onRootDragOver"
++            @dragleave="onRootDragLeave"
++            @drop.prevent="onRootDrop"
++            @dragend="onRootDragEnd"
++        >
+             <TreeNode
+                 v-for="(item, idx) in store.files"
+                 :key="item.path"
+@@ -113,6 +121,13 @@
+             <div v-if="store.files.length === 0" class="empty-hint">
+                 No documents yet. Create one to get started.
+             </div>
++            <!-- Always-present empty area below the nodes so there is a reliable
++                 drop target for "move to workspace root" even when the list is full. -->
++            <div class="tree-root-dropzone">
++                <span v-if="rootDragOver" class="tree-root-hint"
++                    >Drop to move to workspace root</span
++                >
++            </div>
+         </div>
+         <TrashBin />
+         <AgentPanel />
+@@ -142,6 +157,73 @@ const filterText = ref("");
+ const filterHighlightIdx = ref(0);
+ const sidebarTitle = computed(() => store.workspaceName || "Documents");
+ 
++// ── Drag-to-root ──
++// The tree body (incl. the empty area below the nodes) is a drop target that
++// moves the dragged item to the workspace root. Drops landing directly on a
++// folder/file row are handled by TreeNode (its @drop.stop stops propagation),
++// so this only fires for drops in the empty space.
++const rootDragOver = ref(false);
++let rootDragCounter = 0;
++
++function onRootDragEnter() {
++    if (store.isCompactLayout) return;
++    if (!store.draggedPath) return;
++    rootDragCounter++;
++}
++
++function onRootDragOver(e) {
++    if (store.isCompactLayout) return;
++    if (!store.draggedPath) return;
++    // Only highlight the root zone over empty space — when the pointer is over a
++    // node row, let that row own the highlight instead.
++    const overNode = !!(e.target.closest && e.target.closest(".tree-node"));
++    rootDragOver.value = !overNode;
++    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
++}
++
++function onRootDragLeave() {
++    if (store.isCompactLayout) return;
++    // Symmetric with onRootDragEnter so the counter stays balanced across the
++    // child rows; clear only once the pointer has fully left the tree body.
++    rootDragCounter--;
++    if (rootDragCounter <= 0) {
++        rootDragCounter = 0;
++        rootDragOver.value = false;
++    }
++}
++
++// dragend bubbles from the source TreeNode (always inside .tree-body), so this
++// guarantees state is reset after every drag regardless of where it ended.
++function onRootDragEnd() {
++    rootDragCounter = 0;
++    rootDragOver.value = false;
++}
++
++async function onRootDrop(e) {
++    if (store.isCompactLayout) return;
++    rootDragCounter = 0;
++    rootDragOver.value = false;
++
++    let draggedPath = store.draggedPath;
++    if (!draggedPath && e.dataTransfer) {
++        draggedPath =
++            e.dataTransfer.getData("application/canonic-path") ||
++            e.dataTransfer.getData("text/plain");
++    }
++    store.draggedPath = null;
++
++    if (!draggedPath) return;
++    // Already at the root (no parent dir) → nothing to move.
++    if (!draggedPath.includes("/")) return;
++
++    try {
++        await store.moveFile(draggedPath, "");
++    } catch (err) {
++        console.error("Move to root failed:", err);
++        alert("Move to root failed: " + err.message);
++    }
++}
++
+ async function selectBranch(branch) {
+   if (branch === store.currentBranch) { branchOpen.value = false; return; }
+   await store.switchWorkspaceBranch(branch);
+@@ -475,6 +557,32 @@ watch(() => store.treeFocusIndex, () => {
+     flex: 1;
+     overflow-y: auto;
+     padding: 4px 0;
++    display: flex;
++    flex-direction: column;
++}
++
++.tree-body--dragover {
++    box-shadow: inset 0 0 0 2px var(--accent-muted);
++    border-radius: 4px;
++}
++
++/* Grows to fill any space below the last node so there is always an empty
++   region to drop onto for "move to workspace root". */
++.tree-root-dropzone {
++    flex: 1;
++    min-height: 32px;
++    display: flex;
++    align-items: flex-start;
++    justify-content: center;
++    padding: 8px;
++}
++
++.tree-root-hint {
++    font-size: 0.7rem;
++    color: var(--text-muted);
++    font-style: italic;
++    pointer-events: none;
++    text-align: center;
+ }
+ 
+ .empty-hint {
+diff --git a/src/components/sidebar/TreeNode.vue b/src/components/sidebar/TreeNode.vue
+index bc48ceb..4a052f0 100644
+--- a/src/components/sidebar/TreeNode.vue
++++ b/src/components/sidebar/TreeNode.vue
+@@ -25,7 +25,7 @@
+             @dragover.prevent="handleDragOver"
+             @dragleave="handleDragLeave"
+             @dragend="handleDragEnd"
+-            @drop="handleDrop"
++            @drop.prevent.stop="handleDrop"
+         >
+             <!-- ASCII tree lines for children -->
+             <span v-if="depth > 0" class="tree-lines" v-text="treeLines" />
+@@ -335,70 +335,93 @@ function handleDragStart(e) {
+ 
+ function handleDragEnd() {
+     store.draggedPath = null;
++    // Safety: a drop on this node may not fire dragleave symmetrically, so make
++    // sure our own highlight state is always cleared when the drag ends.
++    dragCounter = 0;
++    isDragOver.value = false;
++}
++
++// dragenter/dragleave fire for every child element of the row, so a single
++// boolean flickers as the pointer crosses the folder name, icon, etc. We track
++// a depth counter instead: enter increments, leave decrements, and the highlight
++// only clears once the counter returns to zero (pointer truly left the row).
++let dragCounter = 0;
++
++// A directory is a valid drop target unless we'd be moving it into itself or one
++// of its own descendants. draggedPath is set on dragstart for in-app drags.
++function isValidDropTarget() {
++    if (props.item.type !== "directory") return false;
++    const src = store.draggedPath;
++    if (src && (props.item.path === src || props.item.path.startsWith(src + "/"))) {
++        return false;
++    }
++    return true;
+ }
+ 
+ function handleDragEnter(e) {
+     if (store.isCompactLayout) return;
+     if (props.item.type !== "directory") return;
+-    const hasDraggedPath = store.draggedPath || 
+-        e.dataTransfer.types.includes("application/canonic-path") ||
+-        e.dataTransfer.types.includes("text/plain");
+-    if (hasDraggedPath) {
+-        // Prevent moving a folder into itself or its own descendant
+-        const targetPath = props.item.path;
+-        const sourcePath = store.draggedPath;
+-        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
+-            return;
+-        }
++    dragCounter++;
++    if (isValidDropTarget()) {
+         isDragOver.value = true;
++        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+     }
+ }
+ 
+ function handleDragOver(e) {
+     if (store.isCompactLayout) return;
+     if (props.item.type !== "directory") return;
+-    const hasDraggedPath = store.draggedPath || 
+-        e.dataTransfer.types.includes("application/canonic-path") ||
+-        e.dataTransfer.types.includes("text/plain");
+-    if (hasDraggedPath) {
+-        // Prevent moving a folder into itself or its own descendant
+-        const targetPath = props.item.path;
+-        const sourcePath = store.draggedPath;
+-        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
+-            return;
+-        }
++    // The template's @dragover.prevent already calls preventDefault (required to
++    // allow a drop); here we just reflect the drop effect for the cursor.
++    if (isValidDropTarget()) {
+         isDragOver.value = true;
+-        e.dataTransfer.dropEffect = "move";
++        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
++    } else if (e.dataTransfer) {
++        e.dataTransfer.dropEffect = "none";
+     }
+ }
+ 
+ function handleDragLeave(e) {
+     if (store.isCompactLayout) return;
+     if (props.item.type !== "directory") return;
+-    
+-    // Only clear highlight if we actually left the parent container
+-    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) {
+-        return;
++    // Symmetric with handleDragEnter (both gated only on directory type) so the
++    // counter stays balanced; clear the highlight only when we've fully left.
++    dragCounter--;
++    if (dragCounter <= 0) {
++        dragCounter = 0;
++        isDragOver.value = false;
+     }
+-    isDragOver.value = false;
+ }
+ 
+ async function handleDrop(e) {
+     if (store.isCompactLayout) return;
++    dragCounter = 0;
+     isDragOver.value = false;
++
+     if (props.item.type !== "directory") return;
+ 
+-    const draggedPath = store.draggedPath || 
+-        e.dataTransfer.getData("application/canonic-path") ||
+-        e.dataTransfer.getData("text/plain");
++    let draggedPath = store.draggedPath;
++    if (!draggedPath && e.dataTransfer) {
++        draggedPath = e.dataTransfer.getData("application/canonic-path") || e.dataTransfer.getData("text/plain");
++    }
++
+     store.draggedPath = null;
+-    
+-    if (!draggedPath || draggedPath === props.item.path) return;
+ 
+-    // Prevent moving a folder into its own descendant
+-    if (props.item.path.startsWith(draggedPath + "/")) return;
++    if (!draggedPath || draggedPath === props.item.path) {
++        return;
++    }
+ 
+-    await store.moveFile(draggedPath, props.item.path);
++    // Guard against dropping a folder into itself or one of its descendants.
++    if (props.item.path.startsWith(draggedPath + "/")) {
++        return;
++    }
++
++    try {
++        await store.moveFile(draggedPath, props.item.path);
++    } catch (err) {
++        console.error("Move file failed:", err);
++        alert("Move file failed: " + err.message);
++    }
+ }
+ 
+ async function startRename() {
+diff --git a/src/tauri-bridge.js b/src/tauri-bridge.js
+index 64e57b1..81b2cd8 100644
+--- a/src/tauri-bridge.js
++++ b/src/tauri-bridge.js
+@@ -38,6 +38,9 @@ window.canonic = {
+     setDefaultEditor: (value) => invoke('app_set_default_md', { value }),
+     openConfig: () => invoke('app_open_config'),
+     editAction: (action) => invoke('app_edit_action', { action }),
++    // Pin the native macOS window appearance to the active theme's scheme
++    // ("dark" | "light") so vibrancy/titlebar/menus follow the theme, not the OS.
++    setWindowTheme: (scheme) => invoke('set_window_theme', { scheme }),
+   },
+ 
+   // Telemetry

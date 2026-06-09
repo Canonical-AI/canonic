@@ -28,7 +28,7 @@ tauri-plugin-opener = "2"
 tokio = { version = "1.37", features = ["full"] }
 axum = { version = "0.7", features = ["ws"] }
 tower-http = { version = "0.5", features = ["cors"] }
-git2 = { version = "0.19", features = ["vendored-libgit2"] }
+git2 = { version = "0.19", features = ["vendored-libgit2", "vendored-openssl"] }
 portable-pty = "0.8"
 trash = "5.0"
 mdns-sd = "0.20"

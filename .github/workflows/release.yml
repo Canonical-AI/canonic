@@ -151,7 +151,8 @@ jobs:
             patchelf \
             build-essential \
             file \
-            wget
+            wget \
+            xdg-utils
 
       - name: Install dependencies
         run: npm install

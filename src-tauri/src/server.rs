@@ -288,7 +288,7 @@ async fn handle_comments(
         fs::read_to_string(&comments_file)
             .ok()
             .and_then(|c| serde_json::from_str(&c).ok())
-            .unwrap_or_else(|| vec![])
+            .unwrap_or_default()
     } else {
         vec![]
     };
@@ -552,7 +552,7 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
                     "content": content,
                     "author": author
                 }).to_string();
-                let _ = ws_tx.send(Message::Text(msg.into())).await;
+                let _ = ws_tx.send(Message::Text(msg)).await;
             }
         }
     } else {
@@ -560,7 +560,7 @@ async fn handle_ws_socket(socket: WebSocket, share: Arc<ActiveShare>) {
             "type": "manifest",
             "author": author
         }).to_string();
-        let _ = ws_tx.send(Message::Text(msg.into())).await;
+        let _ = ws_tx.send(Message::Text(msg)).await;
     }
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Message>();
@@ -643,7 +643,7 @@ pub fn push_update(file_path: &str, content: &str) {
         for key in &keys {
             if let Some(list) = clients.get(key) {
                 for tx in list {
-                    let _ = tx.send(Message::Text(payload.clone().into()));
+                    let _ = tx.send(Message::Text(payload.clone()));
                 }
             }
         }

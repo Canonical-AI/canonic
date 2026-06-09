@@ -86,8 +86,8 @@ unsafe fn set_window_blur_radius(window_number: isize, radius: i32) {
     let path = b"/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight\0";
     let handle = dlopen(path.as_ptr() as *const _, 1); // RTLD_LAZY = 1
     if !handle.is_null() {
-        let sym_default_connection = dlsym(handle, b"CGSDefaultConnectionForThread\0".as_ptr() as *const _);
-        let sym_set_blur_radius = dlsym(handle, b"CGSSetWindowBackgroundBlurRadius\0".as_ptr() as *const _);
+        let sym_default_connection = dlsym(handle, c"CGSDefaultConnectionForThread".as_ptr() as *const _);
+        let sym_set_blur_radius = dlsym(handle, c"CGSSetWindowBackgroundBlurRadius".as_ptr() as *const _);
         
         if !sym_default_connection.is_null() && !sym_set_blur_radius.is_null() {
             type CGSDefaultConnectionFn = unsafe extern "C" fn() -> *mut std::ffi::c_void;
@@ -122,7 +122,7 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
                 // set_window_theme with the actual active theme's scheme.
                 set_ns_window_appearance(ns_window, true);
 
-                let sel = sel_registerName(b"windowNumber\0".as_ptr() as *const _);
+                let sel = sel_registerName(c"windowNumber".as_ptr() as *const _);
                 let window_number: isize = objc_msgSend(ns_window, sel);
                 let radius = if blur { 20 } else { 0 };
                 set_window_blur_radius(window_number, radius);
@@ -132,6 +132,7 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn apply_window_effects(_window: &tauri::WebviewWindow) {}
 
 /// Pin the native macOS window appearance to the active theme's scheme
@@ -314,9 +315,9 @@ pub fn config_write(config: Value) -> Result<Value, String> {
 
     // Apply window effects at runtime
     if let Some(app) = app_handle() {
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(_window) = app.get_webview_window("main") {
             #[cfg(target_os = "macos")]
-            apply_window_effects(&window);
+            apply_window_effects(&_window);
         }
     }
 
@@ -765,9 +766,7 @@ pub fn files_list(workspace_path: String) -> Result<Vec<Value>, String> {
         Ok(())
     }
 
-    if let Err(e) = scan_dir(&root, "", &mut flat_list) {
-        return Err(e);
-    }
+    scan_dir(&root, "", &mut flat_list)?;
 
     fn build_tree_recursive(parent_path: &str, flat_list: &[Value]) -> Vec<Value> {
         let mut children = Vec::new();
@@ -829,6 +828,7 @@ pub fn files_tree(workspace_path: String, opts: Option<Value>) -> Result<Value, 
         ".git", "node_modules", ".canonic", ".DS_Store", "dist", "build", ".next", ".cache", ".venv", "__pycache__"
     ].iter().cloned().collect();
 
+    #[allow(clippy::too_many_arguments)]
     fn walk(
         abs_dir: &Path, 
         rel_dir: &str, 
@@ -977,7 +977,7 @@ fn build_index_rust(workspace_path: &str) -> serde_json::Map<String, Value> {
     let mut index = serde_json::Map::new();
     let root = Path::new(workspace_path);
     
-    fn walk(dir: &Path, prefix: &str, index: &mut serde_json::Map<String, Value>, root: &Path) {
+    fn walk(dir: &Path, prefix: &str, index: &mut serde_json::Map<String, Value>, _root: &Path) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -993,7 +993,7 @@ fn build_index_rust(workspace_path: &str) -> serde_json::Map<String, Value> {
                 };
                 
                 if path.is_dir() {
-                    walk(&path, &rel, index, root);
+                    walk(&path, &rel, index, _root);
                 } else if name.ends_with(".md") {
                     let basename = name.trim_end_matches(".md").to_string();
                     let depth = rel.split('/').count();
@@ -1217,27 +1217,25 @@ pub fn git_log(workspace_path: String, file_path: String) -> Result<Vec<Value>, 
     
     let filter_file = !file_path.is_empty();
     let mut list = Vec::new();
-    for oid_res in walk {
-        if let Ok(oid) = oid_res {
-            if let Ok(commit) = repo.find_commit(oid) {
-                let is_merge = commit.parent_count() > 1;
-                let include = !filter_file || is_merge || commit_touches_path(&repo, &commit, &file_path);
-                if !include {
-                    continue;
-                }
-                
-                let author = commit.author();
-                let author_name = author.name().unwrap_or("Unknown").to_string();
-                let message = commit.message().unwrap_or("").to_string();
-                let time_sec = commit.time().seconds();
-                
-                list.push(json!({
-                    "oid": oid.to_string(),
-                    "message": message,
-                    "author": author_name,
-                    "timestamp": time_sec * 1000 // To milliseconds
-                }));
+    for oid in walk.flatten() {
+        if let Ok(commit) = repo.find_commit(oid) {
+            let is_merge = commit.parent_count() > 1;
+            let include = !filter_file || is_merge || commit_touches_path(&repo, &commit, &file_path);
+            if !include {
+                continue;
             }
+            
+            let author = commit.author();
+            let author_name = author.name().unwrap_or("Unknown").to_string();
+            let message = commit.message().unwrap_or("").to_string();
+            let time_sec = commit.time().seconds();
+            
+            list.push(json!({
+                "oid": oid.to_string(),
+                "message": message,
+                "author": author_name,
+                "timestamp": time_sec * 1000 // To milliseconds
+            }));
         }
     }
     Ok(list)
@@ -1595,17 +1593,15 @@ pub fn git_log_all(workspace_path: String, file_path: String, branch_list: Vec<S
     if all.is_empty() {
         if let Ok(mut revwalk) = repo.revwalk() {
             if revwalk.push_head().is_ok() {
-                for oid_res in revwalk {
-                    if let Ok(oid) = oid_res {
-                        if let Ok(commit) = repo.find_commit(oid) {
-                            let is_merge = commit.parent_count() > 1;
-                            let include =
-                                !filter_file || is_merge || commit_touches_path(&repo, &commit, &file_path);
-                            if !include {
-                                continue;
-                            }
-                            all.entry(oid.to_string()).or_insert_with(|| commit_to_json(&commit));
+                for oid in revwalk.flatten() {
+                    if let Ok(commit) = repo.find_commit(oid) {
+                        let is_merge = commit.parent_count() > 1;
+                        let include =
+                            !filter_file || is_merge || commit_touches_path(&repo, &commit, &file_path);
+                        if !include {
+                            continue;
                         }
+                        all.entry(oid.to_string()).or_insert_with(|| commit_to_json(&commit));
                     }
                 }
             }
@@ -2325,7 +2321,7 @@ fn read_peers() -> Vec<Value> {
     std::fs::read_to_string(p)
         .ok()
         .and_then(|c| serde_json::from_str::<Vec<Value>>(&c).ok())
-        .unwrap_or_else(|| vec![])
+        .unwrap_or_default()
 }
 
 fn write_peers(peers: &Vec<Value>) {
@@ -3139,7 +3135,7 @@ fn list_models(agent_id: &str) -> (Vec<String>, Option<String>, String) {
                             }
                         } else {
                             // pi parsing:
-                            let l = line.trim().trim_start_matches(|c| c == ' ' || c == '*' || c == '-' || c == '•').trim();
+                            let l = line.trim().trim_start_matches([' ', '*', '-', '•']).trim();
                             // first column if tabular
                             let l_col = l.split_whitespace().next().unwrap_or("").trim();
                             if !l_col.is_empty() && !l_col.to_lowercase().starts_with("model") && !l_col.to_lowercase().starts_with("available") && !l_col.to_lowercase().starts_with("name") && !l_col.to_lowercase().starts_with("id") {
@@ -3335,7 +3331,7 @@ fn read_sessions(workspace_path: &str) -> Vec<Value> {
     std::fs::read_to_string(p)
         .ok()
         .and_then(|content| serde_json::from_str(&content).ok())
-        .unwrap_or_else(|| vec![])
+        .unwrap_or_default()
 }
 
 fn write_sessions(workspace_path: &str, sessions: &Vec<Value>) -> Result<(), String> {
@@ -3533,8 +3529,8 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
 
     if let Some(mcp) = params.mcp_port {
         let token = crate::mcp::get_token().unwrap_or_default();
-        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
-        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
+        cmd.env("CANONIC_MCP_URL", format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
+        cmd.env("CANONIC_MCP_SSE", format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
         cmd.env("CANONIC_MCP_TOKEN", &token);
     }
     cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");

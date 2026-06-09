@@ -3848,6 +3848,42 @@ fn get_canonic_demo_files() -> Vec<(&'static str, &'static str)> {
 mod tests {
     use super::*;
 
+    // safe_join is always called with an already-canonical base (sanitize_path
+    // canonicalizes first), so mirror that here.
+    fn canonical_tmp() -> std::path::PathBuf {
+        std::env::temp_dir().canonicalize().unwrap()
+    }
+
+    #[test]
+    fn safe_join_allows_nested_relative() {
+        let base = canonical_tmp();
+        let p = safe_join(&base, "sub/dir/file.md").unwrap();
+        assert!(p.starts_with(&base));
+        assert!(p.ends_with("sub/dir/file.md"));
+    }
+
+    #[test]
+    fn safe_join_blocks_parent_traversal() {
+        let base = canonical_tmp();
+        assert!(safe_join(&base, "../escape.md").is_err());
+        assert!(safe_join(&base, "a/../../escape.md").is_err());
+    }
+
+    #[test]
+    fn safe_join_blocks_absolute() {
+        let base = canonical_tmp();
+        assert!(safe_join(&base, "/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn sanitize_path_handles_empty_and_dot() {
+        let base = canonical_tmp();
+        let base_str = base.to_string_lossy().to_string();
+        assert_eq!(sanitize_path(&base_str, "").unwrap(), base);
+        assert_eq!(sanitize_path(&base_str, ".").unwrap(), base);
+        assert!(sanitize_path(&base_str, "..").is_err());
+    }
+
     #[test]
     fn take_utf8_passes_clean_ascii() {
         let mut carry = Vec::new();

@@ -856,4 +856,18 @@ mod tests {
         // 1700000000 == 2023-11-14T22:13:20Z
         assert_eq!(epoch_to_iso(1_700_000_000), "2023-11-14T22:13:20.000Z");
     }
+
+    #[test]
+    fn normalize_lexical_resolves_dot_and_dotdot() {
+        assert_eq!(normalize_lexical(Path::new("a/b/../c")), PathBuf::from("a/c"));
+        assert_eq!(normalize_lexical(Path::new("a/./b")), PathBuf::from("a/b"));
+        // popping past the root just stays empty (can't escape lexically)
+        assert_eq!(normalize_lexical(Path::new("a/../../x")), PathBuf::from("x"));
+    }
+
+    #[test]
+    fn resolve_path_requires_open_workspace() {
+        // No workspace is set under cargo test, so containment can't be checked → Err.
+        assert!(resolve_path("foo.md").is_err());
+    }
 }

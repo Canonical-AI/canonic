@@ -8,7 +8,12 @@
         }"
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
-        <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
+        <div
+            v-if="!store.isCompactLayout"
+            class="titlebar"
+            data-tauri-drag-region
+            @mousedown="onTitlebarMouseDown"
+        >
             <div class="titlebar-left" data-tauri-drag-region>
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name">canonic</span>
@@ -18,7 +23,7 @@
                 />
             </div>
             <div class="titlebar-center" data-tauri-drag-region></div>
-            <div class="titlebar-right" @mousedown.stop>
+            <div class="titlebar-right" @mousedown="onTitlebarRightMouseDown">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
                     <button
@@ -148,8 +153,9 @@
             class="mobile-header"
             :class="{ 'mobile-header--mac': isMac }"
             data-tauri-drag-region
+            @mousedown="onTitlebarMouseDown"
         >
-            <div class="mobile-header-left" @mousedown.stop>
+            <div class="mobile-header-left" @mousedown="onTitlebarRightMouseDown">
                 <button
                     class="mobile-menu-btn"
                     @click="mobileMenuOpen = !mobileMenuOpen"
@@ -161,7 +167,7 @@
                 <img src="/canonical-logo.svg" alt="" class="mobile-logo" />
                 <span class="app-name">canonic</span>
             </div>
-            <div class="mobile-header-right" @mousedown.stop>
+            <div class="mobile-header-right" @mousedown="onTitlebarRightMouseDown">
                 <!-- Focus mode toggle button in header to exit Focus Mode if manually entered -->
                 <button
                     v-if="store.distractionFreeMode"
@@ -625,6 +631,7 @@ import {
     Eye,
     EyeOff,
 } from "lucide-vue-next";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import FileTree from "../sidebar/FileTree.vue";
 import PeersPanel from "../sidebar/PeersPanel.vue";
 import SearchView from "../panels/SearchView.vue";
@@ -652,6 +659,27 @@ import { useAppMenu } from "../../composables/useAppMenu.js";
 const store = useAppStore();
 const router = useRouter();
 const searchViewRef = ref(null);
+
+// ── Titlebar drag & focus ───────────────────────────────────────────────────
+const currentWindow = getCurrentWindow();
+const INTERACTIVE_SELECTOR =
+    'button, input, select, textarea, a, [role="button"], [contenteditable="true"]';
+
+function onTitlebarMouseDown(e) {
+    // Only react to primary (left) mouse button
+    if (e.button !== 0) return;
+    // Focus the window on mousedown in the titlebar
+    currentWindow.setFocus();
+    // Only start dragging on non-interactive elements
+    if (e.target.closest(INTERACTIVE_SELECTOR)) return;
+    currentWindow.startDragging();
+}
+
+function onTitlebarRightMouseDown(e) {
+    // Focus but don't drag from the button area
+    currentWindow.setFocus();
+    e.stopPropagation();
+}
 
 // Drag a doc from the file tree onto the active editor pane to open it there.
 // Capture phase so we intercept before the ProseMirror editor's own drop handler.

@@ -68,6 +68,13 @@ pub fn get_lan_ip() -> String {
     "127.0.0.1".to_string()
 }
 
+// CSP for the served share pages. They are static formatted markdown — no script of
+// our own — so we forbid all script execution outright (defense in depth on top of the
+// ammonia sanitize). Inline <style> in the page template needs style-src 'unsafe-inline';
+// doc images may be remote, hence img-src *.
+const SHARE_CSP: &str =
+    "default-src 'none'; img-src * data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'";
+
 // Helper to escape HTML
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -80,10 +87,14 @@ fn escape_html(s: &str) -> String {
 fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> String {
     let deep_link = format!("canonic://open?url={}", urlencoding::encode(doc_url));
     
-    // Parse markdown using pulldown-cmark
+    // Parse markdown using pulldown-cmark, then sanitize. pulldown-cmark passes raw
+    // inline HTML through verbatim, so an unsanitized doc body is a stored-XSS vector
+    // for anyone viewing the share over the LAN. ammonia strips <script>, on* handlers,
+    // javascript: URLs, etc., while keeping standard formatting/tables/images.
     let parser = pulldown_cmark::Parser::new(content);
-    let mut html_output = String::new();
-    pulldown_cmark::html::push_html(&mut html_output, parser);
+    let mut raw_html = String::new();
+    pulldown_cmark::html::push_html(&mut raw_html, parser);
+    let html_output = ammonia::clean(&raw_html);
 
     format!(
         r#"<!DOCTYPE html>
@@ -422,7 +433,15 @@ async fn handle_file(
         let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
         let doc_url = format!("http://127.0.0.1:{}/file?path={}&token={}", share.port, urlencoding::encode(&query_path), share.token);
         let html = render_doc_page(&title, &content, &author, &doc_url);
-        return (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response();
+        return (
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+                (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
+            ],
+            Html(html),
+        )
+            .into_response();
     }
 
     (StatusCode::OK, Json(json!({
@@ -504,7 +523,15 @@ async fn handle_browse(
         if files.is_empty() { r#"<p class="empty">No documents found.</p>"#.to_string() } else { file_links }
     );
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], Html(html)).into_response()
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+            (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
+        ],
+        Html(html),
+    )
+        .into_response()
 }
 
 async fn ws_handler(
@@ -673,5 +700,27 @@ pub fn stop_sharing_server(key: &str) -> Result<u16, String> {
         Ok(share.port)
     } else {
         Err("No active share found for this key".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_doc_page_strips_active_content() {
+        let md = "# Title\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(2)>\n\n[link](javascript:alert(3))";
+        let html = render_doc_page("Title", md, "Author", "http://127.0.0.1/doc");
+        assert!(!html.contains("<script"), "script tag survived: {html}");
+        assert!(
+            !html.to_lowercase().contains("onerror"),
+            "event handler survived: {html}"
+        );
+        assert!(!html.contains("javascript:"), "javascript: url survived: {html}");
+    }
+
+    #[test]
+    fn escape_html_escapes_metacharacters() {
+        assert_eq!(escape_html("<a>&\"</a>"), "&lt;a&gt;&amp;&quot;&lt;/a&gt;");
     }
 }

@@ -8,8 +8,8 @@
         }"
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
-        <div v-if="!store.isCompactLayout" class="titlebar" @mousedown="startDrag">
-            <div class="titlebar-left">
+        <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
+            <div class="titlebar-left" data-tauri-drag-region>
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name">canonic</span>
                 <AppMenu
@@ -17,7 +17,7 @@
                     @reload-config="reloadConfig"
                 />
             </div>
-            <div class="titlebar-center"></div>
+            <div class="titlebar-center" data-tauri-drag-region></div>
             <div class="titlebar-right">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
@@ -147,7 +147,7 @@
             v-if="store.isCompactLayout"
             class="mobile-header"
             :class="{ 'mobile-header--mac': isMac }"
-            @mousedown="startDrag"
+            data-tauri-drag-region
         >
             <div class="mobile-header-left">
                 <button
@@ -648,16 +648,6 @@ import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
 import { useAppMenu } from "../../composables/useAppMenu.js";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-
-function startDrag(e) {
-    if (e.buttons === 1) {
-        if (e.target.closest('button, input, [role="button"], a, .app-menu, .theme-picker-wrap, .icon-btn')) return;
-        try {
-            getCurrentWindow().startDragging();
-        } catch (err) {}
-    }
-}
 
 const store = useAppStore();
 const router = useRouter();
@@ -1281,12 +1271,14 @@ function toggleDistractionFree() {
     object-fit: contain;
     margin-right: 4px;
     flex-shrink: 0;
+    pointer-events: none;
 }
 
 .app-name {
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: -0.01em;
+    pointer-events: none;
 }
 
 .accent {

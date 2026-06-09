@@ -5,6 +5,11 @@ name: Release
 # `finalize` commit the version bump, tag, and publish the release. A failed
 # build never bumps main or creates a tag. Add the `no-release` label to a PR to
 # merge without triggering a build/release at all (CI-only, docs, etc.).
+#
+# Packaging is Tauri (tauri-apps/tauri-action). Bundles land under
+# src-tauri/target/release/bundle/. Tauri reads the version from
+# src-tauri/tauri.conf.json + src-tauri/Cargo.toml, so the version is written
+# into all three (package.json, conf, Cargo) before building.
 
 on:
   pull_request:
@@ -21,9 +26,6 @@ on:
           - patch
           - minor
           - major
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 # Never run two releases at once — they race on the version bump + tag.
 concurrency:
@@ -89,10 +91,30 @@ jobs:
           echo "Next version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-  release-mac:
+  build:
     needs: compute-version
-    runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            artifact: release-mac
+            rust-targets: "aarch64-apple-darwin x86_64-apple-darwin"
+            args: "--target universal-apple-darwin"
+          - platform: windows-latest
+            artifact: release-win
+            rust-targets: ""
+            args: ""
+          - platform: ubuntu-24.04
+            artifact: release-linux-x64
+            rust-targets: ""
+            args: ""
+          - platform: ubuntu-24.04-arm
+            artifact: release-linux-arm64
+            rust-targets: ""
+            args: ""
+    runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -103,200 +125,76 @@ jobs:
           node-version: 24
           cache: "npm"
 
-      - name: Set release version
-        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install Linux system dependencies
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            patchelf \
+            build-essential \
+            file \
+            wget
 
       - name: Install dependencies
         run: npm install
 
+      - name: Set release version
+        # Tauri reads the version from tauri.conf.json + Cargo.toml (not package.json),
+        # so write it into all three before building.
+        shell: bash
+        env:
+          V: ${{ needs.compute-version.outputs.version }}
+        run: |
+          npm pkg set version="$V"
+          node -e "const fs=require('fs');const v=process.env.V;const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f));c.version=v;fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');let t=fs.readFileSync('src-tauri/Cargo.toml','utf8');t=t.replace(/^version = \".*\"/m,'version = \"'+v+'\"');fs.writeFileSync('src-tauri/Cargo.toml',t);"
+
       - name: Run tests
         run: npm test
 
-      - name: Build (mac, no publish)
-        run: npm run build:mac -- --publish never
+      - name: Build (Tauri bundle, no publish)
+        uses: tauri-apps/tauri-action@v0
         env:
-          DEBUG: "electron-builder"
-          # This workflow triggers on a merged pull_request, so electron-builder
-          # treats it as a PR build and skips code signing by default (a guard
-          # against fork PRs touching the cert). Forks never receive secrets, so
-          # CSC_LINK is only present on trusted same-repo merges — force signing
-          # here so release DMGs are Developer-ID signed + notarized, not ad-hoc.
-          CSC_FOR_PULL_REQUEST: "true"
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing + notarization. Re-add these repo secrets (they replace the
+          # old electron-builder CSC_* secrets): APPLE_CERTIFICATE is the base64 of the
+          # Developer-ID .p12. Build is unsigned/ad-hoc when they are absent.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
+        with:
+          args: ${{ matrix.args }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-mac
+          name: ${{ matrix.artifact }}
           if-no-files-found: error
           path: |
-            dist-electron/*.dmg
-            dist-electron/*.zip
-            dist-electron/*.blockmap
-            dist-electron/latest*.yml
-
-  release-win:
-    needs: compute-version
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "npm"
-
-      - name: Set release version
-        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build (win, no publish)
-        run: npm run build:win -- --publish never
-        env:
-          DEBUG: "electron-builder"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-win
-          if-no-files-found: error
-          path: |
-            dist-electron/*.exe
-            dist-electron/*.blockmap
-            dist-electron/latest*.yml
-
-  release-linux-x64:
-    needs: compute-version
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "npm"
-
-      - name: Cache Flatpak runtimes
-        uses: actions/cache@v4
-        id: cache-flatpak-x64
-        with:
-          path: ~/.local/share/flatpak
-          key: flatpak-runtimes-x64-24.08
-
-      - name: Install Flatpak toolchain and runtimes (x64)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools
-          if [ "${{ steps.cache-flatpak-x64.outputs.cache-hit }}" != "true" ]; then
-            flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-            flatpak install --user -y --noninteractive flathub \
-              org.freedesktop.Platform//24.08 \
-              org.freedesktop.Sdk//24.08 \
-              org.electronjs.Electron2.BaseApp//24.08
-          fi
-
-      - name: Set release version
-        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build (linux x64, no publish)
-        run: npm run build:linux -- --x64 --publish never
-        env:
-          DEBUG: "electron-builder"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-linux-x64
-          if-no-files-found: error
-          path: |
-            dist-electron/*.AppImage
-            dist-electron/*.flatpak
-            dist-electron/*.pacman
-            dist-electron/*.tar.gz
-            dist-electron/latest*.yml
-
-  release-linux-arm64:
-    needs: compute-version
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "npm"
-
-      - name: Cache Flatpak runtimes
-        uses: actions/cache@v4
-        id: cache-flatpak-arm64
-        with:
-          path: ~/.local/share/flatpak
-          key: flatpak-runtimes-arm64-24.08
-
-      - name: Install Flatpak toolchain, FPM, and runtimes (arm64)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder elfutils libarchive-tools ruby ruby-dev build-essential
-          sudo gem install --no-document fpm
-          if [ "${{ steps.cache-flatpak-arm64.outputs.cache-hit }}" != "true" ]; then
-            flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-            flatpak install --user -y --noninteractive flathub \
-              org.freedesktop.Platform//24.08 \
-              org.freedesktop.Sdk//24.08 \
-              org.electronjs.Electron2.BaseApp//24.08
-          fi
-
-      - name: Set release version
-        run: npm pkg set version="${{ needs.compute-version.outputs.version }}"
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build (linux arm64, no publish)
-        run: npm run build:linux -- --arm64 --publish never
-        env:
-          DEBUG: "electron-builder"
-          USE_SYSTEM_FPM: "true"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-linux-arm64
-          if-no-files-found: error
-          path: |
-            dist-electron/*.AppImage
-            dist-electron/*.flatpak
-            dist-electron/*.pacman
-            dist-electron/*.tar.gz
-            dist-electron/latest*.yml
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/nsis/*.exe
+            src-tauri/target/**/release/bundle/deb/*.deb
+            src-tauri/target/**/release/bundle/appimage/*.AppImage
+            src-tauri/target/**/release/bundle/rpm/*.rpm
 
   finalize:
     # Only reached if every build job succeeded. This is the single point that
@@ -304,10 +202,7 @@ jobs:
     # main untouched (no bump, no tag, no release).
     needs:
       - compute-version
-      - release-mac
-      - release-win
-      - release-linux-x64
-      - release-linux-arm64
+      - build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -319,20 +214,28 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Commit version bump and tag
+        # Bump all three version sources so a follow-up build is reproducible.
+        env:
+          V: ${{ needs.compute-version.outputs.version }}
         run: |
-          VERSION="${{ needs.compute-version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          npm pkg set version="$VERSION"
-          git add package.json package-lock.json
-          git commit -m "chore(release): bump version to $VERSION"
+          npm pkg set version="$V"
+          node -e "const fs=require('fs');const v=process.env.V;const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f));c.version=v;fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n');let t=fs.readFileSync('src-tauri/Cargo.toml','utf8');t=t.replace(/^version = \".*\"/m,'version = \"'+v+'\"');fs.writeFileSync('src-tauri/Cargo.toml',t);"
+          git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock 2>/dev/null || git add package.json package-lock.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
+          git commit -m "chore(release): bump version to $V"
           # Clear any stale tag from a prior failed run.
-          git push origin ":refs/tags/v$VERSION" 2>/dev/null || true
-          git tag -d "v$VERSION" 2>/dev/null || true
-          git tag -a "v$VERSION" -m "v$VERSION"
+          git push origin ":refs/tags/v$V" 2>/dev/null || true
+          git tag -d "v$V" 2>/dev/null || true
+          git tag -a "v$V" -m "v$V"
           git push origin main
-          git push origin "refs/tags/v$VERSION"
+          git push origin "refs/tags/v$V"
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -363,7 +266,7 @@ jobs:
             --title "v$VERSION" \
             --notes-file release_notes.md \
             --target main \
-            release-artifacts/*
+            $(find release-artifacts -type f)
 
   update-brew:
     needs: [compute-version, finalize]
@@ -381,6 +284,7 @@ jobs:
           # This workflow runs on a PR-merge (not a tag push), so the action
           # can't infer the tag from the ref — pass it explicitly.
           tag-name: v${{ needs.compute-version.outputs.version }}
-          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic-arm64.dmg
+          # Tauri dmg name is canonic_<version>_aarch64.dmg (was canonic-arm64.dmg under electron-builder).
+          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic_${{ needs.compute-version.outputs.version }}_aarch64.dmg
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

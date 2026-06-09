@@ -8,17 +8,17 @@
         }"
     >
         <!-- Titlebar — Vue chrome on all platforms; macOS traffic lights overlay via hiddenInset + padding-left -->
-        <div v-if="!store.isCompactLayout" class="titlebar" data-tauri-drag-region>
-            <div class="titlebar-left" data-tauri-drag-region>
-                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" data-tauri-drag-region />
-                <span class="app-name" data-tauri-drag-region>canonic</span>
+        <div v-if="!store.isCompactLayout" class="titlebar" @mousedown="startDrag">
+            <div class="titlebar-left">
+                <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
+                <span class="app-name">canonic</span>
                 <AppMenu
                     @open-settings="showSettings = true"
                     @reload-config="reloadConfig"
                 />
             </div>
-            <div class="titlebar-center" data-tauri-drag-region></div>
-            <div class="titlebar-right" data-tauri-drag-region>
+            <div class="titlebar-center"></div>
+            <div class="titlebar-right">
                 <!-- Update indicator -->
                 <template v-if="updateReady">
                     <button
@@ -147,6 +147,7 @@
             v-if="store.isCompactLayout"
             class="mobile-header"
             :class="{ 'mobile-header--mac': isMac }"
+            @mousedown="startDrag"
         >
             <div class="mobile-header-left">
                 <button
@@ -647,6 +648,16 @@ import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
 import { useAppMenu } from "../../composables/useAppMenu.js";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+function startDrag(e) {
+    if (e.buttons === 1) {
+        if (e.target.closest('button, input, [role="button"], a, .app-menu, .theme-picker-wrap, .icon-btn')) return;
+        try {
+            getCurrentWindow().startDragging();
+        } catch (err) {}
+    }
+}
 
 const store = useAppStore();
 const router = useRouter();

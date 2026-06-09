@@ -745,6 +745,12 @@ function applyTheme(name) {
     } else {
         document.documentElement.setAttribute("data-theme", name);
     }
+    // Pin the native macOS window appearance (vibrancy/titlebar/menus) to the
+    // active theme's scheme rather than the OS system appearance. Every theme
+    // path (setTheme, applyConfigTheme, startup) funnels through here. The light
+    // built-in themes are paper and latte; everything else (incl. hal2001) is dark.
+    const scheme = name === "paper" || name === "latte" ? "light" : "dark";
+    window.canonic?.app?.setWindowTheme?.(scheme);
 }
 
 async function setTheme(name) {

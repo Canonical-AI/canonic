@@ -37,7 +37,9 @@
     /* Text — warm beige tones, not cold gray */
     --text-primary: #d6cfcb; /* on-surface-variant — warm off-white */
     --text-secondary: #a899ad; /* medium emphasis — muted lavender-beige */
-    --text-muted: #5a5560; /* low emphasis */
+    --text-muted: #8a8490; /* low emphasis — lightened from #5a5560 so muted
+       labels (e.g. .section-label, titlebar) stay legible on the dark vibrancy
+       backdrop instead of reading as near-invisible dark-on-dark */
 
     /* Accent — HAL2001 primary blue */
     --accent: #4a7a9b;
@@ -70,7 +72,7 @@
     --border-mid: rgba(168, 153, 173, 0.2);
     --text-primary: #c6b2b5;
     --text-secondary: #9a8a8e;
-    --text-muted: #5a4a50;
+    --text-muted: #8a7a82; /* lightened from #5a4a50 for legibility (see :root) */
     --accent: #4a7a9b;
     --accent-light: #6a97b5;
     --accent-muted: rgba(74, 122, 155, 0.18);

@@ -17,10 +17,61 @@ pub fn set_app_handle(app: tauri::AppHandle) {
 #[link(name = "objc")]
 extern "C" {
     fn sel_registerName(name: *const std::os::raw::c_char) -> *mut std::ffi::c_void;
+    fn objc_getClass(name: *const std::os::raw::c_char) -> *mut std::ffi::c_void;
     fn objc_msgSend(
         receiver: *mut std::ffi::c_void,
         selector: *mut std::ffi::c_void,
     ) -> isize;
+}
+
+/// Pin the NSWindow's appearance to a specific aqua variant so the native
+/// vibrancy (NSVisualEffectView) renders against the active theme's scheme
+/// instead of following the OS system appearance. `dark` → NSAppearanceNameDarkAqua,
+/// otherwise NSAppearanceNameAqua. Equivalent ObjC:
+/// `[window setAppearance:[NSAppearance appearanceNamed:name]]`.
+#[cfg(target_os = "macos")]
+unsafe fn set_ns_window_appearance(ns_window: *mut std::ffi::c_void, dark: bool) {
+    use std::ffi::c_void;
+    use std::os::raw::c_char;
+
+    let appearance_class = objc_getClass(c"NSAppearance".as_ptr());
+    let string_class = objc_getClass(c"NSString".as_ptr());
+    if appearance_class.is_null() || string_class.is_null() {
+        return;
+    }
+
+    // objc_msgSend is variadic at the ABI level. Re-type the single declared symbol
+    // for the two call shapes we need (object-arg and C-string-arg) instead of
+    // redeclaring it, which would trip the clashing-extern-declarations lint.
+    type Base = unsafe extern "C" fn(*mut c_void, *mut c_void) -> isize;
+    type MsgSendObj = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void;
+    type MsgSendCStr = unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void;
+    let base: Base = objc_msgSend;
+    let msg_obj = std::mem::transmute::<Base, MsgSendObj>(base);
+    let msg_cstr = std::mem::transmute::<Base, MsgSendCStr>(base);
+
+    // NSString *name = [NSString stringWithUTF8String:"NSAppearanceName…"]
+    let name: &std::ffi::CStr = if dark {
+        c"NSAppearanceNameDarkAqua"
+    } else {
+        c"NSAppearanceNameAqua"
+    };
+    let sel_string_with = sel_registerName(c"stringWithUTF8String:".as_ptr());
+    let ns_name = msg_cstr(string_class, sel_string_with, name.as_ptr());
+    if ns_name.is_null() {
+        return;
+    }
+
+    // NSAppearance *appearance = [NSAppearance appearanceNamed:name]
+    let sel_named = sel_registerName(c"appearanceNamed:".as_ptr());
+    let appearance = msg_obj(appearance_class, sel_named, ns_name);
+    if appearance.is_null() {
+        return;
+    }
+
+    // [window setAppearance:appearance]
+    let sel_set = sel_registerName(c"setAppearance:".as_ptr());
+    let _ = msg_obj(ns_window, sel_set, appearance);
 }
 
 #[cfg(target_os = "macos")]
@@ -66,6 +117,11 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
         
         if let Ok(ns_window) = window.ns_window() {
             unsafe {
+                // Pin the appearance to dark by default so the first paint matches a
+                // dark theme (the default) before the frontend loads and calls
+                // set_window_theme with the actual active theme's scheme.
+                set_ns_window_appearance(ns_window, true);
+
                 let sel = sel_registerName(b"windowNumber\0".as_ptr() as *const _);
                 let window_number: isize = objc_msgSend(ns_window, sel);
                 let radius = if blur { 20 } else { 0 };
@@ -77,6 +133,29 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn apply_window_effects(_window: &tauri::WebviewWindow) {}
+
+/// Pin the native macOS window appearance to the active theme's scheme
+/// ("dark" | "light"). This makes the vibrancy backdrop, titlebar and menus
+/// follow the chosen theme rather than the OS system appearance. The AppKit
+/// mutation is dispatched to the main thread. No-op off macOS.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn set_window_theme(scheme: String) {
+    if let Some(app) = app_handle() {
+        let _ = app.run_on_main_thread(move || {
+            if let Some(window) = app_handle().and_then(|a| a.get_webview_window("main")) {
+                if let Ok(ns_window) = window.ns_window() {
+                    let dark = scheme != "light";
+                    unsafe { set_ns_window_appearance(ns_window, dark) };
+                }
+            }
+        });
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn set_window_theme(_scheme: String) {}
 
 
 

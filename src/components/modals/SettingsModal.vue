@@ -2043,12 +2043,16 @@ async function confirmReset() {
 <style scoped>
 /* ── Variables & Resets ── */
 :where(.modal, .modal-sidebar, .modal-main) {
+    /* Lead with -apple-system/BlinkMacSystemFont so macOS resolves the system UI
+       font via the working alias path. Leading with ui-sans-serif/system-ui makes
+       WebKit request SF Pro by its internal variable-font PostScript name (with
+       wdth/opsz/GRAD/wght axes), which CoreText rejects and falls back to Times New
+       Roman — the source of the ".SFNS-Regular_…" CoreText spam. */
     font-family:
-        ui-sans-serif,
-        system-ui,
         -apple-system,
         BlinkMacSystemFont,
         "Segoe UI",
+        system-ui,
         Roboto,
         "Helvetica Neue",
         Arial,

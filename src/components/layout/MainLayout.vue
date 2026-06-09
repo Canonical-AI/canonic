@@ -654,10 +654,11 @@ const searchViewRef = ref(null);
 
 // Drag a doc from the file tree onto the active editor pane to open it there.
 // Capture phase so we intercept before the ProseMirror editor's own drop handler.
+const hasType = (types, type) => types && (types.includes ? types.includes(type) : types.contains(type));
 const activeDragOver = ref(false);
 function onActiveDragOver(e) {
     if (store.isCompactLayout) return;
-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     activeDragOver.value = true;
@@ -665,7 +666,7 @@ function onActiveDragOver(e) {
 }
 function onActiveDrop(e) {
     if (store.isCompactLayout) return;
-    if (!e.dataTransfer.types.includes("application/canonic-path")) return;
+    if (!hasType(e.dataTransfer.types, "application/canonic-path")) return;
     e.preventDefault();
     e.stopPropagation();
     activeDragOver.value = false;

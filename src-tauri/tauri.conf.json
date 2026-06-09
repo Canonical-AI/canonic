@@ -19,7 +19,8 @@
         "resizable": true,
         "fullscreen": false,
         "titleBarStyle": "Overlay",
-        "transparent": true
+        "transparent": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

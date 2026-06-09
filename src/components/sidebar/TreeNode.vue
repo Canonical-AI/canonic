@@ -23,6 +23,7 @@
             @dragstart="handleDragStart"
             @dragover.prevent="handleDragOver"
             @dragleave="handleDragLeave"
+            @dragend="handleDragEnd"
             @drop="handleDrop"
         >
             <!-- ASCII tree lines for children -->
@@ -325,17 +326,28 @@ function handleClick() {
 
 function handleDragStart(e) {
     if (store.isCompactLayout) return;
+    store.draggedPath = props.item.path;
     e.dataTransfer.setData("application/canonic-path", props.item.path);
     e.dataTransfer.effectAllowed = "move";
+}
+
+function handleDragEnd() {
+    store.draggedPath = null;
 }
 
 function handleDragOver(e) {
     if (store.isCompactLayout) return;
     if (props.item.type !== "directory") return;
-    const draggedPath = e.dataTransfer.types.includes(
+    const hasDraggedPath = store.draggedPath || e.dataTransfer.types.includes(
         "application/canonic-path",
     );
-    if (draggedPath) {
+    if (hasDraggedPath) {
+        // Prevent moving a folder into itself or its own descendant
+        const targetPath = props.item.path;
+        const sourcePath = store.draggedPath;
+        if (sourcePath && (targetPath === sourcePath || targetPath.startsWith(sourcePath + "/"))) {
+            return;
+        }
         isDragOver.value = true;
         e.dataTransfer.dropEffect = "move";
     }
@@ -351,7 +363,9 @@ async function handleDrop(e) {
     isDragOver.value = false;
     if (props.item.type !== "directory") return;
 
-    const draggedPath = e.dataTransfer.getData("application/canonic-path");
+    const draggedPath = store.draggedPath || e.dataTransfer.getData("application/canonic-path");
+    store.draggedPath = null;
+    
     if (!draggedPath || draggedPath === props.item.path) return;
 
     // Prevent moving a folder into its own descendant

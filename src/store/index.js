@@ -19,6 +19,7 @@ export const useAppStore = defineStore("app", () => {
   const files = ref([]);
   const currentFile = ref(null);
   const currentContent = ref("");
+  const draggedPath = ref(null);
 
   // ── Tree keyboard navigation (yazi-style) ──
   const treeFocused = ref(false);
@@ -3234,6 +3235,7 @@ export const useAppStore = defineStore("app", () => {
     files,
     currentFile,
     currentContent,
+    draggedPath,
     branches,
     currentBranch,
     isExternalRepo,

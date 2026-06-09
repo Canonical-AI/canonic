@@ -292,7 +292,8 @@ jobs:
           # This workflow runs on a PR-merge (not a tag push), so the action
           # can't infer the tag from the ref — pass it explicitly.
           tag-name: v${{ needs.compute-version.outputs.version }}
-          # Tauri dmg name is canonic_<version>_aarch64.dmg (was canonic-arm64.dmg under electron-builder).
-          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic_${{ needs.compute-version.outputs.version }}_aarch64.dmg
+          # Universal build (--target universal-apple-darwin) → tauri names the dmg
+          # canonic_<version>_universal.dmg (was canonic-arm64.dmg under electron-builder).
+          download-url: https://github.com/Canonical-AI/canonic/releases/download/v${{ needs.compute-version.outputs.version }}/canonic_${{ needs.compute-version.outputs.version }}_universal.dmg
         env:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

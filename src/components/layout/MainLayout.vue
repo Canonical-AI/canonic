@@ -1250,7 +1250,7 @@ function toggleDistractionFree() {
     height: 44px;
     background: var(--bg-titlebar);
     border-bottom: 1px solid var(--border);
-    -webkit-app-region: drag;
+    user-select: none;
     flex-shrink: 0;
 }
 
@@ -1285,7 +1285,6 @@ function toggleDistractionFree() {
 .titlebar-right {
     display: flex;
     gap: 4px;
-    -webkit-app-region: no-drag;
 }
 
 .icon-btn {
@@ -1633,7 +1632,6 @@ function toggleDistractionFree() {
     cursor: pointer;
     animation: update-pulse 2s ease-in-out infinite;
     white-space: nowrap;
-    -webkit-app-region: no-drag;
 }
 
 .update-ready-btn:hover {
@@ -1664,7 +1662,6 @@ function toggleDistractionFree() {
     cursor: pointer;
     transition: background 0.15s;
     white-space: nowrap;
-    -webkit-app-region: no-drag;
 }
 
 .update-available-btn:hover {
@@ -1835,7 +1832,6 @@ function toggleDistractionFree() {
     flex-shrink: 0;
     z-index: 100;
     position: relative;
-    -webkit-app-region: drag;
 }
 
 .mobile-header--mac {
@@ -1845,7 +1841,6 @@ function toggleDistractionFree() {
 .mobile-menu-btn,
 .mobile-icon-btn,
 .mobile-menu-dropdown {
-    -webkit-app-region: no-drag;
 }
 
 .mobile-header-left {

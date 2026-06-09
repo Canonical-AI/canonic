@@ -14,7 +14,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use futures_util::stream::{self, Stream, StreamExt};
+use futures_util::stream::{self, StreamExt};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -23,7 +23,6 @@ use tauri::Emitter;
 // ── Global state ──────────────────────────────────────────────────────────────
 struct McpState {
     port: u16,
-    #[allow(dead_code)]
     token: String,
 }
 
@@ -34,6 +33,13 @@ fn mcp_state() -> &'static OnceLock<McpState> {
 
 pub fn get_port() -> Option<u16> {
     mcp_state().get().map(|s| s.port)
+}
+
+// The per-launch bearer token. Embedded as `?token=` in every MCP/SSE/REST URL
+// handed to agents (config files + CANONIC_MCP_URL env), and required by every
+// data-bearing handler. None until the server has started.
+pub fn get_token() -> Option<String> {
+    mcp_state().get().map(|s| s.token.clone())
 }
 
 #[derive(Clone, Debug, Default)]
@@ -189,16 +195,26 @@ fn tool_write_doc(args: &Value) -> Value {
                 }
             }
 
-            // If the user has unsaved changes, save them first then make the changes.
+            // If the user has unsaved changes, persist AND snapshot them into git
+            // history before the agent overwrites the file — otherwise their work is
+            // only recoverable if the watcher's debounced auto-commit happens to win
+            // the race against the agent write below (it usually doesn't).
             if let Some(unsaved) = get_unsaved_content(path) {
                 if let Err(e) = std::fs::write(&fp, &unsaved) {
                     log::error!("Failed to write unsaved changes for {:?}: {}", fp, e);
-                } else {
-                    if let Ok(rel) = rel_doc_path(path) {
-                        if let Some(app) = crate::commands::app_handle() {
-                            use tauri::Emitter;
-                            let _ = app.emit("agent:file-saved", json!({ "path": rel }));
+                } else if let Ok(rel) = rel_doc_path(path) {
+                    if let Ok(ws) = workspace_path() {
+                        if let Err(e) = crate::commands::git_commit(
+                            ws,
+                            rel.clone(),
+                            "Auto-save before agent edit".to_string(),
+                        ) {
+                            log::warn!("Auto-save commit before agent edit failed for {rel}: {e}");
                         }
+                    }
+                    if let Some(app) = crate::commands::app_handle() {
+                        use tauri::Emitter;
+                        let _ = app.emit("agent:file-saved", json!({ "path": rel }));
                     }
                 }
             }
@@ -517,6 +533,43 @@ fn has_foreign_origin(headers: &HeaderMap) -> bool {
     host != "localhost" && host != "127.0.0.1"
 }
 
+// ── Bearer-token gate ─────────────────────────────────────────────────────────
+// The origin check only stops browsers (which send Origin); any local process can
+// reach 127.0.0.1:<port> with no Origin. The token (minted per launch, embedded in
+// the URL agents are configured with) is the actual authorization.
+#[derive(serde::Deserialize)]
+struct AuthQuery {
+    token: Option<String>,
+}
+
+fn presented_token(headers: &HeaderMap, query_token: Option<&str>) -> Option<String> {
+    if let Some(t) = query_token {
+        if !t.is_empty() {
+            return Some(t.to_string());
+        }
+    }
+    headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| {
+            s.strip_prefix("Bearer ")
+                .or_else(|| s.strip_prefix("bearer "))
+        })
+        .map(|s| s.trim().to_string())
+}
+
+fn is_authorized(headers: &HeaderMap, query_token: Option<&str>) -> bool {
+    match get_token() {
+        // Server not started yet → deny rather than fail open.
+        None => false,
+        Some(expected) => presented_token(headers, query_token).is_some_and(|t| t == expected),
+    }
+}
+
+fn unauthorized() -> Response {
+    (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response()
+}
+
 // ── JSON-RPC handler ──────────────────────────────────────────────────────────
 fn rpc_error(id: &Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
@@ -525,9 +578,12 @@ fn rpc_result(id: &Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
 
-async fn handle_mcp(headers: HeaderMap, body: String) -> Response {
+async fn handle_mcp(headers: HeaderMap, Query(auth): Query<AuthQuery>, body: String) -> Response {
     if has_foreign_origin(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+    }
+    if !is_authorized(&headers, auth.token.as_deref()) {
+        return unauthorized();
     }
     let parsed: Value = match serde_json::from_str(&body) {
         Ok(v) => v,
@@ -563,12 +619,18 @@ async fn handle_mcp(headers: HeaderMap, body: String) -> Response {
 }
 
 // ── SSE endpoint (minimal; Claude/Gemini use streamable-HTTP /mcp) ─────────────
-async fn handle_sse() -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+async fn handle_sse(headers: HeaderMap, Query(auth): Query<AuthQuery>) -> Response {
+    if has_foreign_origin(&headers) {
+        return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+    }
+    if !is_authorized(&headers, auth.token.as_deref()) {
+        return unauthorized();
+    }
     let connected = stream::once(async {
         Ok::<Event, std::convert::Infallible>(Event::default().event("connected").data("{}"))
     });
     let s = connected.chain(stream::pending::<Result<Event, std::convert::Infallible>>());
-    Sse::new(s).keep_alive(KeepAlive::default())
+    Sse::new(s).keep_alive(KeepAlive::default()).into_response()
 }
 
 async fn handle_health() -> impl IntoResponse {
@@ -579,6 +641,7 @@ async fn handle_health() -> impl IntoResponse {
 #[derive(serde::Deserialize)]
 struct PathQuery {
     path: Option<String>,
+    token: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -595,9 +658,12 @@ struct CommentPost {
     anchor: Value,
 }
 
-async fn rest_workspace(headers: HeaderMap) -> Response {
+async fn rest_workspace(headers: HeaderMap, Query(auth): Query<AuthQuery>) -> Response {
     if has_foreign_origin(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+    }
+    if !is_authorized(&headers, auth.token.as_deref()) {
+        return unauthorized();
     }
     let mut info = tool_get_workspace_info(&json!({}));
     let files = tool_list_docs(&json!({}));
@@ -615,6 +681,9 @@ async fn rest_doc_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Respons
     if has_foreign_origin(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
     }
+    if !is_authorized(&headers, q.token.as_deref()) {
+        return unauthorized();
+    }
     let path = match focused_or(q.path) {
         Some(p) => p,
         None => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "no doc focused" }))).into_response(),
@@ -626,9 +695,16 @@ async fn rest_doc_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Respons
     Json(json!({ "path": path, "content": result.get("content").cloned().unwrap_or(json!("")) })).into_response()
 }
 
-async fn rest_doc_post(headers: HeaderMap, Json(body): Json<DocPost>) -> Response {
+async fn rest_doc_post(
+    headers: HeaderMap,
+    Query(auth): Query<AuthQuery>,
+    Json(body): Json<DocPost>,
+) -> Response {
     if has_foreign_origin(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+    }
+    if !is_authorized(&headers, auth.token.as_deref()) {
+        return unauthorized();
     }
     Json(tool_write_doc(&json!({ "path": body.path, "content": body.content }))).into_response()
 }
@@ -637,6 +713,9 @@ async fn rest_comment_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Res
     if has_foreign_origin(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
     }
+    if !is_authorized(&headers, q.token.as_deref()) {
+        return unauthorized();
+    }
     let path = match focused_or(q.path) {
         Some(p) => p,
         None => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "no doc focused" }))).into_response(),
@@ -644,9 +723,16 @@ async fn rest_comment_get(headers: HeaderMap, Query(q): Query<PathQuery>) -> Res
     Json(tool_read_comments(&json!({ "path": path }))).into_response()
 }
 
-async fn rest_comment_post(headers: HeaderMap, Json(body): Json<CommentPost>) -> Response {
+async fn rest_comment_post(
+    headers: HeaderMap,
+    Query(auth): Query<AuthQuery>,
+    Json(body): Json<CommentPost>,
+) -> Response {
     if has_foreign_origin(&headers) {
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "forbidden" }))).into_response();
+    }
+    if !is_authorized(&headers, auth.token.as_deref()) {
+        return unauthorized();
     }
     let path = match focused_or(body.path) {
         Some(p) => p,
@@ -730,4 +816,58 @@ fn epoch_to_iso(secs: i64) -> String {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = if month <= 2 { y + 1 } else { y };
     format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z", year, month, d, h, m, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn presented_token_prefers_nonempty_query() {
+        let h = HeaderMap::new();
+        assert_eq!(presented_token(&h, Some("abc")).as_deref(), Some("abc"));
+        // empty query token is ignored (treated as absent)
+        assert_eq!(presented_token(&h, Some("")), None);
+        assert_eq!(presented_token(&h, None), None);
+    }
+
+    #[test]
+    fn presented_token_parses_bearer_header() {
+        let mut h = HeaderMap::new();
+        h.insert("authorization", "Bearer xyz".parse().unwrap());
+        assert_eq!(presented_token(&h, None).as_deref(), Some("xyz"));
+
+        let mut lower = HeaderMap::new();
+        lower.insert("authorization", "bearer xyz".parse().unwrap());
+        assert_eq!(presented_token(&lower, None).as_deref(), Some("xyz"));
+    }
+
+    #[test]
+    fn is_authorized_denies_when_server_not_started() {
+        // The mcp_state OnceLock is unset under cargo test, so get_token() is None
+        // and every request must be denied (fail closed, never open).
+        let h = HeaderMap::new();
+        assert!(!is_authorized(&h, Some("anything")));
+        assert!(!is_authorized(&h, None));
+    }
+
+    #[test]
+    fn epoch_to_iso_known_value() {
+        // 1700000000 == 2023-11-14T22:13:20Z
+        assert_eq!(epoch_to_iso(1_700_000_000), "2023-11-14T22:13:20.000Z");
+    }
+
+    #[test]
+    fn normalize_lexical_resolves_dot_and_dotdot() {
+        assert_eq!(normalize_lexical(Path::new("a/b/../c")), PathBuf::from("a/c"));
+        assert_eq!(normalize_lexical(Path::new("a/./b")), PathBuf::from("a/b"));
+        // popping past the root just stays empty (can't escape lexically)
+        assert_eq!(normalize_lexical(Path::new("a/../../x")), PathBuf::from("x"));
+    }
+
+    #[test]
+    fn resolve_path_requires_open_workspace() {
+        // No workspace is set under cargo test, so containment can't be checked → Err.
+        assert!(resolve_path("foo.md").is_err());
+    }
 }

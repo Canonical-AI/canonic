@@ -8,6 +8,41 @@ pub enum Op {
     Del(String),
 }
 
+// build_ops allocates a full (m+1)*(n+1) LCS matrix — O(m*n) memory. Two large
+// docs can blow up to gigabytes, so above this line count on either side we skip
+// the DP and report coarse, order-insensitive counts instead.
+const MAX_DIFF_LINES: usize = 5000;
+
+fn line_count(s: &str) -> usize {
+    s.split('\n').count()
+}
+
+fn too_large(before: &str, after: &str) -> bool {
+    line_count(before) > MAX_DIFF_LINES || line_count(after) > MAX_DIFF_LINES
+}
+
+// O(m+n) multiset difference: how many lines appear in `after` but not `before`
+// (added) and vice-versa (removed). Order-insensitive, so it's an approximation,
+// but it never allocates the quadratic matrix.
+fn coarse_counts(before: &str, after: &str) -> (usize, usize) {
+    use std::collections::HashMap;
+    let mut counts: HashMap<&str, i64> = HashMap::new();
+    for l in before.split('\n') {
+        *counts.entry(l).or_insert(0) += 1;
+    }
+    let mut added = 0usize;
+    for l in after.split('\n') {
+        let e = counts.entry(l).or_insert(0);
+        if *e > 0 {
+            *e -= 1;
+        } else {
+            added += 1;
+        }
+    }
+    let removed = counts.values().filter(|&&v| v > 0).map(|&v| v as usize).sum();
+    (added, removed)
+}
+
 fn build_ops(before: &str, after: &str) -> Vec<Op> {
     let a: Vec<&str> = before.split('\n').collect();
     let b: Vec<&str> = after.split('\n').collect();
@@ -45,6 +80,9 @@ fn build_ops(before: &str, after: &str) -> Vec<Op> {
 }
 
 pub fn count_diff(before: &str, after: &str) -> (usize, usize) {
+    if too_large(before, after) {
+        return coarse_counts(before, after);
+    }
     let mut added = 0;
     let mut removed = 0;
     for op in build_ops(before, after) {
@@ -58,6 +96,10 @@ pub fn count_diff(before: &str, after: &str) -> (usize, usize) {
 }
 
 pub fn generate_diff(before: &str, after: &str, context_lines: usize) -> String {
+    if too_large(before, after) {
+        let (added, removed) = coarse_counts(before, after);
+        return format!("(diff too large to render: ~{added} added, ~{removed} removed)");
+    }
     let ops = build_ops(before, after);
     let len = ops.len();
 
@@ -94,4 +136,31 @@ pub fn generate_diff(before: &str, after: &str, context_lines: usize) -> String 
         last_idx = idx as i64;
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn count_diff_basic() {
+        assert_eq!(count_diff("a\nb\nc", "a\nx\nc"), (1, 1));
+        assert_eq!(count_diff("same", "same"), (0, 0));
+    }
+
+    #[test]
+    fn generate_diff_marks_changes() {
+        let d = generate_diff("a\nb\nc", "a\nx\nc", 1);
+        assert!(d.contains("- b"));
+        assert!(d.contains("+ x"));
+    }
+
+    #[test]
+    fn large_input_falls_back_to_coarse() {
+        let big: String = (0..6000).map(|i| i.to_string()).collect::<Vec<_>>().join("\n");
+        let rendered = generate_diff(&big, "", 3);
+        assert!(rendered.contains("too large"), "got: {rendered}");
+        let (_added, removed) = count_diff(&big, "");
+        assert!(removed >= 5999, "removed={removed}");
+    }
 }

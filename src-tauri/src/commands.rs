@@ -2773,10 +2773,37 @@ pub async fn ai_chat(app: tauri::AppHandle, params: Value) -> Result<(), String>
     }
 
     let mut stream = response.bytes_stream();
-    let mut buf = String::new();
+    // Raw bytes, not a String: a multibyte UTF-8 codepoint can straddle two TCP
+    // chunks, so decode only once a complete line has arrived (lines are \n-delimited,
+    // an ASCII byte, so a line boundary never splits a codepoint).
+    let mut buf: Vec<u8> = Vec::new();
     let mut is_thinking = false;
 
-    while let Some(item) = stream.next().await {
+    // Poll with a short timeout so cancellation is observed even when the upstream
+    // sends nothing, and abandon the request if it stalls (otherwise a hung
+    // connection leaks this task forever).
+    let poll_interval = std::time::Duration::from_millis(500);
+    let max_idle = std::time::Duration::from_secs(120);
+    let mut last_activity = std::time::Instant::now();
+
+    loop {
+        let item = match tokio::time::timeout(poll_interval, stream.next()).await {
+            Ok(Some(item)) => item,
+            Ok(None) => break, // stream ended
+            Err(_) => {
+                // No data this tick — check for cancellation / overall stall.
+                if AI_GEN.load(SeqCst) != my_gen {
+                    let _ = app.emit("ai:done", ());
+                    return Ok(());
+                }
+                if last_activity.elapsed() >= max_idle {
+                    let _ = app.emit("ai:error", "AI stream timed out (no data).");
+                    return Ok(());
+                }
+                continue;
+            }
+        };
+
         if AI_GEN.load(SeqCst) != my_gen {
             let _ = app.emit("ai:done", ());
             return Ok(());
@@ -2788,11 +2815,13 @@ pub async fn ai_chat(app: tauri::AppHandle, params: Value) -> Result<(), String>
                 return Ok(());
             }
         };
-        buf.push_str(&String::from_utf8_lossy(&bytes));
+        last_activity = std::time::Instant::now();
+        buf.extend_from_slice(&bytes);
 
-        while let Some(nl) = buf.find('\n') {
-            let line = buf[..nl].trim().to_string();
-            buf = buf[nl + 1..].to_string();
+        while let Some(pos) = buf.iter().position(|&b| b == b'\n') {
+            let line_bytes: Vec<u8> = buf.drain(..=pos).collect();
+            let decoded = String::from_utf8_lossy(&line_bytes[..line_bytes.len() - 1]);
+            let line = decoded.trim();
             if !line.starts_with("data: ") {
                 continue;
             }
@@ -3341,6 +3370,38 @@ pub fn pty_popout(params: Value) -> Result<Value, String> {
     Ok(json!({ "ok": true }))
 }
 
+/// Append `chunk` to `carry`, then return the longest decodable UTF-8 text from the
+/// front of `carry`, leaving an incomplete trailing codepoint behind for the next call.
+/// A codepoint split across reads is decoded whole instead of becoming a replacement
+/// char; genuinely invalid bytes are decoded lossily so `carry` never grows unbounded.
+fn take_utf8(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
+    carry.extend_from_slice(chunk);
+    match std::str::from_utf8(carry) {
+        Ok(s) => {
+            let out = s.to_string();
+            carry.clear();
+            out
+        }
+        Err(e) => {
+            let valid = e.valid_up_to();
+            match e.error_len() {
+                // Incomplete trailing sequence: emit the valid prefix, keep the tail.
+                None => {
+                    let out = String::from_utf8_lossy(&carry[..valid]).to_string();
+                    carry.drain(..valid);
+                    out
+                }
+                // Genuinely invalid bytes: decode everything lossily and reset.
+                Some(_) => {
+                    let out = String::from_utf8_lossy(carry).to_string();
+                    carry.clear();
+                    out
+                }
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value, String> {
     use portable_pty::PtySystem;
@@ -3392,8 +3453,10 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
     }
 
     if let Some(mcp) = params.mcp_port {
-        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp", mcp));
-        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse", mcp));
+        let token = crate::mcp::get_token().unwrap_or_default();
+        cmd.env("CANONIC_MCP_URL", &format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
+        cmd.env("CANONIC_MCP_SSE", &format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
+        cmd.env("CANONIC_MCP_TOKEN", &token);
     }
     cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
     cmd.env("TERM", "xterm-256color");
@@ -3420,11 +3483,17 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
     let app_handle = app.clone();
     std::thread::spawn(move || {
         let mut buffer = [0u8; 4096];
+        // Carry incomplete trailing bytes between reads so a multibyte UTF-8 codepoint
+        // split across two reads is decoded whole instead of becoming a replacement char.
+        let mut carry: Vec<u8> = Vec::new();
         while let Ok(size) = reader.read(&mut buffer) {
             if size == 0 {
                 break;
             }
-            let text = String::from_utf8_lossy(&buffer[..size]).to_string();
+            let text = take_utf8(&mut carry, &buffer[..size]);
+            if text.is_empty() {
+                continue;
+            }
             let _ = app_handle.emit("pty:data", json!({ "sessionId": session_id_clone, "data": text }));
         }
         if let Ok(mut c) = child_clone.lock() {
@@ -3554,8 +3623,9 @@ fn home_dir() -> PathBuf {
 
 fn mcp_preset(agent_id: &str, port: u16) -> Option<McpPreset> {
     let home = home_dir();
-    let url = format!("http://127.0.0.1:{}/mcp", port);
-    let sse = format!("http://127.0.0.1:{}/sse", port);
+    let token = crate::mcp::get_token().unwrap_or_default();
+    let url = format!("http://127.0.0.1:{}/mcp?token={}", port, token);
+    let sse = format!("http://127.0.0.1:{}/sse?token={}", port, token);
     match agent_id {
         "claude-code" => Some(McpPreset {
             config_path: home.join(".claude.json"),
@@ -3772,4 +3842,76 @@ fn get_canonic_demo_files() -> Vec<(&'static str, &'static str)> {
         ("Discovery/problem-statement.md", "# Problem Statement\n\n> A crisp definition of the problem we're solving.\n\n## The Problem\n\nProduct managers struggle to create a shared, authoritative version of a document that the team trusts enough to build from, because the tools they use treat documents as living notes rather than versioned artifacts — which means engineering teams often start building before the PM is done thinking, and alignment is achieved through Slack threads instead of reviewed documents.\n\n## Evidence\n\n- \"Final_v3_APPROVED.docx\" is a real naming convention used at companies with $1B+ ARR\n- Notion's version history records every keystroke, making it useless for \"what did we decide\"\n- Engineers regularly describe getting requirements mid-sprint via Slack DM\n- In interviews: \"I can tell you what the doc says today but I can't tell you what changed last week or why\"\n\n## Current Workarounds\n\n- Manual version naming in the filename (v1, v2, FINAL, FINAL_APPROVED)\n- Google Docs \"version history\" — exists but not actionable (no branches, no named snapshots)\n- Printing to PDF at key moments and attaching to Jira tickets\n- Duplicate documents (\"Strategy_old.md\") kept as informal archives\n\n## Success Criteria\n\nA PM opens Canonic, writes a requirements doc, commits it at two different stages of review, and can show an engineer the exact diff between \"first draft\" and \"approved\" — without any of those words being in the filename.\n"),
         ("Discovery/user-research.md", "# User Research\n\n> What we've learned directly from users.\n\n## Research Questions\n\n1. How do PMs currently manage document versions and track decisions over time?\n2. What does \"this document is ready to build from\" mean to them — and how do they signal it?\n\n## Methods Used\n\nFounder interviews (10 PMs at B2B SaaS companies, 20–400 employees), alongside survey of 40 PMs in a product community Slack.\n\n## Key Findings\n\n### Finding 1: Version history is the #1 unmet need\n\nEvery PM interviewed had a story about a decision they couldn't reconstruct. \"I know we changed this requirement but I can't find where we landed or why.\" None of them trusted their current tool's version history. Google Docs' history was described as \"too noisy to be useful.\"\n\n### Finding 2: The \"draft → review → approved\" ritual is informal and fragile\n\nMost teams have an implicit flow but no tooling that enforces it. Approval happens via a Slack message or a \"LGTM\" comment. There's no authoritative moment of \"this is the committed version.\"\n\n### Finding 3: PMs are open to Git concepts if explained in their language\n\n\"Branch\" and \"commit\" land if you call them \"draft\" and \"checkpoint.\" Three of ten PMs in initial interviews said they'd wanted something like this for years but assumed it didn't exist.\n\n### Finding 4: AI skepticism is high, but the framing matters\n\nMost PMs have tried AI writing tools and found them underwhelming — they produce generic output that still needs heavy editing. When we described AI that asks questions instead of writes answers, the reaction was universally positive. \"That's actually what I need.\"\n\n## What This Means for the Product\n\nThe core loop is: write → commit → review → approve. Everything we build should make that loop faster and more trustworthy. The AI should be inserted at the review step, not the writing step.\n")
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // safe_join is always called with an already-canonical base (sanitize_path
+    // canonicalizes first), so mirror that here.
+    fn canonical_tmp() -> std::path::PathBuf {
+        std::env::temp_dir().canonicalize().unwrap()
+    }
+
+    #[test]
+    fn safe_join_allows_nested_relative() {
+        let base = canonical_tmp();
+        let p = safe_join(&base, "sub/dir/file.md").unwrap();
+        assert!(p.starts_with(&base));
+        assert!(p.ends_with("sub/dir/file.md"));
+    }
+
+    #[test]
+    fn safe_join_blocks_parent_traversal() {
+        let base = canonical_tmp();
+        assert!(safe_join(&base, "../escape.md").is_err());
+        assert!(safe_join(&base, "a/../../escape.md").is_err());
+    }
+
+    #[test]
+    fn safe_join_blocks_absolute() {
+        let base = canonical_tmp();
+        assert!(safe_join(&base, "/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn sanitize_path_handles_empty_and_dot() {
+        let base = canonical_tmp();
+        let base_str = base.to_string_lossy().to_string();
+        assert_eq!(sanitize_path(&base_str, "").unwrap(), base);
+        assert_eq!(sanitize_path(&base_str, ".").unwrap(), base);
+        assert!(sanitize_path(&base_str, "..").is_err());
+    }
+
+    #[test]
+    fn take_utf8_passes_clean_ascii() {
+        let mut carry = Vec::new();
+        assert_eq!(take_utf8(&mut carry, b"hello\n"), "hello\n");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn take_utf8_carries_split_codepoint() {
+        // '€' is E2 82 AC. Split it across two reads — the first read must not emit a
+        // replacement char; the byte stays buffered until completed.
+        let mut carry = Vec::new();
+        let euro = "€".as_bytes(); // [0xE2, 0x82, 0xAC]
+        let first = take_utf8(&mut carry, &euro[..2]);
+        assert_eq!(first, "");
+        assert_eq!(carry.len(), 2);
+        let second = take_utf8(&mut carry, &euro[2..]);
+        assert_eq!(second, "€");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn take_utf8_emits_valid_prefix_and_carries_tail() {
+        let mut carry = Vec::new();
+        let mut input = b"ab".to_vec();
+        input.extend_from_slice(&"€".as_bytes()[..1]); // trailing incomplete byte
+        let out = take_utf8(&mut carry, &input);
+        assert_eq!(out, "ab");
+        assert_eq!(carry.len(), 1);
+    }
 }

@@ -12,7 +12,7 @@
                 isFocused && 'focused',
             ]"
             :style="{ paddingLeft: `${4 + depth * 14}px` }"
-            :draggable="!store.isCompactLayout"
+            :draggable="!store.isCompactLayout ? 'true' : 'false'"
             role="treeitem"
             :aria-label="`${item.type === 'directory' ? 'Folder' : 'File'}: ${item.name}`"
             :aria-expanded="item.type === 'directory' ? item._open : undefined"
@@ -504,6 +504,8 @@ async function confirmNewFolder() {
     white-space: nowrap;
     overflow: hidden;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .tree-node:hover {

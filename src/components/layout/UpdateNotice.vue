@@ -1,0 +1,225 @@
+<template>
+  <div
+    v-if="visible"
+    class="update-notice"
+    :class="[`update-notice--${placement}`, `update-notice--${variant}`]"
+    role="status"
+  >
+    <component :is="icon" :size="placement === 'sidebar' ? 14 : 15" class="un-icon" aria-hidden="true" />
+    <div class="un-body">
+      <span class="un-text">{{ text }}</span>
+      <div
+        v-if="store.updateDownloading"
+        class="un-bar"
+        :aria-label="`Downloading ${store.downloadProgress}%`"
+      >
+        <div class="un-bar-fill" :style="{ width: store.downloadProgress + '%' }"></div>
+      </div>
+      <a
+        v-else-if="isGreeting && store.releaseNotesUrl"
+        class="un-link"
+        href="#"
+        @click.prevent="store.openReleaseNotes()"
+      >Release notes ↗</a>
+    </div>
+    <button v-if="showDownload" class="un-action" @click="store.downloadUpdate()">
+      Download
+    </button>
+    <button v-else-if="store.updateReady" class="un-action" @click="store.installUpdate()">
+      Restart
+    </button>
+    <button v-if="dismissible" class="un-dismiss" aria-label="Dismiss" @click="dismiss">
+      <X :size="13" />
+    </button>
+  </div>
+</template>
+
+<script setup>
+import { computed } from "vue";
+import { useAppStore } from "../../store";
+import { ArrowUpCircle, Download, CheckCircle2, X } from "lucide-vue-next";
+
+// placement: 'editor' = floating banner over the editor (live state, not
+// dismissible while an update is in flight; shows the post-update greeting).
+// 'sidebar' = persistent widget in the left panel, closable.
+const props = defineProps({
+  placement: { type: String, default: "editor" },
+});
+const store = useAppStore();
+
+// The "Updated to vX" greeting only lives in the editor banner.
+const isGreeting = computed(
+  () => props.placement === "editor" && store.recentlyUpdated,
+);
+const isActive = computed(
+  () => store.updateAvailable || store.updateDownloading || store.updateReady,
+);
+
+const visible = computed(() => {
+  if (isGreeting.value) return true;
+  if (props.placement === "editor") {
+    // The 'available' nudge over the editor is the legacy update-prompt; this
+    // banner adds the in-flight + ready states (progress, restart) on top.
+    return store.updateDownloading || store.updateReady;
+  }
+  // Sidebar carries the full lifecycle, persistent until the user closes it.
+  return isActive.value && !store.updateNoticeDismissed;
+});
+
+const variant = computed(() => {
+  if (isGreeting.value) return "updated";
+  if (store.updateReady) return "ready";
+  if (store.updateDownloading) return "downloading";
+  return "available";
+});
+
+const icon = computed(
+  () =>
+    ({
+      updated: CheckCircle2,
+      ready: ArrowUpCircle,
+      downloading: ArrowUpCircle,
+      available: Download,
+    })[variant.value],
+);
+
+const text = computed(() => {
+  const v = store.updateInfo?.version;
+  switch (variant.value) {
+    case "updated":
+      return `Updated to v${store.recentlyUpdatedVersion}`;
+    case "ready":
+      return "Update ready to install";
+    case "downloading":
+      return `Downloading update… ${store.downloadProgress}%`;
+    default:
+      return v ? `Update available · v${v}` : "Update available";
+  }
+});
+
+// Download button only before the download starts.
+const showDownload = computed(() => variant.value === "available");
+
+// Editor banner is dismissible only for the greeting; the sidebar widget is
+// always closable while an update is in flight.
+const dismissible = computed(
+  () => isGreeting.value || (props.placement === "sidebar" && isActive.value),
+);
+
+function dismiss() {
+  if (isGreeting.value) store.dismissRecentlyUpdated();
+  else store.dismissUpdateNotice();
+}
+</script>
+
+<style scoped>
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--text, #ddd);
+  background: var(--surface, #1a1a2e);
+  border: 1px solid var(--border, #2a2a4a);
+  border-radius: 8px;
+}
+
+.un-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.un-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.un-icon {
+  flex-shrink: 0;
+  color: var(--accent, #7c8cf8);
+}
+
+/* Download progress bar */
+.un-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border, #2a2a4a);
+  overflow: hidden;
+}
+.un-bar-fill {
+  height: 100%;
+  background: var(--accent, #7c8cf8);
+  transition: width 0.2s ease;
+}
+
+.un-link {
+  color: var(--accent, #7c8cf8);
+  text-decoration: none;
+  font-size: 0.75rem;
+}
+.un-link:hover {
+  text-decoration: underline;
+}
+
+.un-action {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  background: var(--accent, #7c8cf8);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.un-action:hover {
+  filter: brightness(1.08);
+}
+
+.un-dismiss {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  padding: 2px;
+}
+.un-dismiss:hover {
+  color: var(--text, #ddd);
+}
+
+/* Variant accents */
+.update-notice--updated {
+  border-left: 3px solid var(--success, #3fb950);
+}
+.update-notice--updated .un-icon {
+  color: var(--success, #3fb950);
+}
+
+/* Floating banner over the editor */
+.update-notice--editor {
+  position: fixed;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  min-width: 280px;
+  max-width: 440px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Persistent widget pinned to the bottom of the left sidebar */
+.update-notice--sidebar {
+  margin: 8px;
+  padding: 8px 10px;
+}
+.update-notice--sidebar .un-body {
+  font-size: 0.78rem;
+}
+</style>

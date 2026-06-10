@@ -727,21 +727,40 @@ export const useAppStore = defineStore("app", () => {
   const updateReady = ref(false);
   const updateInfo = ref(null);
   const downloadProgress = ref(0);
+  // User closed the persistent (sidebar) update widget; a fresh update event
+  // re-shows it. The over-editor banner ignores this — it tracks live state.
+  const updateNoticeDismissed = ref(false);
+  // Set on the launch *after* an update was applied, so we can greet with
+  // "Updated to vX" + a release-notes link. Cleared once dismissed.
+  const recentlyUpdated = ref(false);
+  const recentlyUpdatedVersion = ref("");
+
+  const releaseNotesUrl = computed(() => {
+    const v = recentlyUpdated.value
+      ? recentlyUpdatedVersion.value
+      : updateInfo.value?.version;
+    return v
+      ? `https://github.com/Canonical-AI/canonic/releases/tag/v${v}`
+      : "";
+  });
 
   if (api?.update) {
     api.update.onAvailable?.((info) => {
       updateInfo.value = info;
       updateAvailable.value = true;
+      updateNoticeDismissed.value = false;
     });
     api.update.onProgress?.((progress) => {
       updateAvailable.value = false;
       updateDownloading.value = true;
       downloadProgress.value = Math.round(progress.percent);
+      updateNoticeDismissed.value = false;
     });
     api.update.onDownloaded?.(() => {
       updateReady.value = true;
       updateDownloading.value = false;
       downloadProgress.value = 0;
+      updateNoticeDismissed.value = false;
     });
     api.update.onError?.((err) => {
       console.error("[update]", err);
@@ -772,14 +791,59 @@ export const useAppStore = defineStore("app", () => {
   }
 
   function installUpdate() {
-    // Demo can't relaunch into a new binary — just clear the prompt.
+    const version = updateInfo.value?.version || "";
+    // Demo can't relaunch into a new binary — fake the post-restart state so
+    // the "Updated to vX" banner + release-notes link are demoable.
     if (isDemoMode.value) {
       updateReady.value = false;
       updateAvailable.value = false;
       updateInfo.value = null;
+      recentlyUpdatedVersion.value = version;
+      recentlyUpdated.value = version !== "";
       return;
     }
+    // Stash the target version; on the next launch checkRecentlyUpdated() reads
+    // it back to confirm the swap landed and greet the user.
+    try {
+      if (typeof localStorage !== "undefined" && version) {
+        localStorage.setItem("canonic:updatingTo", version);
+      }
+    } catch {
+      /* localStorage unavailable (tests/web) — skip the greeting */
+    }
     api?.update.install();
+  }
+
+  function dismissUpdateNotice() {
+    updateNoticeDismissed.value = true;
+  }
+
+  function dismissRecentlyUpdated() {
+    recentlyUpdated.value = false;
+  }
+
+  function openReleaseNotes() {
+    if (releaseNotesUrl.value) api?.share?.openLink?.(releaseNotesUrl.value);
+  }
+
+  // Called once at startup: if the previous session installed an update and the
+  // running version now matches the stashed target, show the "Updated to vX"
+  // greeting. Always clears the marker so it fires exactly once.
+  async function checkRecentlyUpdated() {
+    try {
+      if (typeof localStorage === "undefined") return;
+      const target = localStorage.getItem("canonic:updatingTo");
+      if (!target) return;
+      localStorage.removeItem("canonic:updatingTo");
+      let current = "";
+      if (api?.app?.getVersion) current = await api.app.getVersion();
+      if (current && current === target) {
+        recentlyUpdatedVersion.value = target;
+        recentlyUpdated.value = true;
+      }
+    } catch {
+      /* best-effort greeting; never block startup */
+    }
   }
 
   async function syncActiveShares() {
@@ -3573,8 +3637,16 @@ export const useAppStore = defineStore("app", () => {
     updateReady,
     updateInfo,
     downloadProgress,
+    updateNoticeDismissed,
+    recentlyUpdated,
+    recentlyUpdatedVersion,
+    releaseNotesUrl,
     downloadUpdate,
     installUpdate,
+    dismissUpdateNotice,
+    dismissRecentlyUpdated,
+    openReleaseNotes,
+    checkRecentlyUpdated,
     commentingActive: ref(false),
     refreshDiscoveredPeers,
     sharesByFile,

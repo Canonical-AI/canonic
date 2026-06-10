@@ -11,7 +11,8 @@ const mockApi = {
   git: { branches: vi.fn().mockResolvedValue({ branches: ['main'], current: 'main' }), log: vi.fn().mockResolvedValue([]) },
   comments: { get: vi.fn().mockResolvedValue([]), save: vi.fn() },
   search: { query: vi.fn().mockResolvedValue([]), index: vi.fn() },
-  share: { onStats: vi.fn(), onNetworkChanged: vi.fn(), offNetworkChanged: vi.fn() },
+  share: { onStats: vi.fn(), onNetworkChanged: vi.fn(), offNetworkChanged: vi.fn(), openLink: vi.fn() },
+  app: { getVersion: vi.fn().mockResolvedValue('0.3.0') },
   peers: { list: vi.fn().mockResolvedValue([]), onFound: vi.fn(), offFound: vi.fn(), onLost: vi.fn(), offLost: vi.fn() },
   peerComments: { onReceived: vi.fn(), offReceived: vi.fn() },
   update: {
@@ -42,6 +43,7 @@ describe('auto-update store', () => {
     setActivePinia(createPinia())
     store = useAppStore()
     vi.clearAllMocks()
+    mockLocalStorage.clear()
   })
 
   afterEach(() => {
@@ -63,7 +65,7 @@ describe('auto-update store', () => {
     expect(mockApi.update.download).not.toHaveBeenCalled()
   })
 
-  it('installUpdate clears the prompt in demo mode without IPC', () => {
+  it('installUpdate clears the prompt and greets in demo mode without IPC', () => {
     store.isDemoMode = true
     store.updateReady = true
     store.updateInfo = { version: '0.3.0' }
@@ -71,6 +73,8 @@ describe('auto-update store', () => {
     expect(store.updateReady).toBe(false)
     expect(store.updateAvailable).toBe(false)
     expect(store.updateInfo).toBe(null)
+    expect(store.recentlyUpdated).toBe(true)
+    expect(store.recentlyUpdatedVersion).toBe('0.3.0')
     expect(mockApi.update.install).not.toHaveBeenCalled()
   })
 
@@ -82,9 +86,64 @@ describe('auto-update store', () => {
     expect(mockApi.update.download).toHaveBeenCalledTimes(1)
   })
 
-  it('installUpdate invokes the IPC install in live mode', () => {
+  it('installUpdate invokes the IPC install in live mode and stashes the target version', () => {
     store.isDemoMode = false
+    store.updateInfo = { version: '0.3.0' }
     store.installUpdate()
     expect(mockApi.update.install).toHaveBeenCalledTimes(1)
+    expect(mockLocalStorage.getItem('canonic:updatingTo')).toBe('0.3.0')
+  })
+
+  it('dismissUpdateNotice hides the persistent sidebar widget', () => {
+    expect(store.updateNoticeDismissed).toBe(false)
+    store.dismissUpdateNotice()
+    expect(store.updateNoticeDismissed).toBe(true)
+  })
+
+  it('releaseNotesUrl points at the GitHub tag for the pending update', () => {
+    store.updateInfo = { version: '0.3.0' }
+    expect(store.releaseNotesUrl).toBe(
+      'https://github.com/Canonical-AI/canonic/releases/tag/v0.3.0',
+    )
+  })
+
+  it('releaseNotesUrl prefers the just-updated version after a restart', () => {
+    store.recentlyUpdated = true
+    store.recentlyUpdatedVersion = '0.4.1'
+    expect(store.releaseNotesUrl).toBe(
+      'https://github.com/Canonical-AI/canonic/releases/tag/v0.4.1',
+    )
+  })
+
+  it('openReleaseNotes opens the release URL via the bridge', () => {
+    store.updateInfo = { version: '0.3.0' }
+    store.openReleaseNotes()
+    expect(mockApi.share.openLink).toHaveBeenCalledWith(
+      'https://github.com/Canonical-AI/canonic/releases/tag/v0.3.0',
+    )
+  })
+
+  it('checkRecentlyUpdated greets when the running version matches the stashed target', async () => {
+    mockLocalStorage.setItem('canonic:updatingTo', '0.3.0')
+    mockApi.app.getVersion.mockResolvedValueOnce('0.3.0')
+    await store.checkRecentlyUpdated()
+    expect(store.recentlyUpdated).toBe(true)
+    expect(store.recentlyUpdatedVersion).toBe('0.3.0')
+    // Marker consumed so the greeting fires exactly once.
+    expect(mockLocalStorage.getItem('canonic:updatingTo')).toBe(null)
+  })
+
+  it('checkRecentlyUpdated does not greet if the update did not land, and clears the marker', async () => {
+    mockLocalStorage.setItem('canonic:updatingTo', '0.3.0')
+    mockApi.app.getVersion.mockResolvedValueOnce('0.2.2-alpha')
+    await store.checkRecentlyUpdated()
+    expect(store.recentlyUpdated).toBe(false)
+    expect(mockLocalStorage.getItem('canonic:updatingTo')).toBe(null)
+  })
+
+  it('checkRecentlyUpdated is a no-op when no update was pending', async () => {
+    await store.checkRecentlyUpdated()
+    expect(store.recentlyUpdated).toBe(false)
+    expect(mockApi.app.getVersion).not.toHaveBeenCalled()
   })
 })

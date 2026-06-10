@@ -240,6 +240,12 @@ fn get_default_config() -> Value {
             "wordBoundaryOnly": true,
             "extraInstructions": ""
         },
+        "backup": {
+            "enabled": false,
+            "path": null,
+            "intervalMinutes": 30,
+            "maxCount": 20
+        },
         "theme": {
             "light": "paper",
             "dark": "hal2001",
@@ -1654,6 +1660,14 @@ fn get_comments_file(doc_id: &str) -> PathBuf {
     get_config_dir().join("comments").join(format!("{}.json", sanitized))
 }
 
+/// Path to the JSON file backing a doc's comments. Exposed so the LAN share server
+/// (server.rs) writes browser-posted comments to the exact file the app reads, using the
+/// same sanitization and honoring `CANONIC_CONFIG_DIR` (the server previously hardcoded
+/// `~/.config/canonic`, which diverged when that env var was set).
+pub fn comments_file_path(doc_id: &str) -> PathBuf {
+    get_comments_file(doc_id)
+}
+
 // --- Comments ---
 #[tauri::command]
 pub fn comments_get(doc_id: String) -> Result<Vec<Value>, String> {
@@ -2638,19 +2652,111 @@ pub fn demo_cleanup() -> Result<(), String> {
 }
 
 // --- Updates ---
-#[tauri::command]
-pub fn update_check() -> Result<Value, String> {
-    Ok(json!({ "available": false }))
+// Backed by tauri-plugin-updater. `update_check` queries the configured GitHub
+// `latest.json`; if a newer signed release exists it stashes the pending Update
+// so `update_download` (streams progress) and `update_install` (verifies the
+// signature, swaps the binary, relaunches) can pick it up across IPC calls.
+struct PendingUpdate {
+    update: tauri_plugin_updater::Update,
+    bytes: Option<Vec<u8>>,
+}
+
+fn pending_update() -> &'static std::sync::Mutex<Option<PendingUpdate>> {
+    static P: std::sync::OnceLock<std::sync::Mutex<Option<PendingUpdate>>> =
+        std::sync::OnceLock::new();
+    P.get_or_init(|| std::sync::Mutex::new(None))
 }
 
 #[tauri::command]
-pub fn update_download() -> Result<(), String> {
-    Ok(())
+pub async fn update_check(app: tauri::AppHandle) -> Result<Value, String> {
+    use tauri::Emitter;
+    use tauri_plugin_updater::UpdaterExt;
+
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => {
+            let info = json!({
+                "version": update.version.clone(),
+                "notes": update.body.clone(),
+                "date": update.date.map(|d| d.to_string()),
+            });
+            *pending_update().lock().unwrap() =
+                Some(PendingUpdate { update, bytes: None });
+            let _ = app.emit("update:available", info.clone());
+            Ok(json!({ "available": true, "updateInfo": info }))
+        }
+        Ok(None) => {
+            *pending_update().lock().unwrap() = None;
+            Ok(json!({ "available": false }))
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let _ = app.emit("update:error", msg.clone());
+            Err(msg)
+        }
+    }
 }
 
 #[tauri::command]
-pub fn update_install() -> Result<(), String> {
-    Ok(())
+pub async fn update_download(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+
+    // Take the stashed Update out so we don't hold the lock across .await.
+    let update = match pending_update().lock().unwrap().take() {
+        Some(p) => p.update,
+        None => return Err("no update available — run update_check first".into()),
+    };
+
+    let app_progress = app.clone();
+    let mut downloaded: u64 = 0;
+    let result = update
+        .download(
+            move |chunk, content_len| {
+                downloaded += chunk as u64;
+                let total = content_len.unwrap_or(0);
+                let percent = if total > 0 {
+                    (downloaded as f64 / total as f64) * 100.0
+                } else {
+                    0.0
+                };
+                let _ = app_progress.emit(
+                    "update:progress",
+                    json!({ "percent": percent, "downloaded": downloaded, "total": total }),
+                );
+            },
+            || {},
+        )
+        .await;
+
+    match result {
+        Ok(bytes) => {
+            // Re-stash the Update alongside the downloaded bytes for install.
+            *pending_update().lock().unwrap() =
+                Some(PendingUpdate { update, bytes: Some(bytes) });
+            let _ = app.emit("update:downloaded", ());
+            Ok(())
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let _ = app.emit("update:error", msg.clone());
+            Err(msg)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
+    let pending = pending_update()
+        .lock()
+        .unwrap()
+        .take()
+        .ok_or("no update downloaded")?;
+    let bytes = pending
+        .bytes
+        .ok_or("update not downloaded yet — run update_download first")?;
+    pending.update.install(bytes).map_err(|e| e.to_string())?;
+    // Replaced the binary; relaunch into the new version. restart() never returns.
+    app.restart();
 }
 
 // --- Doc Branches ---
@@ -3922,6 +4028,475 @@ fn get_canonic_demo_files() -> Vec<(&'static str, &'static str)> {
         ("Discovery/problem-statement.md", "# Problem Statement\n\n> A crisp definition of the problem we're solving.\n\n## The Problem\n\nProduct managers struggle to create a shared, authoritative version of a document that the team trusts enough to build from, because the tools they use treat documents as living notes rather than versioned artifacts — which means engineering teams often start building before the PM is done thinking, and alignment is achieved through Slack threads instead of reviewed documents.\n\n## Evidence\n\n- \"Final_v3_APPROVED.docx\" is a real naming convention used at companies with $1B+ ARR\n- Notion's version history records every keystroke, making it useless for \"what did we decide\"\n- Engineers regularly describe getting requirements mid-sprint via Slack DM\n- In interviews: \"I can tell you what the doc says today but I can't tell you what changed last week or why\"\n\n## Current Workarounds\n\n- Manual version naming in the filename (v1, v2, FINAL, FINAL_APPROVED)\n- Google Docs \"version history\" — exists but not actionable (no branches, no named snapshots)\n- Printing to PDF at key moments and attaching to Jira tickets\n- Duplicate documents (\"Strategy_old.md\") kept as informal archives\n\n## Success Criteria\n\nA PM opens Canonic, writes a requirements doc, commits it at two different stages of review, and can show an engineer the exact diff between \"first draft\" and \"approved\" — without any of those words being in the filename.\n"),
         ("Discovery/user-research.md", "# User Research\n\n> What we've learned directly from users.\n\n## Research Questions\n\n1. How do PMs currently manage document versions and track decisions over time?\n2. What does \"this document is ready to build from\" mean to them — and how do they signal it?\n\n## Methods Used\n\nFounder interviews (10 PMs at B2B SaaS companies, 20–400 employees), alongside survey of 40 PMs in a product community Slack.\n\n## Key Findings\n\n### Finding 1: Version history is the #1 unmet need\n\nEvery PM interviewed had a story about a decision they couldn't reconstruct. \"I know we changed this requirement but I can't find where we landed or why.\" None of them trusted their current tool's version history. Google Docs' history was described as \"too noisy to be useful.\"\n\n### Finding 2: The \"draft → review → approved\" ritual is informal and fragile\n\nMost teams have an implicit flow but no tooling that enforces it. Approval happens via a Slack message or a \"LGTM\" comment. There's no authoritative moment of \"this is the committed version.\"\n\n### Finding 3: PMs are open to Git concepts if explained in their language\n\n\"Branch\" and \"commit\" land if you call them \"draft\" and \"checkpoint.\" Three of ten PMs in initial interviews said they'd wanted something like this for years but assumed it didn't exist.\n\n### Finding 4: AI skepticism is high, but the framing matters\n\nMost PMs have tried AI writing tools and found them underwhelming — they produce generic output that still needs heavy editing. When we described AI that asks questions instead of writes answers, the reaction was universally positive. \"That's actually what I need.\"\n\n## What This Means for the Product\n\nThe core loop is: write → commit → review → approve. Everything we build should make that loop faster and more trustworthy. The AI should be inserted at the review step, not the writing step.\n")
     ]
+}
+
+// --- Backup ---
+
+static BACKUP_CANCEL: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>> =
+    std::sync::Mutex::new(None);
+static BACKUP_LAST_OID: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Read workspace-local backup config from .canonic/backup.json
+fn read_workspace_backup_config(workspace_path: &str) -> Value {
+    let path = Path::new(workspace_path).join(".canonic").join("backup.json");
+    if !path.exists() {
+        return json!({"path": null});
+    }
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(json!({"path": null}))
+}
+
+/// Write workspace-local backup config to .canonic/backup.json
+fn write_workspace_backup_config(workspace_path: &str, config: &Value) -> Result<(), String> {
+    let dir = Path::new(workspace_path).join(".canonic");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join("backup.json");
+    let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
+    std::fs::write(path, content).map_err(|e| e.to_string())
+}
+
+fn get_backup_dir(workspace_path: &str) -> Result<PathBuf, String> {
+    // 1. Check per-workspace override first
+    let ws_cfg = read_workspace_backup_config(workspace_path);
+    if let Some(ws_path) = ws_cfg.get("path").and_then(|p| p.as_str()) {
+        if !ws_path.is_empty() {
+            return Ok(PathBuf::from(ws_path));
+        }
+    }
+
+    // 2. Check global config
+    let config = config_read()?;
+    if let Some(backup) = config.get("backup") {
+        if let Some(custom_path) = backup.get("path").and_then(|p| p.as_str()) {
+            if !custom_path.is_empty() {
+                return Ok(PathBuf::from(custom_path));
+            }
+        }
+    }
+
+    // 3. Default: .canonic-backups inside workspace
+    Ok(Path::new(workspace_path).join(".canonic-backups"))
+}
+
+fn backup_name() -> String {
+    let now = chrono::Local::now();
+    format!("canonic-backup-{}.bundle", now.format("%Y-%m-%dT%H-%M-%S"))
+}
+
+fn parse_backup_timestamp(filename: &str) -> Option<i64> {
+    // canonic-backup-2026-06-09T14-30-00.bundle
+    let ts_part = filename
+        .strip_prefix("canonic-backup-")?
+        .strip_suffix(".bundle")?;
+    let naive = chrono::NaiveDateTime::parse_from_str(ts_part, "%Y-%m-%dT%H-%M-%S").ok()?;
+    use chrono::TimeZone;
+    let dt = chrono::Local.from_local_datetime(&naive).single()?;
+    Some(dt.timestamp_millis())
+}
+
+#[tauri::command]
+pub fn backup_get_config() -> Result<Value, String> {
+    let config = config_read()?;
+    let backup = config.get("backup").cloned().unwrap_or(json!({
+        "enabled": false,
+        "path": null,
+        "intervalMinutes": 30,
+        "maxCount": 20
+    }));
+    Ok(backup)
+}
+
+#[tauri::command]
+pub fn backup_set_config(backup_config: Value) -> Result<Value, String> {
+    let mut config = config_read()?;
+
+    // Validate path if set
+    if let Some(path) = backup_config.get("path").and_then(|p| p.as_str()) {
+        if !path.is_empty() {
+            let p = Path::new(path);
+            if !p.exists() {
+                return Ok(json!({"success": false, "error": "Backup path does not exist"}));
+            }
+            // Check writable
+            let test_file = p.join(".canonic-backup-test");
+            if let Err(e) = std::fs::write(&test_file, b"test") {
+                return Ok(json!({"success": false, "error": format!("Backup path is not writable: {}", e)}));
+            }
+            let _ = std::fs::remove_file(&test_file);
+        }
+    }
+
+    config.as_object_mut()
+        .ok_or("Invalid config")?
+        .insert("backup".to_string(), backup_config.clone());
+
+    config_write(config)?;
+
+    // If enabled, start auto-backup; if disabled, stop it
+    let enabled = backup_config.get("enabled").and_then(|e| e.as_bool()).unwrap_or(false);
+    if enabled {
+        let _ = backup_start_auto_internal();
+    } else {
+        let _ = backup_stop_auto_internal();
+    }
+
+    Ok(json!({"success": true}))
+}
+
+#[tauri::command]
+pub fn backup_get_workspace_config(workspace_path: String) -> Result<Value, String> {
+    let global = backup_get_config()?;
+    let ws_cfg = read_workspace_backup_config(&workspace_path);
+
+    // Merge: workspace override + global defaults
+    Ok(json!({
+        "enabled": global.get("enabled").and_then(|e| e.as_bool()).unwrap_or(false),
+        "path": ws_cfg.get("path").and_then(|p| p.as_str()).unwrap_or(""),
+        "intervalMinutes": global.get("intervalMinutes").and_then(|m| m.as_u64()).unwrap_or(30),
+        "maxCount": global.get("maxCount").and_then(|m| m.as_u64()).unwrap_or(20),
+        "hasWorkspaceOverride": ws_cfg.get("path").and_then(|p| p.as_str()).map(|s| !s.is_empty()).unwrap_or(false)
+    }))
+}
+
+#[tauri::command]
+pub fn backup_set_workspace_config(workspace_path: String, backup_config: Value) -> Result<Value, String> {
+    // Validate path if set
+    if let Some(path) = backup_config.get("path").and_then(|p| p.as_str()) {
+        if !path.is_empty() {
+            let p = Path::new(path);
+            if !p.exists() {
+                return Ok(json!({"success": false, "error": "Backup path does not exist"}));
+            }
+            let test_file = p.join(".canonic-backup-test");
+            if let Err(e) = std::fs::write(&test_file, b"test") {
+                return Ok(json!({"success": false, "error": format!("Backup path is not writable: {}", e)}));
+            }
+            let _ = std::fs::remove_file(&test_file);
+        }
+    }
+
+    write_workspace_backup_config(&workspace_path, &backup_config)?;
+    Ok(json!({"success": true}))
+}
+
+#[tauri::command]
+pub async fn backup_run(workspace_path: String) -> Result<Value, String> {
+    backup_internal(&workspace_path)
+}
+
+fn backup_internal(workspace_path: &str) -> Result<Value, String> {
+    let backup_dir = get_backup_dir(workspace_path)?;
+    std::fs::create_dir_all(&backup_dir).map_err(|e| format!("Cannot create backup dir: {}", e))?;
+
+    let repo = git2::Repository::open(workspace_path)
+        .map_err(|e| format!("Cannot open repository: {}", e))?;
+
+    // Get current HEAD oid
+    let head_oid = match repo.head() {
+        Ok(head) => head.peel_to_commit().map(|c| c.id()).ok(),
+        Err(_) => None,
+    };
+
+    let head_oid_str = head_oid.map(|o| o.to_string()).unwrap_or_default();
+
+    // Check if anything changed since last backup
+    {
+        if let Ok(mut last) = BACKUP_LAST_OID.lock() {
+            if let Some(ref last_oid) = *last {
+                if last_oid == &head_oid_str {
+                    return Ok(json!({"success": true, "skipped": true, "reason": "no changes since last backup"}));
+                }
+            }
+            *last = Some(head_oid_str.clone());
+        }
+    }
+
+    let filename = backup_name();
+    let filepath = backup_dir.join(&filename);
+
+    // Use git CLI to create bundle with all refs
+    let output = std::process::Command::new("git")
+        .args(["bundle", "create"])
+        .arg(&filepath)
+        .arg("--all")
+        .current_dir(workspace_path)
+        .output()
+        .map_err(|e| format!("Failed to run git bundle create: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // "Refusing to create empty bundle" is not really an error — nothing to back up
+        if stderr.contains("Refusing to create empty bundle") {
+            return Ok(json!({"success": true, "skipped": true, "reason": "empty repository, nothing to back up"}));
+        }
+        return Err(format!("Bundle creation failed: {}", stderr));
+    }
+
+    let metadata = std::fs::metadata(&filepath).map_err(|e| e.to_string())?;
+    let size = metadata.len();
+    let timestamp = chrono::Local::now().timestamp_millis();
+
+    // Enforce maxCount
+    enforce_max_backups(&backup_dir)?;
+
+    if let Some(app) = app_handle() {
+        use tauri::Emitter;
+        let _ = app.emit("backup:completed", json!({
+            "filename": filename,
+            "path": filepath.to_string_lossy(),
+            "size": size,
+            "timestamp": timestamp,
+            "oid": head_oid_str
+        }));
+    }
+
+    Ok(json!({
+        "success": true,
+        "skipped": false,
+        "filename": filename,
+        "path": filepath.to_string_lossy(),
+        "size": size,
+        "timestamp": timestamp,
+        "oid": head_oid_str
+    }))
+}
+
+fn enforce_max_backups(backup_dir: &Path) -> Result<(), String> {
+    let config = config_read()?;
+    let max_count: usize = config
+        .get("backup")
+        .and_then(|b| b.get("maxCount"))
+        .and_then(|m| m.as_u64())
+        .unwrap_or(20) as usize;
+
+    let mut files: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(backup_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("bundle") {
+                files.push(path);
+            }
+        }
+    }
+
+    files.sort_by(|a, b| {
+        let a_name = a.file_name().unwrap_or_default().to_string_lossy();
+        let b_name = b.file_name().unwrap_or_default().to_string_lossy();
+        b_name.cmp(&a_name) // newest first by filename
+    });
+
+    while files.len() > max_count {
+        if let Some(oldest) = files.pop() {
+            let _ = std::fs::remove_file(&oldest);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn backup_list(workspace_path: String) -> Result<Vec<Value>, String> {
+    let backup_dir = get_backup_dir(&workspace_path)?;
+    if !backup_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&backup_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("bundle") {
+                continue;
+            }
+            let filename = path.file_name().unwrap_or_default().to_string_lossy();
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            let ts = parse_backup_timestamp(&filename).unwrap_or(0);
+
+            results.push(json!({
+                "filename": filename,
+                "path": path.to_string_lossy(),
+                "size": size,
+                "timestamp": ts
+            }));
+        }
+    }
+
+    results.sort_by(|a, b| {
+        let a_ts = a.get("timestamp").and_then(|t| t.as_i64()).unwrap_or(0);
+        let b_ts = b.get("timestamp").and_then(|t| t.as_i64()).unwrap_or(0);
+        b_ts.cmp(&a_ts) // newest first
+    });
+
+    Ok(results)
+}
+
+#[tauri::command]
+pub fn backup_restore(workspace_path: String, filename: String) -> Result<Value, String> {
+    let backup_dir = get_backup_dir(&workspace_path)?;
+    let bundle_path = backup_dir.join(&filename);
+    if !bundle_path.exists() {
+        return Err(format!("Backup file not found: {}", filename));
+    }
+
+    let _repo = git2::Repository::open(&workspace_path)
+        .map_err(|e| format!("Cannot open repository: {}", e))?;
+
+    // Create a restore branch name from the timestamp
+    let branch_name = if let Some(ts) = parse_backup_timestamp(&filename) {
+        let dt = chrono::DateTime::from_timestamp_millis(ts).unwrap_or_default();
+        format!(
+            "restore-{}",
+            dt.format("%Y%m%d-%H%M%S")
+        )
+    } else {
+        format!("restore-{}", uuid::Uuid::new_v4())
+    };
+
+    // Use git2 bundle verification and then fetch
+    // First get the ref tips from the bundle
+    let mut refs_to_fetch: Vec<String> = Vec::new();
+    {
+        // List refs from the bundle file using git bundle list-heads
+        let output = std::process::Command::new("git")
+            .args(["bundle", "list-heads"])
+            .arg(&bundle_path)
+            .current_dir(&workspace_path)
+            .output()
+            .map_err(|e| format!("Failed to run git bundle list-heads: {}", e))?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "Bundle verification failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                refs_to_fetch.push(parts[1].to_string());
+            }
+        }
+    }
+
+    if refs_to_fetch.is_empty() {
+        return Err("No refs found in bundle".to_string());
+    }
+
+    // Fetch from the bundle using git fetch
+    let fetch_output = std::process::Command::new("git")
+        .args(["fetch"])
+        .arg(&bundle_path)
+        .args(&refs_to_fetch)
+        .current_dir(&workspace_path)
+        .output()
+        .map_err(|e| format!("Failed to fetch from bundle: {}", e))?;
+
+    if !fetch_output.status.success() {
+        return Err(format!(
+            "Fetch from bundle failed: {}",
+            String::from_utf8_lossy(&fetch_output.stderr)
+        ));
+    }
+
+    // Create restore branch from the first ref
+    let first_ref = format!("FETCH_HEAD");
+    let branch_output = std::process::Command::new("git")
+        .args(["branch", &branch_name, &first_ref])
+        .current_dir(&workspace_path)
+        .output()
+        .map_err(|e| format!("Failed to create restore branch: {}", e))?;
+
+    if !branch_output.status.success() {
+        return Err(format!(
+            "Branch creation failed: {}",
+            String::from_utf8_lossy(&branch_output.stderr)
+        ));
+    }
+
+    Ok(json!({
+        "success": true,
+        "branch": branch_name
+    }))
+}
+
+#[tauri::command]
+pub fn backup_delete(workspace_path: String, filename: String) -> Result<Value, String> {
+    let backup_dir = get_backup_dir(&workspace_path)?;
+    let bundle_path = backup_dir.join(&filename);
+    if !bundle_path.exists() {
+        return Err(format!("Backup file not found: {}", filename));
+    }
+    std::fs::remove_file(&bundle_path).map_err(|e| e.to_string())?;
+    Ok(json!({"success": true}))
+}
+
+#[tauri::command]
+pub fn backup_start_auto(_workspace_path: String) -> Result<Value, String> {
+    // Reset last oid so next tick always runs
+    if let Ok(mut last) = BACKUP_LAST_OID.lock() {
+        *last = None;
+    }
+    backup_start_auto_internal()?;
+    Ok(json!({"success": true}))
+}
+
+fn backup_start_auto_internal() -> Result<(), String> {
+    // Stop existing timer
+    let _ = backup_stop_auto_internal();
+
+    let config = config_read()?;
+    let backup = config.get("backup").cloned().unwrap_or_default();
+    let interval_minutes = backup
+        .get("intervalMinutes")
+        .and_then(|m| m.as_u64())
+        .unwrap_or(30) as u64;
+
+    let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+
+    if let Ok(mut cancel) = BACKUP_CANCEL.lock() {
+        *cancel = Some(tx);
+    }
+
+    tauri::async_runtime::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_minutes * 60));
+        interval.tick().await; // skip immediate first tick
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let workspace = match get_active_workspace() {
+                        Ok(w) => w,
+                        Err(_) => continue,
+                    };
+                    if let Err(e) = backup_internal(&workspace) {
+                        log::error!("[backup] auto-backup failed: {}", e);
+                    }
+                }
+                _ = &mut rx => {
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn backup_stop_auto() -> Result<Value, String> {
+    backup_stop_auto_internal()?;
+    Ok(json!({"success": true}))
+}
+
+fn backup_stop_auto_internal() -> Result<(), String> {
+    if let Ok(mut cancel) = BACKUP_CANCEL.lock() {
+        if let Some(tx) = cancel.take() {
+            let _ = tx.send(());
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

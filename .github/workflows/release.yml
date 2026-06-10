@@ -174,6 +174,12 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing. With these set and createUpdaterArtifacts:true in
+          # tauri.conf.json, tauri-action emits a signed updater bundle
+          # (.app.tar.gz on macOS, the NSIS .exe on Windows, .AppImage on Linux)
+          # plus a detached .sig next to each — the inputs for latest.json below.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS signing + notarization. Reuses the existing electron-builder
           # secrets — CSC_LINK is already the base64 of the Developer-ID .p12
           # (identical to what tauri-action wants for APPLE_CERTIFICATE), and
@@ -203,6 +209,7 @@ jobs:
             src-tauri/target/**/release/bundle/deb/*.deb
             src-tauri/target/**/release/bundle/appimage/*.AppImage
             src-tauri/target/**/release/bundle/rpm/*.rpm
+            src-tauri/target/**/release/bundle/**/*.sig
 
   build-flatpak:
     # Wrap each architecture's .deb from the `build` job into a distro-agnostic
@@ -346,6 +353,71 @@ jobs:
             --notes-file release_notes.md \
             --target main \
             $(find release-artifacts -type f)
+
+      - name: Generate and upload updater manifest (latest.json)
+        # The auto-updater fetches this from the release. It pairs each platform
+        # with its signed bundle URL + detached signature (read from the .sig
+        # files). VERSION/REPO are passed via env (never interpolated into the
+        # script) so untrusted input can't reach the shell or node.
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          REPO: Canonical-AI/canonic
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const version = process.env.VERSION;
+          const repo = process.env.REPO;
+
+          // Recursively collect every downloaded artifact file.
+          const files = [];
+          (function walk(d) {
+            for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+              const p = path.join(d, e.name);
+              if (e.isDirectory()) walk(p);
+              else files.push(p);
+            }
+          })('release-artifacts');
+
+          const base = (p) => path.basename(p);
+          const url = (p) => `https://github.com/${repo}/releases/download/v${version}/${base(p)}`;
+          const sigFor = (p) => {
+            const s = files.find((f) => base(f) === base(p) + '.sig');
+            if (!s) throw new Error('missing .sig for ' + base(p));
+            return fs.readFileSync(s, 'utf8').trim();
+          };
+
+          const platforms = {};
+          const add = (key, p) => { platforms[key] = { signature: sigFor(p), url: url(p) }; };
+
+          // macOS universal .app.tar.gz serves both arches.
+          const mac = files.find((f) => f.endsWith('.app.tar.gz'));
+          if (mac) { add('darwin-aarch64', mac); add('darwin-x86_64', mac); }
+
+          // Windows NSIS installer.
+          const win = files.find((f) => /-setup\.exe$/.test(f));
+          if (win) add('windows-x86_64', win);
+
+          // Linux AppImages, one per arch.
+          for (const a of files.filter((f) => f.endsWith('.AppImage'))) {
+            if (/aarch64|arm64/.test(base(a))) add('linux-aarch64', a);
+            else add('linux-x86_64', a);
+          }
+
+          if (Object.keys(platforms).length === 0) {
+            throw new Error('no updater artifacts found — check createUpdaterArtifacts + signing secrets');
+          }
+
+          fs.writeFileSync('latest.json', JSON.stringify({
+            version,
+            notes: `See https://github.com/${repo}/releases/tag/v${version}`,
+            pub_date: new Date().toISOString(),
+            platforms,
+          }, null, 2));
+          console.log(fs.readFileSync('latest.json', 'utf8'));
+          EOF
+          gh release upload "v$VERSION" latest.json --repo "$REPO" --clobber
 
   update-brew:
     needs: [compute-version, finalize]

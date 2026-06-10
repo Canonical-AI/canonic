@@ -1953,4 +1953,180 @@ GNOME runtime carries glibc and webkit2gtk inside the sandbox.
   when: the pipeline reaches finalize
   then: no version bump, tag, or release is published (finalize depends on the Flatpak job)
 
+## Auto-Update (UPD)
+
+Canonic updates itself in place using the Tauri updater. On launch it checks the
+GitHub release feed (`latest.json`) for a newer, cryptographically signed build;
+the user is prompted, downloads with progress, then relaunches into the new
+version. Releases are signed in CI with a minisign key whose public half is
+pinned in `tauri.conf.json`, so an unsigned or tampered package is rejected.
+
+* scenario: check on launch when auto-update is enabled
+  given: a real (non-demo) workspace opens and `config.autoUpdate` is not false
+  when: the app finishes loading the workspace
+  then: it checks the release feed in the background and emits `update:available` if a newer signed release exists
+
+* scenario: auto-update disabled
+  given: the user has turned off Auto-update in settings (`config.autoUpdate === false`)
+  when: a workspace opens
+  then: no update check runs automatically
+
+* scenario: manual check finds the latest version
+  given: the user clicks "Check for updates" in settings and no newer release exists
+  when: the check completes
+  then: the status reads "You are on the latest version."
+
+* scenario: manual check finds a newer version
+  given: the user clicks "Check for updates" and a newer signed release exists
+  when: the check completes
+  then: the status shows the new version number and an update prompt appears
+
+* scenario: download shows progress
+  given: an available update has been detected
+  when: the user starts the download
+  then: a download indicator reports percent progress until the package is ready
+
+* scenario: install relaunches into the new version
+  given: an update has finished downloading
+  when: the user chooses to install
+  then: the signed package is verified and applied and the app relaunches on the new version
+
+* scenario: tampered or unsigned package is rejected
+  given: a release package whose signature does not match the pinned public key
+  when: the updater attempts to install it
+  then: installation fails and the running version is left untouched
+
+* scenario: signed updater manifest published with each release
+  given: a release build succeeds with the signing secrets present
+  when: the release is finalized
+  then: a `latest.json` listing each platform's bundle URL and signature is attached to the GitHub release
+
+* scenario: update available in demo mode
+  given: the app is running in demo mode
+  when: the user views the update indicator
+  then: a simulated available update is shown and the download → ready → install flow runs locally without any network or relaunch
+
+***
+
+## Automatic Backup (BKUP)
+
+> Canonic can periodically back up the workspace to a hidden `.canonic-backups` directory (default) or a user-configured path (iCloud, Dropbox, external drive, etc.). Backups are compressed git bundles or tar archives. The user can view backup history and restore from any snapshot.
+
+### Configuration
+
+* scenario: backup is off by default
+  given: a fresh install or no prior backup settings
+  when: the user opens Settings → Backup
+  then: the auto-backup toggle is off and no path is configured
+
+* scenario: enable auto-backup with default path
+  given: backup is off and no custom path is set
+  when: the user toggles auto-backup on
+  then: the default backup path is set to `<workspace>/.canonic-backups` and an initial backup runs immediately
+
+* scenario: set a custom backup path
+  given: the user opens Settings → Backup
+  when: the user picks a folder (e.g. iCloud Drive, Dropbox, external drive)
+  then: the custom path is saved to config under `backup.path` and future backups write there
+
+* scenario: custom path must exist and be writable
+  given: the user sets a backup path
+  when: the path is validated on save
+  then: if the path does not exist or is not writable, an error is shown and the path is not saved
+
+* scenario: backup path persists across restarts
+  given: a custom backup path was configured
+  when: the app is restarted
+  then: the configured path is restored from `~/.config/canonic/config.json` under `backup.path`
+
+### Backup Execution
+
+* scenario: backup runs on a configurable interval
+  given: auto-backup is enabled
+  when: the interval (default 30 minutes) elapses since the last backup
+  then: a new backup is created without any user action
+
+* scenario: backup interval is configurable
+  given: the user opens Settings → Backup
+  when: the user changes the interval from the dropdown (options: 5min, 15min, 30min, 1hr, 2hr, 4hr, 8hr, 24hr)
+  then: the new interval is saved to config under `backup.intervalMinutes` and the timer resets
+
+* scenario: backup only runs when there are changes
+  given: auto-backup is enabled
+  when: the interval elapses but no files have changed since the last backup
+  then: no backup is created and the next interval continues counting
+
+* scenario: manual backup runs immediately
+  given: a workspace is open and a backup path is configured
+  when: the user clicks "Back up now" in Settings → Backup
+  then: a backup runs immediately and the "last backup" timestamp updates
+
+* scenario: backup shows progress feedback
+  given: a backup is running
+  when: the user views Settings → Backup
+  then: a spinner or progress indicator is shown until the backup completes
+
+* scenario: backup failure shows an error
+  given: auto-backup is enabled
+  when: the backup path becomes inaccessible (e.g. external drive disconnected)
+  then: an error is logged, the last backup time is not updated, and the next scheduled attempt runs at the next interval
+
+### Backup Format
+
+* scenario: backup is a compressed git bundle
+  given: a backup runs on a git workspace
+  when: the backup completes
+  then: a timestamped `.bundle` file is written to the backup path (e.g. `canonic-backup-2026-06-09T14-30-00.bundle`)
+
+* scenario: backup includes all branches and tags
+  given: the workspace has multiple branches and tags
+  when: a backup bundle is created
+  then: all refs are included in the bundle so a full restore is possible
+
+* scenario: backup filename is timestamped and sortable
+  given: multiple backups have been created
+  when: the user views the backup list
+  then: backups are listed newest-first by their ISO-8601 timestamp in the filename
+
+### Backup History & Restore
+
+* scenario: backup history is listed in settings
+  given: at least one backup has been created
+  when: the user opens Settings → Backup
+  then: a list shows each backup's timestamp, size, and a "Restore" button
+
+* scenario: restore creates a new branch
+  given: the user clicks "Restore" on a previous backup
+  when: the restore completes
+  then: a new branch `restore-<timestamp>` is created from the backup so the user can inspect changes before merging
+
+* scenario: restore with confirmation
+  given: the user clicks "Restore" on a backup entry
+  when: the confirmation dialog appears
+  then: the dialog warns that restoring will create a new branch; the user must confirm or cancel
+
+* scenario: delete old backup
+  given: backup history is shown
+  when: the user clicks the delete button on a backup entry
+  then: that backup bundle file is deleted from disk and removed from the list
+
+### Retention & Cleanup
+
+* scenario: max backup count caps old backups
+  given: auto-backup is enabled and `backup.maxCount` is set (default 20)
+  when: a new backup is created and total count exceeds maxCount
+  then: the oldest backup is deleted automatically
+
+* scenario: max count is configurable
+  given: the user opens Settings → Backup
+  when: the user changes the max count (options: 10, 20, 50, 100, unlimited)
+  then: the new value is saved to config under `backup.maxCount`
+
+### Demo Mode
+
+* scenario: backup toggle is shown in demo mode
+  given: the app is in demo mode
+  when: the user opens Settings → Backup
+  then: the auto-backup toggle is visible but disabled with a hint "Backup is disabled in demo mode"
+
 *Last updated: 2026-06-09*

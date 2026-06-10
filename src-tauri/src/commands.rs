@@ -352,7 +352,9 @@ pub fn config_validate(config: Value) -> Result<Value, String> {
 // --- App ---
 #[tauri::command]
 pub fn app_version() -> Result<String, String> {
-    Ok("0.0.23-tauri-alpha".to_string())
+    // Baked from Cargo.toml at compile time; CI keeps it in step with
+    // tauri.conf.json, which is also the version the updater compares against.
+    Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
 #[tauri::command]

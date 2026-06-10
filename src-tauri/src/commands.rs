@@ -352,7 +352,9 @@ pub fn config_validate(config: Value) -> Result<Value, String> {
 // --- App ---
 #[tauri::command]
 pub fn app_version() -> Result<String, String> {
-    Ok("0.0.23-tauri-alpha".to_string())
+    // Baked from Cargo.toml at compile time; CI keeps it in step with
+    // tauri.conf.json, which is also the version the updater compares against.
+    Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
 #[tauri::command]
@@ -2746,6 +2748,20 @@ pub async fn update_download(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+
+    // The updater swaps the installed app bundle and relaunches it. Under
+    // `tauri dev` there is no bundle — install() writes to a derived path that
+    // doesn't exist and app.restart() fails with "No such file or directory".
+    // Refuse cleanly so dev can still exercise the check/download UI without
+    // crashing the session. Real installs only run in packaged builds.
+    if tauri::is_dev() {
+        let msg = "Updates can't be installed in a dev build (no app bundle to \
+                   replace). Test install in a packaged build.";
+        let _ = app.emit("update:error", msg);
+        return Err(msg.into());
+    }
+
     let pending = pending_update()
         .lock()
         .unwrap()

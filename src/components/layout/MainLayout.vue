@@ -360,11 +360,13 @@
                         :config="store.config"
                         @navigate="handleHintNavigate"
                     />
+                    <UpdateNotice placement="sidebar" />
                 </template>
             </aside>
 
             <!-- Editor -->
             <main class="editor-area">
+                <UpdateNotice placement="editor" />
                 <SearchView v-if="store.searchViewOpen" ref="searchViewRef" />
                 <PeerFileViewer v-else-if="store.peerFileContent" />
                 <template v-else-if="store.currentFile">
@@ -653,6 +655,7 @@ import AppMenu from "./AppMenu.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
+import UpdateNotice from "./UpdateNotice.vue";
 import { matchesHotkey } from "../../utils/hotkey.js";
 import { useAppMenu } from "../../composables/useAppMenu.js";
 
@@ -954,6 +957,9 @@ onMounted(async () => {
     if (window.canonic?.app?.getVersion) {
         store.appVersion = await window.canonic.app.getVersion();
     }
+
+    // After an applied update, greet with "Updated to vX" + release-notes link.
+    store.checkRecentlyUpdated();
 
     // Suppress default-editor hint if already set
     if (window.canonic?.app?.isDefaultEditor) {

@@ -2192,4 +2192,57 @@ pinned in `tauri.conf.json`, so an unsigned or tampered package is rejected.
   when: the user opens Settings → Backup
   then: the auto-backup toggle is visible but disabled with a hint "Backup is disabled in demo mode"
 
-*Last updated: 2026-06-09*
+## App Updates (UPD)
+
+### Update notice surfaces
+
+* scenario: download progress is visible without opening Settings
+  given: an update is downloading
+  when: the user is anywhere in the workspace
+  then: a banner over the editor shows the download progress, and the left-panel update widget shows the same — no need to open Settings
+
+* scenario: restart prompt appears over the editor
+  given: an update has finished downloading and is ready
+  when: the user is in the workspace
+  then: the over-editor banner shows a "Restart" button that installs and relaunches
+
+* scenario: left-panel widget is persistent until closed
+  given: an update is available, downloading, or ready
+  when: the user views the left sidebar
+  then: an update widget is shown there persistently and stays until the user closes it
+
+* scenario: closing the left-panel widget hides it until the next change
+  given: the left-panel update widget is shown
+  when: the user closes it
+  then: it stays hidden until the next update event (available/progress/ready), which re-shows it
+
+* scenario: the over-editor banner is not dismissible while updating
+  given: an update is downloading or ready
+  when: the user views the over-editor banner
+  then: it has no close button — it tracks live update state (only the post-update greeting is dismissible)
+
+### Post-update greeting
+
+* scenario: greet after a successful update
+  given: the previous session installed an update and the app relaunched into the matching new version
+  when: the app starts
+  then: a banner shows "Updated to vX.Y.Z" with a link to that release's notes
+
+* scenario: greeting fires once
+  given: the post-update greeting has been shown
+  when: the app is relaunched again without a new update
+  then: the greeting does not reappear (the stored target version is cleared after the first check)
+
+* scenario: no greeting if the update did not land
+  given: an install was attempted but the running version does not match the stored target
+  when: the app starts
+  then: no greeting is shown and the stored target is cleared
+
+### Demo Mode
+
+* scenario: update flow is demoable end to end
+  given: the app is in demo mode
+  when: the user downloads and restarts the fake update
+  then: progress animates, then an "Updated to v0.3.0" greeting with a release-notes link is shown — no real binary or network is touched
+
+*Last updated: 2026-06-10*

@@ -419,6 +419,69 @@ jobs:
           EOF
           gh release upload "v$VERSION" latest.json --repo "$REPO" --clobber
 
+  verify-manifest:
+    # Post-release smoke test for the auto-updater. The updater is only as good as
+    # latest.json, and the manifest step above can silently leave it off the release
+    # (e.g. signing produced no .sig). Fetch it the exact way the app does — via the
+    # channel URL in tauri.conf.json (releases/latest/download/...), not the tag-
+    # pinned asset — and assert it parses, the version matches the tag, and every
+    # platform entry carries a signed URL. A red X here means clients can't update.
+    needs:
+      - compute-version
+      - finalize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify latest.json is published and well-formed
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          REPO: Canonical-AI/canonic
+        run: |
+          set -euo pipefail
+          url="https://github.com/$REPO/releases/latest/download/latest.json"
+          echo "Fetching $url"
+          # Retry: the `latest` pointer + CDN can lag a few seconds after publish.
+          code=000
+          for i in 1 2 3 4 5; do
+            code=$(curl -sL -o latest.json -w '%{http_code}' "$url" || echo 000)
+            [ "$code" = "200" ] && break
+            echo "attempt $i: HTTP $code — retrying in 10s"
+            sleep 10
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::latest.json not reachable at channel URL (HTTP $code)"
+            cat latest.json || true
+            exit 1
+          fi
+          node <<'EOF'
+          const fs = require('fs');
+          const want = process.env.VERSION;
+          let m;
+          try {
+            m = JSON.parse(fs.readFileSync('latest.json', 'utf8'));
+          } catch (e) {
+            console.error('::error::latest.json is not valid JSON: ' + e.message);
+            process.exit(1);
+          }
+          if (m.version !== want) {
+            console.error(`::error::latest.json version "${m.version}" != tag "${want}"`);
+            process.exit(1);
+          }
+          const platforms = m.platforms || {};
+          const keys = Object.keys(platforms);
+          if (keys.length === 0) {
+            console.error('::error::latest.json has no platforms');
+            process.exit(1);
+          }
+          for (const k of keys) {
+            const p = platforms[k] || {};
+            if (!p.url || !p.signature) {
+              console.error(`::error::platform "${k}" missing url or signature`);
+              process.exit(1);
+            }
+          }
+          console.log(`latest.json OK — v${m.version}, platforms: ${keys.join(', ')}`);
+          EOF
+
   update-brew:
     needs: [compute-version, finalize]
     runs-on: ubuntu-latest

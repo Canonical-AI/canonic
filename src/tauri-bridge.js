@@ -307,4 +307,19 @@ window.canonic = {
     optOutMcp: (args) => invoke('agent_control_opt_out_mcp', args),
     pickDirectory: () => invoke('dialog_open_directory'),
   },
+  // Backup
+  backup: {
+    getConfig: () => invoke('backup_get_config'),
+    setConfig: (config) => invoke('backup_set_config', { backupConfig: config }),
+    getWorkspaceConfig: (workspacePath) => invoke('backup_get_workspace_config', { workspacePath }),
+    setWorkspaceConfig: (workspacePath, config) => invoke('backup_set_workspace_config', { workspacePath, backupConfig: config }),
+    run: (workspacePath) => invoke('backup_run', { workspacePath }),
+    list: (workspacePath) => invoke('backup_list', { workspacePath }),
+    restore: (workspacePath, filename) => invoke('backup_restore', { workspacePath, filename }),
+    delete: (workspacePath, filename) => invoke('backup_delete', { workspacePath, filename }),
+    startAuto: (workspacePath) => invoke('backup_start_auto', { workspacePath }),
+    stopAuto: () => invoke('backup_stop_auto'),
+    onCompleted: (cb) => addListener('backup:completed', cb),
+    offCompleted: () => removeListener('backup:completed'),
+  },
 };

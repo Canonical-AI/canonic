@@ -13,6 +13,11 @@ pub fn run() {
       // Cache the AppHandle globally so background threads can emit events
       commands::set_app_handle(app.handle().clone());
 
+      // Auto-updater (desktop only). Checks GitHub releases for a signed
+      // `latest.json`; the update_check/download/install commands drive it.
+      #[cfg(desktop)]
+      app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
       // Start the local MCP server so agents (Claude/Codex/Gemini/…) get Canonic tools.
       // Bound to 127.0.0.1 on a random port; port is exposed via agent_control_get_mcp_port.
       mcp::start_mcp_server(app.handle().clone());
@@ -158,7 +163,17 @@ pub fn run() {
       commands::agent_control_get_mcp_port,
       commands::agent_control_check_mcp,
       commands::agent_control_register_mcp,
-      commands::agent_control_opt_out_mcp
+      commands::agent_control_opt_out_mcp,
+      commands::backup_get_config,
+      commands::backup_set_config,
+      commands::backup_get_workspace_config,
+      commands::backup_set_workspace_config,
+      commands::backup_run,
+      commands::backup_list,
+      commands::backup_restore,
+      commands::backup_delete,
+      commands::backup_start_auto,
+      commands::backup_stop_auto
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

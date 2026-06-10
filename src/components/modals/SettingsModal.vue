@@ -1416,6 +1416,336 @@
                         </div>
                     </div>
 
+                    <!-- Backup tab -->
+                    <div v-if="activeTab === 'backup'" class="tab-content">
+                        <div
+                            v-show="shouldShow('backupEnabled', 'backup')"
+                            id="setting-backupEnabled"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name">Auto-backup</span>
+                                <span class="set-desc">
+                                    Periodically back up your workspace to a
+                                    <code>.canonic-backups</code> directory or a
+                                    custom folder.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{
+                                        on: form.backup.enabled,
+                                    }"
+                                    @click="
+                                        form.backup.enabled =
+                                            !form.backup.enabled
+                                    "
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            v-show="
+                                form.backup.enabled &&
+                                shouldShow('backupPath', 'backup')
+                            "
+                            id="setting-backupPath"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name">Backup location</span>
+                                <span class="set-desc">
+                                    Choose where backups are stored (iCloud,
+                                    Dropbox, external drive, etc.). Leave empty
+                                    for the default .canonic-backups folder.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <input
+                                    v-model="form.backup.path"
+                                    class="set-input"
+                                    placeholder="Default: .canonic-backups in workspace"
+                                />
+                                <button
+                                    class="btn-secondary"
+                                    style="margin-top: 6px"
+                                    @click="pickBackupPath"
+                                >
+                                    Choose folder…
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Per-workspace override -->
+                        <div
+                            v-if="
+                                form.backup.enabled && store.workspacePath
+                            "
+                            v-show="
+                                shouldShow(
+                                    'backupWorkspaceOverride',
+                                    'backup',
+                                )
+                            "
+                            id="setting-backupWorkspaceOverride"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name"
+                                    >Custom location for this
+                                    workspace</span
+                                >
+                                <span class="set-desc">
+                                    Override the backup path for
+                                    <strong>{{ store.workspaceName }}</strong>
+                                    only. Other workspaces use the global
+                                    default above.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <div
+                                    class="toggle"
+                                    :class="{ on: store.hasWorkspaceOverride }"
+                                    @click="toggleWorkspaceOverride"
+                                >
+                                    <div class="toggle-thumb"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            v-if="
+                                form.backup.enabled &&
+                                store.hasWorkspaceOverride &&
+                                store.workspacePath
+                            "
+                            v-show="
+                                shouldShow(
+                                    'backupWorkspacePath',
+                                    'backup',
+                                )
+                            "
+                            id="setting-backupWorkspacePath"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name"
+                                    >Workspace backup path</span
+                                >
+                                <span class="set-desc">
+                                    Backups for
+                                    <strong>{{ store.workspaceName }}</strong>
+                                    go here. Leave empty to reset to global
+                                    default.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <input
+                                    v-model="workspaceBkPath"
+                                    class="set-input"
+                                    :placeholder="
+                                        form.backup.path ||
+                                        'Default: .canonic-backups in workspace'
+                                    "
+                                />
+                                <button
+                                    class="btn-secondary"
+                                    style="margin-top: 6px"
+                                    @click="pickWorkspaceBackupPath"
+                                >
+                                    Choose folder…
+                                </button>
+                            </div>
+                        </div>
+
+                        <div
+                            v-show="
+                                form.backup.enabled &&
+                                shouldShow('backupInterval', 'backup')
+                            "
+                            id="setting-backupInterval"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name">Interval</span>
+                                <span class="set-desc">
+                                    How often to create a backup when files have
+                                    changed.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model.number="
+                                        form.backup.intervalMinutes
+                                    "
+                                    class="set-select"
+                                >
+                                    <option :value="5">
+                                        Every 5 minutes
+                                    </option>
+                                    <option :value="15">
+                                        Every 15 minutes
+                                    </option>
+                                    <option :value="30">
+                                        Every 30 minutes
+                                    </option>
+                                    <option :value="60">
+                                        Every hour
+                                    </option>
+                                    <option :value="120">
+                                        Every 2 hours
+                                    </option>
+                                    <option :value="240">
+                                        Every 4 hours
+                                    </option>
+                                    <option :value="480">
+                                        Every 8 hours
+                                    </option>
+                                    <option :value="1440">
+                                        Every 24 hours
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div
+                            v-show="
+                                form.backup.enabled &&
+                                shouldShow('backupMaxCount', 'backup')
+                            "
+                            id="setting-backupMaxCount"
+                            class="set-row"
+                        >
+                            <div class="set-info">
+                                <span class="set-name">Max backups</span>
+                                <span class="set-desc">
+                                    Oldest backups are removed when this limit
+                                    is exceeded.
+                                </span>
+                            </div>
+                            <div class="set-control">
+                                <select
+                                    v-model.number="form.backup.maxCount"
+                                    class="set-select"
+                                >
+                                    <option :value="10">10</option>
+                                    <option :value="20">20</option>
+                                    <option :value="50">50</option>
+                                    <option :value="100">100</option>
+                                    <option :value="0">Unlimited</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="form.backup.enabled || store.backupHistory.length"
+                            v-show="activeTab !== 'all'"
+                            class="field"
+                        >
+                            <div
+                                style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 8px;
+                                "
+                            >
+                                <button
+                                    class="btn-secondary"
+                                    :disabled="store.backupBusy"
+                                    @click="triggerBackup"
+                                >
+                                    {{
+                                        store.backupBusy
+                                            ? 'Backing up…'
+                                            : 'Back up now'
+                                    }}
+                                </button>
+                                <span
+                                    v-if="store.backupLastRun"
+                                    class="update-status"
+                                >
+                                    Last backup:
+                                    {{
+                                        new Date(
+                                            store.backupLastRun.timestamp,
+                                        ).toLocaleString()
+                                    }}
+                                </span>
+                                <span v-else class="update-status">
+                                    No backups yet
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Backup history -->
+                        <div
+                            v-if="store.backupHistory.length"
+                            v-show="activeTab !== 'all'"
+                            class="field"
+                            style="margin-top: 16px"
+                        >
+                            <h4 style="margin-bottom: 8px">
+                                Backup history
+                            </h4>
+                            <div
+                                v-for="entry in store.backupHistory.slice(
+                                    0,
+                                    10,
+                                )"
+                                :key="entry.filename"
+                                class="set-row"
+                                style="padding: 8px 0"
+                            >
+                                <div class="set-info">
+                                    <span class="set-name">
+                                        {{
+                                            new Date(
+                                                entry.timestamp,
+                                            ).toLocaleString()
+                                        }}
+                                    </span>
+                                    <span class="set-desc">
+                                        {{
+                                            formatFileSize(entry.size)
+                                        }}
+                                        — {{ entry.filename }}
+                                    </span>
+                                </div>
+                                <div class="set-control">
+                                    <button
+                                        class="btn-secondary"
+                                        style="margin-right: 6px"
+                                        @click="restoreBackup(entry.filename)"
+                                    >
+                                        Restore
+                                    </button>
+                                    <button
+                                        class="btn-secondary"
+                                        @click="
+                                            deleteBackupEntry(entry.filename)
+                                        "
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Demo mode hint -->
+                        <div
+                            v-if="store.isDemoMode"
+                            v-show="activeTab !== 'all'"
+                            class="field"
+                            style="margin-top: 16px"
+                        >
+                            <p class="field-hint" style="color: var(--text-muted)">
+                                💡 Backup is disabled in demo mode.
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- Reset tab -->
                     <div v-if="activeTab === 'danger'" class="tab-content">
                         <div class="danger-zone-card">
@@ -1506,6 +1836,7 @@ import {
     Shield,
     RefreshCw,
     Trash2,
+    HardDrive,
 } from "lucide-vue-next";
 
 const props = defineProps({ initialTab: { type: String, default: "profile" } });
@@ -1532,6 +1863,7 @@ const navItems = {
     workspace: "Workspace",
     privacy: "Privacy",
     updates: "Updates",
+    backup: "Backup",
     danger: "Reset",
 };
 const navIcons = {
@@ -1544,6 +1876,7 @@ const navIcons = {
     workspace: FolderTree,
     privacy: Shield,
     updates: RefreshCw,
+    backup: HardDrive,
     danger: Trash2,
 };
 
@@ -1620,6 +1953,12 @@ const form = reactive({
         findNext: "Mod-g",
         findPrev: "Mod-Shift-g",
     },
+    backup: {
+        enabled: false,
+        path: "",
+        intervalMinutes: 30,
+        maxCount: 20,
+    },
 });
 
 const newExcludedPath = ref("");
@@ -1642,6 +1981,103 @@ function addExcludedPath() {
     }
     newExcludedPath.value = "";
 }
+
+// ── Backup helpers ──
+async function pickBackupPath() {
+    if (store.isDemoMode) return;
+    try {
+        const picked = await window.canonic.agentControl.pickDirectory();
+        if (picked) form.backup.path = picked;
+    } catch {}
+}
+
+async function triggerBackup() {
+    await store.runBackup();
+}
+
+async function restoreBackup(filename) {
+    const ok = await store.confirm({
+        title: "Restore backup?",
+        message: `This will create a new branch from the backup "${filename}". Your current work won't be overwritten.`,
+        confirmText: "Restore",
+    });
+    if (!ok) return;
+    const result = await store.restoreBackup(filename);
+    if (result.success) {
+        await store.refreshBranches();
+    }
+}
+
+async function deleteBackupEntry(filename) {
+    const ok = await store.confirm({
+        title: "Delete backup?",
+        message: `This permanently deletes "${filename}". This cannot be undone.`,
+        confirmText: "Delete",
+        danger: true,
+    });
+    if (!ok) return;
+    await store.deleteBackup(filename);
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    let i = 0;
+    let size = bytes;
+    while (size >= 1024 && i < units.length - 1) {
+        size /= 1024;
+        i++;
+    }
+    return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+// ── Workspace backup override ──
+const workspaceBkPath = ref("");
+
+async function toggleWorkspaceOverride() {
+    if (store.hasWorkspaceOverride) {
+        // Turning off — clear the workspace override
+        await store.saveWorkspaceBackupConfig("");
+        workspaceBkPath.value = "";
+    } else {
+        // Turning on — start with a blank path (user picks or types)
+        store.hasWorkspaceOverride = true;
+    }
+}
+
+async function pickWorkspaceBackupPath() {
+    if (store.isDemoMode) return;
+    try {
+        const picked = await window.canonic.agentControl.pickDirectory();
+        if (picked) {
+            workspaceBkPath.value = picked;
+            await store.saveWorkspaceBackupConfig(picked);
+        }
+    } catch {}
+}
+
+// Sync workspaceBkPath when override is loaded
+watch(
+    () => store.hasWorkspaceOverride,
+    (on) => {
+        if (on) {
+            workspaceBkPath.value = store.backupConfig.path || "";
+        } else {
+            workspaceBkPath.value = "";
+        }
+    },
+    { immediate: true },
+);
+
+// Debounce-save when user types a workspace backup path
+let workspaceBkPathTimer = null;
+watch(workspaceBkPath, (val) => {
+    if (!store.hasWorkspaceOverride) return;
+    clearTimeout(workspaceBkPathTimer);
+    workspaceBkPathTimer = setTimeout(() => {
+        store.saveWorkspaceBackupConfig(val || "");
+    }, 600);
+});
 
 watch(
     form,
@@ -1906,6 +2342,42 @@ const allSettingsMetadata = [
         desc: "Customize global and editor hotkeys.",
         tab: "hotkeys",
     },
+    {
+        id: "backupEnabled",
+        label: "Auto-backup",
+        desc: "Periodically back up your workspace to a hidden folder or custom location.",
+        tab: "backup",
+    },
+    {
+        id: "backupPath",
+        label: "Backup location",
+        desc: "Custom folder for backups (iCloud, Dropbox, external drive).",
+        tab: "backup",
+    },
+    {
+        id: "backupInterval",
+        label: "Backup interval",
+        desc: "How often to create a new backup snapshot.",
+        tab: "backup",
+    },
+    {
+        id: "backupMaxCount",
+        label: "Max backups",
+        desc: "Oldest backups are deleted when this limit is exceeded.",
+        tab: "backup",
+    },
+    {
+        id: "backupWorkspaceOverride",
+        label: "Custom backup location per workspace",
+        desc: "Use a different backup folder just for the currently open workspace.",
+        tab: "backup",
+    },
+    {
+        id: "backupWorkspacePath",
+        label: "Workspace-specific backup path",
+        desc: "Backup folder used only by the current workspace (iCloud, Dropbox, external drive).",
+        tab: "backup",
+    },
 ];
 
 function shouldShow(id, tab) {
@@ -1959,6 +2431,7 @@ onMounted(async () => {
             assistant: { ...form.assistant, ...(cfg.assistant || {}) },
             completion: { ...form.completion, ...(cfg.completion || {}) },
             hotkeys: { ...form.hotkeys, ...(cfg.hotkeys || {}) },
+            backup: { ...form.backup, ...(cfg.backup || {}) },
             windowBlur: cfg.windowBlur === true,
             windowTransparency: cfg.windowTransparency !== false,
             windowTransparencyOpacity: cfg.windowTransparencyOpacity ?? 0.88,

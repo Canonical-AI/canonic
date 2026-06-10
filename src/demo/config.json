@@ -1,6 +1,10 @@
 {
   "workspaceName": "canonic-demo",
   "template": "pm-framework",
+  "update": {
+    "version": "0.3.0",
+    "notes": "Faster workspace search, new editor themes, and inline comment improvements."
+  },
   "files": {
     "Vision/product-vision.md": "# Product Vision\n\n> What we're building and why it matters.\n\n## Vision Statement\n\nCanonic is a local-first document editor for product managers — built on Git — that makes version control, peer review, and AI-assisted thinking feel native to how good PMs already work.\n\n## Problem We're Solving\n\nProduct managers write documents — PRDs, strategies, roadmaps — in tools that treat them as ephemeral notes. Notion, Google Docs, and Confluence have no concept of history, branching, or structured review. Decisions get made in comments that disappear. `Final_v3_APPROVED.docx` is still the state of the art.\n\nThe real problem isn't the format. It's that there's no shared ritual for saying \"this document is ready to build from.\" Engineers have pull requests. PMs have Slack threads.\n\n## Why Now\n\nThree things converged:\n\n1. **Remote-first teams normalized async review.** The \"walk over and ask\" fallback is gone. Docs need to stand alone — and when they don't, the cost is a sprint built on the wrong requirements.\n2. **AI can now act as a thinking partner.** The bottleneck isn't writing speed — it's thinking quality. Claude can challenge your reasoning before you've committed to it.\n3. **Local-first is having a moment.** Developers are exhausted by SaaS tools that hold their data hostage. PMs are starting to feel the same way.\n\n## Who This Is For\n\nB2B product managers at 20–200 person companies who ship software. They write documents before building things. They collaborate with engineers and designers who have opinions. They care about their decisions aging well — they want to look back at *why* they decided something, not just *what*.\n\nNot for: enterprise PMOs, agencies, or anyone who needs a PM tool to also be a project tracker.\n",
 
@@ -62,6 +66,20 @@
       "online": false
     }
   ],
+  "backup": {
+    "enabled": false,
+    "path": "",
+    "intervalMinutes": 30,
+    "maxCount": 20,
+    "history": [
+      {
+        "filename": "canonic-backup-2026-06-08T09-00-00.bundle",
+        "path": "/demo/.canonic-backups/canonic-backup-2026-06-08T09-00-00.bundle",
+        "size": 48200,
+        "timestamp": 1765342800000
+      }
+    ]
+  },
   "agentSessions": [
     {
       "id": "demo-session-1",
@@ -116,6 +134,25 @@
         },
         "text": "The upper bound worries me a bit — 200-person companies often already have process. I'd tighten to 20–100 and add 'no dedicated program manager layer' as a qualifier. That's the person who's actually in pain.",
         "resolved": false,
+        "commitOid": "demo-v1",
+        "replies": [
+          {
+            "id": "demo-priya-1-r1",
+            "author": "Ben Okafor",
+            "authorInitials": "BO",
+            "text": "Agree — 20–100 matches the design partners we talked to. Anything bigger already has a PMO.",
+            "source": "browser",
+            "createdAt": "2026-05-06T15:42:00.000Z"
+          },
+          {
+            "id": "demo-priya-1-r2",
+            "author": "You",
+            "authorInitials": "Y",
+            "text": "Updated the vision to 20–100. Thanks both.",
+            "source": "app",
+            "createdAt": "2026-05-07T09:10:00.000Z"
+          }
+        ],
         "isDemo": true
       }
     ],

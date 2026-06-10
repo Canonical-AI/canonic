@@ -465,6 +465,125 @@ export const useAppStore = defineStore("app", () => {
   const _demoComments = ref({});
 
   // ==========================================
+  // ── BACKUP ──
+  // ==========================================
+  const backupConfig = ref({ enabled: false, path: null, intervalMinutes: 30, maxCount: 20 });
+  const backupHistory = ref([]);
+  const backupLastRun = ref(null); // { timestamp, size } or null
+  const backupBusy = ref(false);
+  const hasWorkspaceOverride = ref(false); // true when this workspace has its own backup path
+
+  async function loadBackupConfig() {
+    if (isDemoMode.value) {
+      backupConfig.value = { enabled: false, path: null, intervalMinutes: 30, maxCount: 20 };
+      hasWorkspaceOverride.value = false;
+      backupHistory.value = [{
+        filename: 'canonic-backup-2026-06-08T09-00-00.bundle',
+        path: '/demo/.canonic-backups/canonic-backup-2026-06-08T09-00-00.bundle',
+        size: 48200,
+        timestamp: new Date('2026-06-08T09:00:00Z').getTime(),
+      }];
+      return;
+    }
+    if (!api.backup?.getConfig) return;
+    backupConfig.value = await api.backup.getConfig();
+
+    // Load workspace-level override if a workspace is open
+    await loadWorkspaceBackupConfig();
+  }
+
+  async function loadWorkspaceBackupConfig() {
+    if (isDemoMode.value || !workspacePath.value) return;
+    if (!api.backup?.getWorkspaceConfig) return;
+    try {
+      const wsCfg = await api.backup.getWorkspaceConfig(workspacePath.value);
+      hasWorkspaceOverride.value = wsCfg.hasWorkspaceOverride || false;
+      // If there's a workspace override, merge it into the display config
+      if (hasWorkspaceOverride.value && wsCfg.path) {
+        backupConfig.value = { ...backupConfig.value, path: wsCfg.path };
+      }
+    } catch { /* non-critical */ }
+  }
+
+  async function saveWorkspaceBackupConfig(overridePath) {
+    if (isDemoMode.value || !workspacePath.value) return;
+    if (!api.backup?.setWorkspaceConfig) return;
+    const result = await api.backup.setWorkspaceConfig(workspacePath.value, { path: overridePath });
+    if (result.success) {
+      hasWorkspaceOverride.value = !!overridePath;
+      if (overridePath) {
+        backupConfig.value = { ...backupConfig.value, path: overridePath };
+      } else {
+        // Revert to global path
+        const globalCfg = await api.backup.getConfig();
+        backupConfig.value = { ...backupConfig.value, path: globalCfg.path };
+      }
+    }
+    return result;
+  }
+
+  async function saveBackupConfig(cfg) {
+    const result = await api.backup.setConfig(cfg);
+    if (result.success) {
+      backupConfig.value = cfg;
+      await loadBackupHistory();
+    }
+    return result;
+  }
+
+  async function runBackup() {
+    if (isDemoMode.value) {
+      backupBusy.value = true;
+      // simulate delay
+      await new Promise(r => setTimeout(r, 1500));
+      backupLastRun.value = { timestamp: Date.now(), size: 48200 };
+      backupHistory.value.unshift({
+        filename: `canonic-backup-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.bundle`,
+        path: '/demo/.canonic-backups/latest.bundle',
+        size: 48200,
+        timestamp: Date.now(),
+      });
+      backupBusy.value = false;
+      return { success: true };
+    }
+    backupBusy.value = true;
+    try {
+      const result = await api.backup.run(workspacePath.value);
+      if (result.success && !result.skipped) {
+        backupLastRun.value = { timestamp: result.timestamp, size: result.size };
+        await loadBackupHistory();
+      }
+      return result;
+    } finally {
+      backupBusy.value = false;
+    }
+  }
+
+  async function loadBackupHistory() {
+    if (isDemoMode.value || !workspacePath.value) return;
+    backupHistory.value = await api.backup.list(workspacePath.value);
+  }
+
+  async function restoreBackup(filename) {
+    if (isDemoMode.value) {
+      return { success: true, branch: `restore-${Date.now()}` };
+    }
+    return await api.backup.restore(workspacePath.value, filename);
+  }
+
+  async function deleteBackup(filename) {
+    if (isDemoMode.value) {
+      backupHistory.value = backupHistory.value.filter(b => b.filename !== filename);
+      return { success: true };
+    }
+    const result = await api.backup.delete(workspacePath.value, filename);
+    if (result.success) {
+      await loadBackupHistory();
+    }
+    return result;
+  }
+
+  // ==========================================
   // ── SEARCH INTERFACE ──
   // ==========================================
   const searchResults = ref([]);
@@ -634,10 +753,32 @@ export const useAppStore = defineStore("app", () => {
   function downloadUpdate() {
     updateAvailable.value = false;
     updateDownloading.value = true;
+    // Demo mode has no real binary to fetch — fake the progress so the full
+    // download → ready → install flow is visible without touching the network.
+    if (isDemoMode.value) {
+      downloadProgress.value = 0;
+      const timer = setInterval(() => {
+        downloadProgress.value += 20;
+        if (downloadProgress.value >= 100) {
+          clearInterval(timer);
+          updateDownloading.value = false;
+          updateReady.value = true;
+          downloadProgress.value = 0;
+        }
+      }, 250);
+      return;
+    }
     api?.update.download();
   }
 
   function installUpdate() {
+    // Demo can't relaunch into a new binary — just clear the prompt.
+    if (isDemoMode.value) {
+      updateReady.value = false;
+      updateAvailable.value = false;
+      updateInfo.value = null;
+      return;
+    }
     api?.update.install();
   }
 
@@ -717,6 +858,17 @@ export const useAppStore = defineStore("app", () => {
     };
   });
 
+  // Comments POSTed to an active share (from a recipient's browser) land in the same file
+  // the app reads. Reload the open doc's comments live so the author sees new comments and
+  // replies without reopening the document.
+  if (api.peerComments?.onReceived) {
+    api.peerComments.onReceived((payload) => {
+      if (payload?.filePath && payload.filePath === currentFile.value) {
+        loadComments();
+      }
+    });
+  }
+
   // Wire peer discovery IPC listeners
   if (api.peers.onFound) {
     api.peers.onFound((peer) => {
@@ -727,6 +879,13 @@ export const useAppStore = defineStore("app", () => {
     api.peers.onLost(({ id }) => {
       const idx = discoveredPeers.value.findIndex((p) => p.id === id);
       if (idx >= 0) discoveredPeers.value.splice(idx, 1);
+    });
+  }
+
+  // Wire backup completion listener
+  if (api.backup) {
+    api.backup.onCompleted((data) => {
+      backupLastRun.value = { timestamp: data.timestamp, size: data.size };
     });
   }
 
@@ -967,6 +1126,18 @@ export const useAppStore = defineStore("app", () => {
       await refreshBranches();
       // Restore last used branch if it exists in the workspace
       const cfg = await loadConfig();
+
+      // Load backup configuration and auto-start if enabled
+      await loadBackupConfig();
+      if (backupConfig.value.enabled && !isDemoMode.value && api.backup?.startAuto) {
+        api.backup.startAuto(workspacePath.value).catch(() => {});
+      }
+
+      // Background auto-update check (real workspaces only). The backend emits
+      // update:available if a newer signed release is on GitHub.
+      if (!isDemoMode.value && cfg?.autoUpdate !== false) {
+        Promise.resolve(api.update?.check?.()).catch(() => {});
+      }
 
       if (cfg?.autoShareAllWorkspaces && !sharesByFile["__all_workspaces__"]) {
         await startAllWorkspacesShare();
@@ -1606,9 +1777,24 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function addComment(comment) {
+    // Stamp the doc version the comment was made against so the panel can filter by
+    // tagged version/commit. commitLog[0] is HEAD for the current file.
+    if (comment && comment.commitOid == null && commitLog.value.length) {
+      comment.commitOid = commitLog.value[0].oid;
+    }
     comments.value.push(comment);
     await persistComments();
     await logEvent("comment:add");
+  }
+
+  // Add a one-level reply to an existing comment thread.
+  async function addReply(commentId, reply) {
+    const root = comments.value.find((c) => c.id === commentId);
+    if (!root) return;
+    if (!Array.isArray(root.replies)) root.replies = [];
+    root.replies.push(reply);
+    await persistComments();
+    await logEvent("comment:reply");
   }
 
   async function resolveComment(commentId) {
@@ -1729,6 +1915,12 @@ export const useAppStore = defineStore("app", () => {
     demoFiles.value = cfg.files ? { ...cfg.files } : {};
     isDemoMode.value = true;
 
+    // Surface a fake available update so the auto-update flow is demoable.
+    if (cfg.update) {
+      updateInfo.value = cfg.update;
+      updateAvailable.value = true;
+    }
+
     // AI Control demo data
     controlHistory.value = (cfg.agentSessions || []).map(s => ({ ...s }))
     configuredAgents.value = (cfg.configuredAgents || []).map(a => ({ ...a }))
@@ -1754,6 +1946,11 @@ export const useAppStore = defineStore("app", () => {
     demoPeers.value = [];
     demoFiles.value = {};
     _demoComments.value = {};
+    // Clear the simulated update prompt when leaving demo.
+    updateAvailable.value = false;
+    updateReady.value = false;
+    updateDownloading.value = false;
+    updateInfo.value = null;
     comments.value = comments.value.filter((c) => !c.isDemo);
     controlHistory.value = []
     configuredAgents.value = []
@@ -3320,6 +3517,7 @@ export const useAppStore = defineStore("app", () => {
     checkFileStatus,
     loadComments,
     addComment,
+    addReply,
     resolveComment,
     deleteComment,
     deleteAgentComments,
@@ -3436,6 +3634,21 @@ export const useAppStore = defineStore("app", () => {
     loadMcpPort,
     registerMcp,
     optOutMcp,
+
+    // ── Backup ──
+    backupConfig,
+    backupHistory,
+    backupLastRun,
+    backupBusy,
+    hasWorkspaceOverride,
+    loadBackupConfig,
+    loadWorkspaceBackupConfig,
+    saveBackupConfig,
+    saveWorkspaceBackupConfig,
+    runBackup,
+    loadBackupHistory,
+    restoreBackup,
+    deleteBackup,
 
     // ── File tree keyboard navigation (yazi-style) ──
     treeFocused,

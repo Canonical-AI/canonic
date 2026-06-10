@@ -3,9 +3,11 @@ name: Build arm64 Linux bundle
 # Builds aarch64 Linux bundles (.deb + .AppImage) for arm64 Linux devices via
 # Tauri. Runs on a native arm64 runner. Trigger manually from the Actions tab.
 #
-# NOTE: the previous Electron flatpak (org.electronjs.Electron2.BaseApp) path was
-# removed in the Tauri migration. A Tauri-native flatpak manifest is a TODO; the
-# AppImage produced here is the portable arm64 artifact in the meantime.
+# NOTE: this is NOT the Flatpak build (it was historically misnamed
+# build-flatpak.yml). The Flatpak bundle is produced by the `build-flatpak` job
+# in release.yml from flatpak/ai.canonic.app.yml. The AppImage here targets
+# glibc arm64 distros; it does NOT run on musl distros like Alpine — use the
+# Flatpak there.
 
 on:
   workflow_dispatch:

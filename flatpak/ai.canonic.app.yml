@@ -1,0 +1,60 @@
+# Flatpak manifest for Canonic (Tauri v2).
+#
+# This does NOT compile the app — it wraps the .deb that the release pipeline
+# already builds (tauri-action, ubuntu-24.04) into a distro-agnostic Flatpak
+# bundle. One bundle runs on Alpine, Arch, Fedora, Ubuntu, etc.: the GNOME
+# runtime ships glibc + webkit2gtk-4.1 inside the sandbox, so even musl distros
+# (Alpine) run it unchanged.
+#
+# The release workflow copies the built amd64 .deb to flatpak/canonic.deb before
+# invoking flatpak-builder, so the `path: canonic.deb` source resolves.
+#
+# runtime-version pinned to '47': the GNOME 47 runtime provides webkit2gtk-4.1,
+# which Tauri v2 links against. Bump in lockstep with the flatpak-builder
+# container tag in release.yml. If a future runtime drops webkit2gtk-4.1, the
+# app fails to start — keep these two versions matched and known-good.
+id: ai.canonic.app
+runtime: org.gnome.Platform
+runtime-version: "47"
+sdk: org.gnome.Sdk
+command: canonic
+
+finish-args:
+  # Rendering: Wayland with X11 fallback, GPU access for the webview.
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --share=ipc
+  # LAN peer discovery (mDNS), HTTP sharing server, and AI provider calls.
+  - --share=network
+  # Canonic is a local-first file editor: it reads/writes the user's markdown
+  # workspace and runs git on it. Grant the home dir so workspaces are usable.
+  - --filesystem=home
+  # Desktop notifications (share requests, peer events).
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: canonic
+    buildsystem: simple
+    sources:
+      - type: file
+        path: canonic.deb
+      - type: file
+        path: ai.canonic.app.metainfo.xml
+    build-commands:
+      # Unpack the Debian package (ar archive -> data tarball -> /usr tree).
+      - ar -x canonic.deb
+      - tar -xf data.tar.gz
+      # Relocate the Tauri /usr payload into the Flatpak /app prefix.
+      - install -Dm755 usr/bin/canonic /app/bin/canonic
+      # Desktop file + icons must be named after the app id for Flatpak export.
+      - install -Dm644 usr/share/applications/canonic.desktop /app/share/applications/ai.canonic.app.desktop
+      - desktop-file-edit --set-icon=ai.canonic.app /app/share/applications/ai.canonic.app.desktop
+      - |
+        for icon in usr/share/icons/hicolor/*/apps/canonic.png; do
+          [ -e "$icon" ] || continue
+          size=$(echo "$icon" | sed 's|usr/share/icons/hicolor/\([^/]*\)/apps/canonic.png|\1|')
+          install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/ai.canonic.app.png"
+        done
+      # AppStream metadata so software centres show the app properly.
+      - install -Dm644 ai.canonic.app.metainfo.xml /app/share/metainfo/ai.canonic.app.metainfo.xml

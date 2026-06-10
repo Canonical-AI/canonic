@@ -174,6 +174,12 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing. With these set and createUpdaterArtifacts:true in
+          # tauri.conf.json, tauri-action emits a signed updater bundle
+          # (.app.tar.gz on macOS, the NSIS .exe on Windows, .AppImage on Linux)
+          # plus a detached .sig next to each — the inputs for latest.json below.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # macOS signing + notarization. Reuses the existing electron-builder
           # secrets — CSC_LINK is already the base64 of the Developer-ID .p12
           # (identical to what tauri-action wants for APPLE_CERTIFICATE), and
@@ -203,6 +209,77 @@ jobs:
             src-tauri/target/**/release/bundle/deb/*.deb
             src-tauri/target/**/release/bundle/appimage/*.AppImage
             src-tauri/target/**/release/bundle/rpm/*.rpm
+            src-tauri/target/**/release/bundle/**/*.sig
+
+  build-flatpak:
+    # Wrap each architecture's .deb from the `build` job into a distro-agnostic
+    # .flatpak bundle (installs on Alpine, Arch, Fedora, Ubuntu, …). Each arch
+    # builds natively: x86_64 on an x64 runner, aarch64 on an arm64 runner — the
+    # flatpak-builder container's runtime matches the host arch, so no emulation.
+    # The `gnome-47` tag MUST match `runtime-version` in flatpak/ai.canonic.app.yml.
+    needs:
+      - compute-version
+      - build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            artifact: release-linux-x64
+            deb_glob: "*_amd64.deb"
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            artifact: release-linux-arm64
+            deb_glob: "*_arm64.deb"
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Download Linux build (.deb)
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+          path: linux-deb
+
+      - name: Stage .deb for the manifest
+        # The manifest's `path: canonic.deb` is relative to flatpak/, so the
+        # built .deb must sit there before flatpak-builder runs.
+        env:
+          DEB_GLOB: ${{ matrix.deb_glob }}
+        run: |
+          deb=$(find linux-deb -name "$DEB_GLOB" | head -n1)
+          test -n "$deb" || { echo "no .deb matching $DEB_GLOB found in artifact"; exit 1; }
+          cp "$deb" flatpak/canonic.deb
+
+      - name: Sync metainfo release version
+        # Keep the AppStream <release> in step with the version being shipped.
+        env:
+          V: ${{ needs.compute-version.outputs.version }}
+        run: |
+          sed -i "0,/<release version=\"[^\"]*\"/s//<release version=\"$V\"/" \
+            flatpak/ai.canonic.app.metainfo.xml
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@401fe28a8384095fc1531b9d320b292f0ee45adb # v6.7
+        with:
+          bundle: canonic_${{ needs.compute-version.outputs.version }}_${{ matrix.arch }}.flatpak
+          manifest-path: flatpak/ai.canonic.app.yml
+          # Per-arch cache so the two matrix legs don't clobber each other.
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v7
+        with:
+          # Unique per arch — same artifact name across matrix legs collides.
+          name: release-flatpak-${{ matrix.arch }}
+          if-no-files-found: error
+          path: canonic_${{ needs.compute-version.outputs.version }}_${{ matrix.arch }}.flatpak
 
   finalize:
     # Only reached if every build job succeeded. This is the single point that
@@ -211,6 +288,7 @@ jobs:
     needs:
       - compute-version
       - build
+      - build-flatpak
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -275,6 +353,134 @@ jobs:
             --notes-file release_notes.md \
             --target main \
             $(find release-artifacts -type f)
+
+      - name: Generate and upload updater manifest (latest.json)
+        # The auto-updater fetches this from the release. It pairs each platform
+        # with its signed bundle URL + detached signature (read from the .sig
+        # files). VERSION/REPO are passed via env (never interpolated into the
+        # script) so untrusted input can't reach the shell or node.
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          REPO: Canonical-AI/canonic
+        run: |
+          node <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const version = process.env.VERSION;
+          const repo = process.env.REPO;
+
+          // Recursively collect every downloaded artifact file.
+          const files = [];
+          (function walk(d) {
+            for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+              const p = path.join(d, e.name);
+              if (e.isDirectory()) walk(p);
+              else files.push(p);
+            }
+          })('release-artifacts');
+
+          const base = (p) => path.basename(p);
+          const url = (p) => `https://github.com/${repo}/releases/download/v${version}/${base(p)}`;
+          const sigFor = (p) => {
+            const s = files.find((f) => base(f) === base(p) + '.sig');
+            if (!s) throw new Error('missing .sig for ' + base(p));
+            return fs.readFileSync(s, 'utf8').trim();
+          };
+
+          const platforms = {};
+          const add = (key, p) => { platforms[key] = { signature: sigFor(p), url: url(p) }; };
+
+          // macOS universal .app.tar.gz serves both arches.
+          const mac = files.find((f) => f.endsWith('.app.tar.gz'));
+          if (mac) { add('darwin-aarch64', mac); add('darwin-x86_64', mac); }
+
+          // Windows NSIS installer.
+          const win = files.find((f) => /-setup\.exe$/.test(f));
+          if (win) add('windows-x86_64', win);
+
+          // Linux AppImages, one per arch.
+          for (const a of files.filter((f) => f.endsWith('.AppImage'))) {
+            if (/aarch64|arm64/.test(base(a))) add('linux-aarch64', a);
+            else add('linux-x86_64', a);
+          }
+
+          if (Object.keys(platforms).length === 0) {
+            throw new Error('no updater artifacts found — check createUpdaterArtifacts + signing secrets');
+          }
+
+          fs.writeFileSync('latest.json', JSON.stringify({
+            version,
+            notes: `See https://github.com/${repo}/releases/tag/v${version}`,
+            pub_date: new Date().toISOString(),
+            platforms,
+          }, null, 2));
+          console.log(fs.readFileSync('latest.json', 'utf8'));
+          EOF
+          gh release upload "v$VERSION" latest.json --repo "$REPO" --clobber
+
+  verify-manifest:
+    # Post-release smoke test for the auto-updater. The updater is only as good as
+    # latest.json, and the manifest step above can silently leave it off the release
+    # (e.g. signing produced no .sig). Fetch it the exact way the app does — via the
+    # channel URL in tauri.conf.json (releases/latest/download/...), not the tag-
+    # pinned asset — and assert it parses, the version matches the tag, and every
+    # platform entry carries a signed URL. A red X here means clients can't update.
+    needs:
+      - compute-version
+      - finalize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify latest.json is published and well-formed
+        env:
+          VERSION: ${{ needs.compute-version.outputs.version }}
+          REPO: Canonical-AI/canonic
+        run: |
+          set -euo pipefail
+          url="https://github.com/$REPO/releases/latest/download/latest.json"
+          echo "Fetching $url"
+          # Retry: the `latest` pointer + CDN can lag a few seconds after publish.
+          code=000
+          for i in 1 2 3 4 5; do
+            code=$(curl -sL -o latest.json -w '%{http_code}' "$url" || echo 000)
+            [ "$code" = "200" ] && break
+            echo "attempt $i: HTTP $code — retrying in 10s"
+            sleep 10
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::latest.json not reachable at channel URL (HTTP $code)"
+            cat latest.json || true
+            exit 1
+          fi
+          node <<'EOF'
+          const fs = require('fs');
+          const want = process.env.VERSION;
+          let m;
+          try {
+            m = JSON.parse(fs.readFileSync('latest.json', 'utf8'));
+          } catch (e) {
+            console.error('::error::latest.json is not valid JSON: ' + e.message);
+            process.exit(1);
+          }
+          if (m.version !== want) {
+            console.error(`::error::latest.json version "${m.version}" != tag "${want}"`);
+            process.exit(1);
+          }
+          const platforms = m.platforms || {};
+          const keys = Object.keys(platforms);
+          if (keys.length === 0) {
+            console.error('::error::latest.json has no platforms');
+            process.exit(1);
+          }
+          for (const k of keys) {
+            const p = platforms[k] || {};
+            if (!p.url || !p.signature) {
+              console.error(`::error::platform "${k}" missing url or signature`);
+              process.exit(1);
+            }
+          }
+          console.log(`latest.json OK — v${m.version}, platforms: ${keys.join(', ')}`);
+          EOF
 
   update-brew:
     needs: [compute-version, finalize]

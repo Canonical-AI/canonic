@@ -4402,7 +4402,7 @@ pub fn backup_restore(workspace_path: String, filename: String) -> Result<Value,
     }
 
     // Create restore branch from the first ref
-    let first_ref = format!("FETCH_HEAD");
+    let first_ref = "FETCH_HEAD".to_string();
     let branch_output = std::process::Command::new("git")
         .args(["branch", &branch_name, &first_ref])
         .current_dir(&workspace_path)
@@ -4452,7 +4452,7 @@ fn backup_start_auto_internal() -> Result<(), String> {
     let interval_minutes = backup
         .get("intervalMinutes")
         .and_then(|m| m.as_u64())
-        .unwrap_or(30) as u64;
+        .unwrap_or(30);
 
     let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
 

@@ -83,8 +83,210 @@ fn escape_html(s: &str) -> String {
      .replace('"', "&quot;")
 }
 
+// Escape a JSON blob for safe embedding inside an inline <script>. Stops document or
+// comment content from breaking out of the element (`</script>`) or terminating the JS
+// string via U+2028 / U+2029. The values themselves stay valid JS once escaped.
+fn escape_script_json(s: &str) -> String {
+    s.replace('<', "\\u003c")
+     .replace('>', "\\u003e")
+     .replace('&', "\\u0026")
+     .replace('\u{2028}', "\\u2028")
+     .replace('\u{2029}', "\\u2029")
+}
+
+// CSS for the interactive comment layer. Only emitted on comment-enabled shares, so the
+// strict view-only pages stay byte-for-byte unchanged.
+const COMMENT_CSS: &str = r#"
+  .comments-col { flex: 0 0 300px; padding: 56px 0 96px; position: sticky; top: 0; align-self: flex-start; }
+  .comments-col h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 14px; font-weight: 600; }
+  .c-card { border: 1px solid #e8e5e1; border-radius: 8px; padding: 11px 13px; margin-bottom: 8px; background: #fff; }
+  .c-author { font-weight: 600; font-size: 0.8125rem; color: #333; }
+  .c-quote { font-size: 0.75rem; color: #4A7A9B; border-left: 2px solid #cfe0ea; padding-left: 8px; margin: 6px 0; }
+  .c-text { font-size: 0.875rem; color: #1a1a1a; white-space: pre-wrap; }
+  .c-reply { font-size: 0.8125rem; color: #333; margin: 6px 0 0 12px; padding-left: 8px; border-left: 2px solid #e8e5e1; white-space: pre-wrap; }
+  .c-reply-author { font-weight: 600; }
+  .c-reply-btn { margin-top: 8px; background: none; border: none; color: #4A7A9B; cursor: pointer; padding: 0; font-size: 0.75rem; font-weight: 500; }
+  .c-empty { color: #999; font-size: 0.75rem; }
+  #sel-comment-btn { position: absolute; display: none; z-index: 50; background: #4A7A9B; color: #fff; border: none; border-radius: 6px; padding: 5px 11px; font-size: 0.8125rem; font-weight: 500; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+  #cmt-pop { position: absolute; display: none; z-index: 51; width: 280px; background: #fff; border: 1px solid #d0cac4; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.16); padding: 12px; }
+  #cmt-pop .pop-quote { font-size: 0.75rem; color: #4A7A9B; margin-bottom: 8px; max-height: 48px; overflow: hidden; }
+  #cmt-pop input, #cmt-pop textarea { width: 100%; border: 1px solid #d0cac4; border-radius: 6px; padding: 7px 9px; font: inherit; font-size: 0.875rem; margin-bottom: 8px; resize: vertical; }
+  #cmt-pop textarea { min-height: 64px; }
+  #cmt-pop .pop-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  #cmt-pop button { border: none; border-radius: 6px; padding: 6px 12px; font-size: 0.8125rem; font-weight: 500; cursor: pointer; }
+  #cmt-pop .btn-post { background: #4A7A9B; color: #fff; }
+  #cmt-pop .btn-cancel { background: #ede9e5; color: #555; }
+  @media (max-width: 980px) { .layout { flex-direction: column; align-items: stretch; } .comments-col { flex: 1 1 auto; padding: 0 0 40px; position: static; } .page { flex: 1 1 auto; } }
+"#;
+
+// Right-margin comment thread container.
+const COMMENT_ASIDE_HTML: &str =
+    r#"<aside class="comments-col"><h3>Comments</h3><div id="comments-list"></div></aside>"#;
+
+// Floating "Comment" button + the add/reply popover. Markup only; behavior is in COMMENT_SCRIPT.
+const COMMENT_WIDGET_HTML: &str = r#"<button id="sel-comment-btn" type="button">💬 Comment</button>
+<div id="cmt-pop">
+  <div class="pop-quote" id="pop-quote"></div>
+  <input id="pop-name" type="text" placeholder="Your name" autocomplete="name">
+  <textarea id="pop-text" placeholder="Add a comment…"></textarea>
+  <div class="pop-actions">
+    <button class="btn-cancel" id="pop-cancel" type="button">Cancel</button>
+    <button class="btn-post" id="pop-post" type="button">Comment</button>
+  </div>
+</div>"#;
+
+// The whole browser comment layer. Reads its config from the single escaped `__CANONIC__`
+// blob injected ahead of it (token, file path, viewed commit oid, existing comments) and
+// renders/threads comments with textContent only — no innerHTML, so doc/comment text can
+// never inject markup.
+const COMMENT_SCRIPT: &str = r#"(function(){
+  var TOKEN=__CANONIC__.token, FILE=__CANONIC__.file, OID=__CANONIC__.oid;
+  var DATA=Array.isArray(__CANONIC__.comments)?__CANONIC__.comments:[];
+  var NAME_KEY="canonic_commenter_name";
+  var listEl=document.getElementById("comments-list");
+  var btn=document.getElementById("sel-comment-btn");
+  var pop=document.getElementById("cmt-pop");
+  var popQuote=document.getElementById("pop-quote");
+  var popName=document.getElementById("pop-name");
+  var popText=document.getElementById("pop-text");
+  var popPost=document.getElementById("pop-post");
+  var docBody=document.getElementById("doc-body");
+  var pendingQuote="", replyTo=null;
+  function initials(n){return n.split(/\s+/).filter(Boolean).map(function(w){return w.charAt(0);}).join("").slice(0,2).toUpperCase();}
+  function uuid(){try{return crypto.randomUUID();}catch(e){return "c-"+Date.now()+"-"+Math.random().toString(16).slice(2);}}
+  function el(tag,cls,txt){var e=document.createElement(tag);if(cls){e.className=cls;}if(txt!=null){e.textContent=txt;}return e;}
+  function render(){
+    listEl.textContent="";
+    var active=DATA.filter(function(c){return !c.resolved;});
+    if(!active.length){listEl.appendChild(el("p","c-empty","No comments yet. Select text to add one."));return;}
+    active.forEach(function(c){
+      var card=el("div","c-card");
+      card.appendChild(el("div","c-author",c.author||"Anonymous"));
+      if(c.anchor&&c.anchor.quotedText){card.appendChild(el("div","c-quote","“"+c.anchor.quotedText+"”"));}
+      card.appendChild(el("div","c-text",c.text||""));
+      (c.replies||[]).forEach(function(r){
+        var row=el("div","c-reply");
+        row.appendChild(el("span","c-reply-author",(r.author||"Anonymous")+": "));
+        row.appendChild(document.createTextNode(r.text||""));
+        card.appendChild(row);
+      });
+      var rb=el("button","c-reply-btn","Reply");
+      rb.addEventListener("click",function(){openPop(c.anchor&&c.anchor.quotedText?c.anchor.quotedText:"",c.id,rb);});
+      card.appendChild(rb);
+      listEl.appendChild(card);
+    });
+  }
+  function hideBtn(){btn.style.display="none";}
+  function hidePop(){pop.style.display="none";replyTo=null;}
+  function openPop(quote,parentId,anchorEl){
+    replyTo=parentId||null;
+    pendingQuote=quote||"";
+    hideBtn();
+    popQuote.textContent=pendingQuote?("“"+pendingQuote.slice(0,140)+(pendingQuote.length>140?"…":"")+"”"):"";
+    popName.value=localStorage.getItem(NAME_KEY)||"";
+    popText.value="";
+    popText.placeholder=replyTo?"Write a reply…":"Add a comment…";
+    var r=anchorEl?anchorEl.getBoundingClientRect():{top:80,left:80};
+    pop.style.display="block";
+    pop.style.top=(window.scrollY+r.top-8)+"px";
+    pop.style.left=(window.scrollX+Math.max(8,(r.left||80)-40))+"px";
+    (popName.value?popText:popName).focus();
+  }
+  document.addEventListener("mouseup",function(){
+    setTimeout(function(){
+      if(pop.style.display==="block"){return;}
+      var sel=window.getSelection();
+      var text=sel?sel.toString().trim():"";
+      if(!text||!sel.anchorNode||!docBody.contains(sel.anchorNode)){hideBtn();return;}
+      pendingQuote=text;
+      var rr=sel.getRangeAt(0).getBoundingClientRect();
+      btn.style.display="block";
+      btn.style.top=(window.scrollY+rr.top-40)+"px";
+      btn.style.left=(window.scrollX+rr.left)+"px";
+    },0);
+  });
+  btn.addEventListener("mousedown",function(e){e.preventDefault();});
+  btn.addEventListener("click",function(){
+    var r=null;try{r=window.getSelection().getRangeAt(0).getBoundingClientRect();}catch(e){}
+    openPop(pendingQuote,null,{getBoundingClientRect:function(){return r||{top:80,left:80};}});
+  });
+  document.getElementById("pop-cancel").addEventListener("click",hidePop);
+  popPost.addEventListener("click",function(){
+    var name=(popName.value||"").trim();
+    var text=(popText.value||"").trim();
+    if(!name){popName.focus();return;}
+    if(!text){popText.focus();return;}
+    localStorage.setItem(NAME_KEY,name);
+    var payload;
+    if(replyTo){
+      payload={id:uuid(),parentId:replyTo,author:name,authorInitials:initials(name),text:text,source:"browser",createdAt:new Date().toISOString()};
+    }else{
+      payload={id:uuid(),author:name,authorInitials:initials(name),type:"selection",source:"browser",anchor:{quotedText:pendingQuote},text:text,resolved:false,createdAt:new Date().toISOString()};
+      if(OID){payload.commitOid=OID;}
+    }
+    popPost.disabled=true;popPost.textContent="Posting…";
+    fetch("/comments?token="+encodeURIComponent(TOKEN),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filePath:FILE,comments:[payload]})})
+      .then(function(res){if(!res.ok){throw new Error("HTTP "+res.status);}
+        if(replyTo){var root=DATA.filter(function(c){return c.id===replyTo;})[0];if(root){root.replies=root.replies||[];root.replies.push(payload);}}
+        else{DATA.push(payload);}
+        render();hidePop();var s=window.getSelection();if(s){s.removeAllRanges();}})
+      .catch(function(err){alert("Could not post comment: "+err.message);})
+      .then(function(){popPost.disabled=false;popPost.textContent="Comment";});
+  });
+  render();
+})();"#;
+
+// Merge browser-posted comments into the stored list. A payload carrying `parentId` is
+// appended as a reply to that root (deduped by id); otherwise it's a new root (deduped by
+// id). Orphan replies (missing parent) are dropped. Writes the same file the app reads.
+fn merge_incoming_comments(existing: &mut Vec<Value>, incoming: &[Value]) {
+    for c in incoming {
+        let id = match c.get("id").and_then(|i| i.as_str()) {
+            Some(id) => id.to_string(),
+            None => continue,
+        };
+        if let Some(parent_id) = c.get("parentId").and_then(|p| p.as_str()) {
+            if let Some(root) = existing
+                .iter_mut()
+                .find(|e| e.get("id").and_then(|i| i.as_str()) == Some(parent_id))
+            {
+                if let Some(obj) = root.as_object_mut() {
+                    let replies = obj.entry("replies").or_insert_with(|| json!([]));
+                    if let Some(arr) = replies.as_array_mut() {
+                        let dup = arr
+                            .iter()
+                            .any(|r| r.get("id").and_then(|i| i.as_str()) == Some(id.as_str()));
+                        if !dup {
+                            arr.push(c.clone());
+                        }
+                    }
+                }
+            }
+        } else {
+            let dup = existing
+                .iter()
+                .any(|e| e.get("id").and_then(|i| i.as_str()) == Some(id.as_str()));
+            if !dup {
+                existing.push(c.clone());
+            }
+        }
+    }
+}
+
 // Helper to render HTML doc page
-fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> String {
+#[allow(clippy::too_many_arguments)]
+fn render_doc_page(
+    title: &str,
+    content: &str,
+    author: &str,
+    doc_url: &str,
+    file_path: &str,
+    token: &str,
+    viewed_oid: &str,
+    can_comment: bool,
+    comments: &Value,
+    nonce: &str,
+) -> String {
     let deep_link = format!("canonic://open?url={}", urlencoding::encode(doc_url));
     
     // Parse markdown using pulldown-cmark, then sanitize. pulldown-cmark passes raw
@@ -95,6 +297,25 @@ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> S
     let mut raw_html = String::new();
     pulldown_cmark::html::push_html(&mut raw_html, parser);
     let html_output = ammonia::clean(&raw_html);
+
+    let meta_label = if can_comment { "Comment enabled" } else { "View only" };
+    let (comment_css, aside_block, interactive_block): (&str, String, String) = if can_comment {
+        // One escaped config blob feeds the script — avoids per-value placeholder
+        // substitution and double-encoding, and keeps user content out of the markup.
+        let cfg = json!({ "token": token, "file": file_path, "oid": viewed_oid, "comments": comments });
+        let cfg_js = escape_script_json(&cfg.to_string());
+        let mut script_body = String::from("var __CANONIC__=");
+        script_body.push_str(&cfg_js);
+        script_body.push_str(";\n");
+        script_body.push_str(COMMENT_SCRIPT);
+        let interactive = format!(
+            "{}\n<script nonce=\"{}\">{}</script>",
+            COMMENT_WIDGET_HTML, nonce, script_body
+        );
+        (COMMENT_CSS, COMMENT_ASIDE_HTML.to_string(), interactive)
+    } else {
+        ("", String::new(), String::new())
+    };
 
     format!(
         r#"<!DOCTYPE html>
@@ -113,9 +334,17 @@ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> S
     background: #f9f8f7;
     padding: 0 16px;
   }}
-  .page {{
-    max-width: 720px;
+  .layout {{
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 32px;
+    max-width: 1120px;
     margin: 0 auto;
+  }}
+  .page {{
+    flex: 0 1 720px;
+    max-width: 720px;
     padding: 56px 0 96px;
   }}
   .meta {{
@@ -185,24 +414,33 @@ fn render_doc_page(title: &str, content: &str, author: &str, doc_url: &str) -> S
   a {{ color: #4A7A9B; }}
   img {{ max-width: 100%; height: auto; border-radius: 6px; }}
   hr {{ border: none; border-top: 1px solid #e8e5e1; margin: 32px 0; }}
+  {}
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="meta">
-    <span>Shared by <strong>{}</strong></span>
-    <span class="meta-dot">·</span>
-    <span>View only</span>
-    <a class="open-app-btn" href="{}" title="Open in Canonic app">Open in Canonic ↗</a>
+<div class="layout">
+  <div class="page">
+    <div class="meta">
+      <span>Shared by <strong>{}</strong></span>
+      <span class="meta-dot">·</span>
+      <span>{}</span>
+      <a class="open-app-btn" href="{}" title="Open in Canonic app">Open in Canonic ↗</a>
+    </div>
+    <div id="doc-body">{}</div>
   </div>
   {}
 </div>
+{}
 </body>
 </html>"#,
         escape_html(title),
+        comment_css,
         escape_html(author),
+        meta_label,
         deep_link,
-        html_output
+        html_output,
+        aside_block,
+        interactive_block
     )
 }
 
@@ -275,14 +513,14 @@ async fn handle_comments(
         return (StatusCode::FORBIDDEN, Json(json!({ "error": "Comments not allowed" })));
     }
 
-    let home = std::env::var("HOME").unwrap_or_default();
-    let comments_dir = Path::new(&home).join(".config").join("canonic").join("comments");
-    if let Err(e) = fs::create_dir_all(&comments_dir) {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })));
+    // Same file the desktop app reads (commands::comments_file_path), so browser comments
+    // and replies show up in the app and survive `CANONIC_CONFIG_DIR` overrides.
+    let comments_file = crate::commands::comments_file_path(&body.file_path);
+    if let Some(parent) = comments_file.parent() {
+        if let Err(e) = fs::create_dir_all(parent) {
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() })));
+        }
     }
-
-    let file_name = format!("{}.json", body.file_path.replace('/', "_"));
-    let comments_file = comments_dir.join(file_name);
 
     let mut existing: Vec<Value> = if comments_file.exists() {
         fs::read_to_string(&comments_file)
@@ -293,20 +531,7 @@ async fn handle_comments(
         vec![]
     };
 
-    let mut ids = std::collections::HashSet::new();
-    for c in &existing {
-        if let Some(id) = c.get("id").and_then(|i| i.as_str()) {
-            ids.insert(id.to_string());
-        }
-    }
-
-    for c in body.comments.clone() {
-        if let Some(id) = c.get("id").and_then(|i| i.as_str()) {
-            if !ids.contains(id) {
-                existing.push(c);
-            }
-        }
-    }
+    merge_incoming_comments(&mut existing, &body.comments);
 
     if let Ok(content) = serde_json::to_string_pretty(&existing) {
         let _ = fs::write(comments_file, content);
@@ -402,13 +627,7 @@ async fn handle_file(
         }
     };
 
-    let home = std::env::var("HOME").unwrap_or_default();
-    let comments_file = Path::new(&home)
-        .join(".config")
-        .join("canonic")
-        .join("comments")
-        .join(format!("{}.json", query_path.replace('/', "_")));
-
+    let comments_file = crate::commands::comments_file_path(&query_path);
     let comments: Value = if comments_file.exists() {
         fs::read_to_string(comments_file)
             .ok()
@@ -423,16 +642,32 @@ async fn handle_file(
         let title = Path::new(&query_path).file_stem().unwrap_or_default().to_string_lossy();
         let author = std::env::var("USER").unwrap_or_else(|_| "Author".to_string());
         let doc_url = format!("http://127.0.0.1:{}/file?path={}&token={}", share.port, urlencoding::encode(&query_path), share.token);
-        let html = render_doc_page(&title, &content, &author, &doc_url);
-        return (
-            StatusCode::OK,
-            [
-                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
-                (header::CONTENT_SECURITY_POLICY, SHARE_CSP),
-            ],
-            Html(html),
-        )
-            .into_response();
+        // Commenting reuses the existing share permission model: anything above view-only
+        // (comment/copy) gets the interactive layer. View-only pages stay script-free.
+        let can_comment = share.permission != "view";
+        let viewed_oid = query.oid.clone().unwrap_or_default();
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let html = render_doc_page(
+            &title, &content, &author, &doc_url,
+            &query_path, &share.token, &viewed_oid, can_comment, &comments, &nonce,
+        );
+        // Relax the CSP just enough for our own nonce'd script + same-origin POST when
+        // commenting is enabled; everything else stays locked (no remote/inline script).
+        let csp = if can_comment {
+            format!(
+                "default-src 'none'; img-src * data:; style-src 'unsafe-inline'; font-src data:; connect-src 'self'; script-src 'nonce-{}'; base-uri 'none'; form-action 'none'",
+                nonce
+            )
+        } else {
+            SHARE_CSP.to_string()
+        };
+        let mut resp = Html(html).into_response();
+        let h = resp.headers_mut();
+        h.insert(header::CONTENT_TYPE, HeaderValue::from_static("text/html; charset=utf-8"));
+        if let Ok(v) = HeaderValue::from_str(&csp) {
+            h.insert(header::CONTENT_SECURITY_POLICY, v);
+        }
+        return resp;
     }
 
     (StatusCode::OK, Json(json!({
@@ -769,13 +1004,85 @@ mod tests {
     #[test]
     fn render_doc_page_strips_active_content() {
         let md = "# Title\n\n<script>alert(1)</script>\n\n<img src=x onerror=alert(2)>\n\n[link](javascript:alert(3))";
-        let html = render_doc_page("Title", md, "Author", "http://127.0.0.1/doc");
+        // View-only page: no script of our own, so the doc body must stay inert too.
+        let html = render_doc_page(
+            "Title", md, "Author", "http://127.0.0.1/doc",
+            "f.md", "tok", "", false, &json!([]), "nonce",
+        );
         assert!(!html.contains("<script"), "script tag survived: {html}");
         assert!(
             !html.to_lowercase().contains("onerror"),
             "event handler survived: {html}"
         );
         assert!(!html.contains("javascript:"), "javascript: url survived: {html}");
+        assert!(html.contains("View only"), "view-only label missing: {html}");
+    }
+
+    #[test]
+    fn render_doc_page_comment_enabled_has_widget() {
+        let comments = json!([
+            { "id": "c1", "author": "Priya", "text": "tighten", "anchor": { "quotedText": "segment" } }
+        ]);
+        let html = render_doc_page(
+            "Doc", "# Body", "Author", "http://127.0.0.1/doc",
+            "Vision.md", "tok123", "", true, &comments, "NONCEXYZ",
+        );
+        assert!(html.contains("Comment enabled"), "label missing: {html}");
+        assert!(html.contains("nonce=\"NONCEXYZ\""), "nonce missing: {html}");
+        assert!(html.contains("id=\"comments-list\""), "comments column missing: {html}");
+        assert!(html.contains("/comments?token="), "post endpoint missing: {html}");
+        assert!(html.contains("Priya"), "existing comment not embedded: {html}");
+        // Exactly our own one script element — nothing smuggled in.
+        assert_eq!(html.matches("<script").count(), 1, "unexpected extra script: {html}");
+        assert_eq!(html.matches("</script>").count(), 1, "unbalanced script tags: {html}");
+    }
+
+    #[test]
+    fn embedded_comment_text_cannot_break_out_of_script() {
+        let comments = json!([
+            { "id": "x", "author": "A", "text": "</script><script>alert(1)</script>",
+              "anchor": { "quotedText": "q" } }
+        ]);
+        let html = render_doc_page(
+            "Doc", "# Body", "Author", "http://127.0.0.1/doc",
+            "Vision.md", "tok", "", true, &comments, "N",
+        );
+        // The malicious text is escaped, so the only real script tags are our own.
+        assert_eq!(html.matches("<script").count(), 1, "breakout via comment text: {html}");
+        assert_eq!(html.matches("</script>").count(), 1, "breakout via comment text: {html}");
+        assert!(html.contains("\\u003c/script\\u003e"), "comment text not escaped: {html}");
+    }
+
+    #[test]
+    fn merge_incoming_comments_appends_reply_and_dedupes() {
+        let mut existing = vec![json!({ "id": "root1", "author": "P", "text": "hi" })];
+
+        // New reply on an existing root.
+        merge_incoming_comments(
+            &mut existing,
+            &[json!({ "id": "r1", "parentId": "root1", "author": "B", "text": "agree" })],
+        );
+        let replies = existing[0].get("replies").and_then(|r| r.as_array()).unwrap();
+        assert_eq!(replies.len(), 1);
+        assert_eq!(replies[0]["id"], "r1");
+
+        // Same reply id again is ignored.
+        merge_incoming_comments(
+            &mut existing,
+            &[json!({ "id": "r1", "parentId": "root1", "author": "B", "text": "agree" })],
+        );
+        assert_eq!(existing[0]["replies"].as_array().unwrap().len(), 1);
+
+        // New root is appended; orphan reply (unknown parent) is dropped.
+        merge_incoming_comments(
+            &mut existing,
+            &[
+                json!({ "id": "root2", "author": "C", "text": "new" }),
+                json!({ "id": "r9", "parentId": "ghost", "author": "C", "text": "lost" }),
+            ],
+        );
+        assert_eq!(existing.len(), 2);
+        assert_eq!(existing[1]["id"], "root2");
     }
 
     #[test]

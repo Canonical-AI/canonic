@@ -620,6 +620,69 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the comments panel is open
   then: the "Clear AI" button is not shown
 
+* scenario: reply creates a one-level thread
+  given: a comment exists on the open document
+  when: the user writes a reply to that comment
+  then: the reply is saved under the comment's replies and shown indented beneath it
+
+* scenario: comment stamped with current version
+  given: the document has at least one commit
+  when: the user adds a comment
+  then: the comment records the current commit oid so it can be filtered by version
+
+* scenario: filter comments by version
+  given: comments exist that were made against different saved versions
+  when: the user selects a named version in the comments panel version filter
+  then: only comments whose commit oid matches that version are shown
+
+* scenario: filter shows all versions by default
+  given: comments exist across multiple versions
+  when: the comments panel opens
+  then: the version filter is set to "All versions" and every unresolved comment is shown
+
+***
+
+## Browser Commenting (BCM)
+
+> Recipients of a share with comment (or copy) permission can leave comments and replies
+> directly in the browser — they only enter a name. The served page reuses the share token
+> for trust; no account or login. View-only shares stay static, script-free HTML.
+
+* scenario: comment UI only on comment-enabled shares
+  given: a document is shared with view-only permission
+  when: a recipient opens the share link in a browser
+  then: the page is static HTML with no comment controls and no script
+
+* scenario: interactive page on comment permission
+  given: a document is shared with comment or copy permission
+  when: a recipient opens the share link in a browser
+  then: a Comments column, a comment-on-selection button, and the existing thread are shown
+
+* scenario: name required before posting
+  given: a recipient is on a comment-enabled share page
+  when: they try to post a comment without entering a name
+  then: the comment is not sent and the name field is focused
+
+* scenario: comment on selected text from the browser
+  given: a recipient has entered a name and selected text in the document
+  when: they submit a comment
+  then: the selected text is saved as the anchor and the comment is posted to the share
+
+* scenario: browser comment appears in the app live
+  given: the author has the shared document open in the desktop app
+  when: a recipient posts a comment from their browser
+  then: the comment appears in the app's comments panel without reopening the document
+
+* scenario: reply from the browser
+  given: a comment thread exists on a comment-enabled share page
+  when: a recipient replies to a comment from the browser
+  then: the reply is appended to that comment's thread for everyone viewing the doc
+
+* scenario: invalid token rejected
+  given: a comment-enabled share is active
+  when: a comment POST arrives with a missing or incorrect token
+  then: the server responds with HTTP 403 and stores nothing
+
 ***
 
 ## Floating Toolbar (TBR)

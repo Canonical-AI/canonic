@@ -858,6 +858,17 @@ export const useAppStore = defineStore("app", () => {
     };
   });
 
+  // Comments POSTed to an active share (from a recipient's browser) land in the same file
+  // the app reads. Reload the open doc's comments live so the author sees new comments and
+  // replies without reopening the document.
+  if (api.peerComments?.onReceived) {
+    api.peerComments.onReceived((payload) => {
+      if (payload?.filePath && payload.filePath === currentFile.value) {
+        loadComments();
+      }
+    });
+  }
+
   // Wire peer discovery IPC listeners
   if (api.peers.onFound) {
     api.peers.onFound((peer) => {
@@ -1766,9 +1777,24 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function addComment(comment) {
+    // Stamp the doc version the comment was made against so the panel can filter by
+    // tagged version/commit. commitLog[0] is HEAD for the current file.
+    if (comment && comment.commitOid == null && commitLog.value.length) {
+      comment.commitOid = commitLog.value[0].oid;
+    }
     comments.value.push(comment);
     await persistComments();
     await logEvent("comment:add");
+  }
+
+  // Add a one-level reply to an existing comment thread.
+  async function addReply(commentId, reply) {
+    const root = comments.value.find((c) => c.id === commentId);
+    if (!root) return;
+    if (!Array.isArray(root.replies)) root.replies = [];
+    root.replies.push(reply);
+    await persistComments();
+    await logEvent("comment:reply");
   }
 
   async function resolveComment(commentId) {
@@ -3491,6 +3517,7 @@ export const useAppStore = defineStore("app", () => {
     checkFileStatus,
     loadComments,
     addComment,
+    addReply,
     resolveComment,
     deleteComment,
     deleteAgentComments,

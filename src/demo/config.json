@@ -134,6 +134,25 @@
         },
         "text": "The upper bound worries me a bit — 200-person companies often already have process. I'd tighten to 20–100 and add 'no dedicated program manager layer' as a qualifier. That's the person who's actually in pain.",
         "resolved": false,
+        "commitOid": "demo-v1",
+        "replies": [
+          {
+            "id": "demo-priya-1-r1",
+            "author": "Ben Okafor",
+            "authorInitials": "BO",
+            "text": "Agree — 20–100 matches the design partners we talked to. Anything bigger already has a PMO.",
+            "source": "browser",
+            "createdAt": "2026-05-06T15:42:00.000Z"
+          },
+          {
+            "id": "demo-priya-1-r2",
+            "author": "You",
+            "authorInitials": "Y",
+            "text": "Updated the vision to 20–100. Thanks both.",
+            "source": "app",
+            "createdAt": "2026-05-07T09:10:00.000Z"
+          }
+        ],
         "isDemo": true
       }
     ],

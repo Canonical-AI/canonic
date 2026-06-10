@@ -122,13 +122,13 @@ const permissionOptions = [
         value: "comment",
         label: "Comment",
         icon: MessageSquare,
-        hint: "Others can read and leave comments.",
+        hint: "Others can read and leave comments — right from their browser, no account needed.",
     },
     {
         value: "copy",
         label: "Copy",
         icon: Copy,
-        hint: "Others can read, comment, and copy the document to their workspace.",
+        hint: "Others can read, comment from their browser, and copy the document to their workspace.",
     },
 ];
 

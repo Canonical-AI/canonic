@@ -1,8 +1,17 @@
 <template>
   <div class="comments-panel">
     <div class="panel-header">
-      <span>{{ visibleComments.length }} comment{{ visibleComments.length !== 1 ? 's' : '' }}</span>
+      <span>{{ filteredComments.length }} comment{{ filteredComments.length !== 1 ? 's' : '' }}</span>
       <div v-if="!isPeerMode" class="header-actions">
+        <select
+          v-if="versionOptions.length > 2"
+          v-model="versionFilter"
+          class="version-filter"
+          title="Filter comments by version"
+          @click.stop
+        >
+          <option v-for="o in versionOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+        </select>
         <button
           v-if="agentCommentCount > 0"
           class="clear-agents"
@@ -19,9 +28,9 @@
       <span v-else class="peer-mode-label">{{ store.peerFileContent.peer.name }}'s doc</span>
     </div>
 
-    <div class="comments-list" v-if="visibleComments.length > 0" ref="listEl">
+    <div class="comments-list" v-if="filteredComments.length > 0" ref="listEl">
       <div
-        v-for="comment in visibleComments"
+        v-for="comment in filteredComments"
         :key="comment.id"
         :data-comment-id="comment.id"
         :class="['comment-card',
@@ -55,6 +64,29 @@
         </div>
 
         <p class="comment-text">{{ comment.text }}</p>
+
+        <div v-if="comment.replies && comment.replies.length" class="replies">
+          <div v-for="r in comment.replies" :key="r.id" class="reply">
+            <span class="reply-author">{{ r.author }}</span>
+            <span class="reply-text">{{ r.text }}</span>
+          </div>
+        </div>
+
+        <div v-if="!isPeerMode && !comment.isAgent" class="reply-box" @click.stop>
+          <template v-if="replyingTo === comment.id">
+            <textarea
+              v-model="replyDraft"
+              class="reply-input"
+              placeholder="Write a reply…"
+              @keydown.enter.exact.prevent="submitReply(comment.id)"
+            ></textarea>
+            <div class="reply-actions">
+              <button class="action-link" @click.stop="submitReply(comment.id)">Reply</button>
+              <button class="action-link" @click.stop="cancelReply">Cancel</button>
+            </div>
+          </template>
+          <button v-else class="action-link reply-trigger" @click.stop="startReply(comment.id)">Reply</button>
+        </div>
 
         <div v-if="!isPeerMode" class="comment-actions">
           <button v-if="!comment.resolved" class="action-link" @click.stop="store.resolveComment(comment.id)">
@@ -134,6 +166,55 @@ function formatTime(iso) {
 
 function truncate(text, len) {
   return text.length > len ? text.slice(0, len) + '…' : text
+}
+
+// ── Version filter ──
+// Comments are stamped with the commit oid they were made against (store.addComment).
+// Named versions (store.docVersions) map a label to an oid; "Current" is HEAD.
+const versionFilter = ref('all')
+const headOid = computed(() => store.commitLog?.[0]?.oid || null)
+const versionOptions = computed(() => {
+  const opts = [
+    { value: 'all', label: 'All versions' },
+    { value: 'current', label: 'Current' },
+  ]
+  for (const v of (store.docVersions || [])) {
+    if (v?.oid) opts.push({ value: v.oid, label: v.name || v.oid.slice(0, 7) })
+  }
+  return opts
+})
+
+// Layer the version filter on top of visibleComments (which handles resolved/peer mode).
+const filteredComments = computed(() => {
+  const base = visibleComments.value
+  if (isPeerMode.value || versionFilter.value === 'all') return base
+  if (versionFilter.value === 'current') {
+    return base.filter(c => !c.commitOid || c.commitOid === headOid.value)
+  }
+  return base.filter(c => c.commitOid === versionFilter.value)
+})
+
+// ── Replies (one-level threads) ──
+const replyingTo = ref(null)
+const replyDraft = ref('')
+function startReply(id) { replyingTo.value = id; replyDraft.value = '' }
+function cancelReply() { replyingTo.value = null; replyDraft.value = '' }
+function makeInitials(name) {
+  return (name || '').split(/\s+/).filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()
+}
+async function submitReply(commentId) {
+  const text = replyDraft.value.trim()
+  if (!text) return
+  const author = store.config?.displayName || 'You'
+  await store.addReply(commentId, {
+    id: (globalThis.crypto?.randomUUID?.() || `r-${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    author,
+    authorInitials: makeInitials(author),
+    text,
+    source: 'app',
+    createdAt: new Date().toISOString(),
+  })
+  cancelReply()
 }
 </script>
 
@@ -323,4 +404,63 @@ function truncate(text, len) {
 .comment-card.agent-comment { border-left: 3px solid var(--accent); }
 .comment-card.agent-comment:hover { border-color: var(--accent); }
 .agent-author { color: var(--accent) !important; font-style: italic; }
+
+.version-filter {
+  font-size: 0.7rem;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  max-width: 120px;
+  cursor: pointer;
+}
+
+.replies {
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reply {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.reply-author {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-right: 6px;
+}
+
+.reply-box {
+  margin-bottom: 8px;
+}
+
+.reply-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 48px;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.reply-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.reply-trigger {
+  color: var(--accent);
+}
 </style>

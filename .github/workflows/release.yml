@@ -212,10 +212,13 @@ jobs:
             src-tauri/target/**/release/bundle/**/*.sig
 
   build-flatpak:
-    # Wrap each architecture's .deb from the `build` job into a distro-agnostic
-    # .flatpak bundle (installs on Alpine, Arch, Fedora, Ubuntu, …). Each arch
-    # builds natively: x86_64 on an x64 runner, aarch64 on an arm64 runner — the
-    # flatpak-builder container's runtime matches the host arch, so no emulation.
+    # Wrap the .deb from the `build` job into a distro-agnostic .flatpak bundle
+    # (installs on Alpine, Arch, Fedora, Ubuntu, …). x86_64 ONLY: the builder
+    # image `bilelmoussaoui/flatpak-github-actions:gnome-47` ships no arm64
+    # manifest, so `docker pull` on an arm64 runner fails outright — native
+    # aarch64 flatpak isn't buildable with this toolchain. arm64 Linux users are
+    # covered by the .deb/.rpm/.AppImage arm64 artifacts; only the arm64 .flatpak
+    # is omitted. Revisit if the image gains arm64 (or via QEMU cross-build).
     # The `gnome-47` tag MUST match `runtime-version` in flatpak/ai.canonic.app.yml.
     needs:
       - compute-version
@@ -229,10 +232,6 @@ jobs:
             artifact: release-linux-x64
             deb_glob: "*_amd64.deb"
             arch: x86_64
-          - runner: ubuntu-24.04-arm
-            artifact: release-linux-arm64
-            deb_glob: "*_arm64.deb"
-            arch: aarch64
     runs-on: ${{ matrix.runner }}
     container:
       image: bilelmoussaoui/flatpak-github-actions:gnome-47

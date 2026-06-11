@@ -2238,11 +2238,33 @@ pinned in `tauri.conf.json`, so an unsigned or tampered package is rejected.
   when: the app starts
   then: no greeting is shown and the stored target is cleared
 
+### Mandatory security updates
+
+* scenario: a critical update can't be dismissed
+  given: the release manifest marks the update `critical`
+  when: the update is detected
+  then: the over-editor banner and the left-panel widget both show a red "Security update required" notice with no close button (overriding the usual dismiss)
+
+* scenario: advisory link is shown for security updates
+  given: a critical update whose manifest includes an advisory URL
+  when: the security banner is shown
+  then: it includes an "Advisory" link that opens the advisory in the browser
+
+* scenario: forcing is best-effort and non-destructive
+  given: the critical flag lives in the unsigned part of the manifest
+  when: the client enforces it
+  then: it only nags/forces-with-update — the downloaded binary is still signature-verified before install, so a tampered flag can never run a malicious build
+
+* scenario: releases can be flagged critical from CI
+  given: a release is published
+  when: the `mark_critical` workflow input is true or the merged PR has the `security-critical` label
+  then: `latest.json` is written with `critical: true`, `severity: critical`, and an advisory URL
+
 ### Demo Mode
 
 * scenario: update flow is demoable end to end
   given: the app is in demo mode
-  when: the user downloads and restarts the fake update
-  then: progress animates, then an "Updated to v0.3.0" greeting with a release-notes link is shown — no real binary or network is touched
+  when: the user downloads and restarts the fake (critical) update
+  then: a non-dismissible "Security update required" banner is shown, progress animates, then an "Updated to v0.3.0" greeting with a release-notes link — no real binary or network is touched
 
 *Last updated: 2026-06-10*

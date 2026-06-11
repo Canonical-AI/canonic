@@ -26,6 +26,14 @@ on:
           - patch
           - minor
           - major
+      mark_critical:
+        description: "Mandatory security update (clients can't dismiss the prompt)"
+        type: boolean
+        default: false
+      advisory_url:
+        description: "Optional advisory/release link shown on the security banner"
+        type: string
+        default: ""
 
 # Never run two releases at once — they race on the version bump + tag.
 concurrency:
@@ -358,16 +366,24 @@ jobs:
         # with its signed bundle URL + detached signature (read from the .sig
         # files). VERSION/REPO are passed via env (never interpolated into the
         # script) so untrusted input can't reach the shell or node.
+        # MARK_CRITICAL/ADVISORY_URL flag a mandatory security update: from the
+        # workflow_dispatch input, or a `security-critical` label on the merged
+        # PR. They become unsigned manifest fields the client enforces (the
+        # binary is still signature-verified, so this can only force-with-update).
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.compute-version.outputs.version }}
           REPO: Canonical-AI/canonic
+          MARK_CRITICAL: ${{ github.event.inputs.mark_critical == 'true' || contains(github.event.pull_request.labels.*.name, 'security-critical') }}
+          ADVISORY_URL: ${{ github.event.inputs.advisory_url }}
         run: |
           node <<'EOF'
           const fs = require('fs');
           const path = require('path');
           const version = process.env.VERSION;
           const repo = process.env.REPO;
+          const critical = process.env.MARK_CRITICAL === 'true';
+          const advisory = process.env.ADVISORY_URL || '';
 
           // Recursively collect every downloaded artifact file.
           const files = [];
@@ -408,12 +424,22 @@ jobs:
             throw new Error('no updater artifacts found — check createUpdaterArtifacts + signing secrets');
           }
 
-          fs.writeFileSync('latest.json', JSON.stringify({
+          const manifest = {
             version,
             notes: `See https://github.com/${repo}/releases/tag/v${version}`,
             pub_date: new Date().toISOString(),
             platforms,
-          }, null, 2));
+          };
+          // Custom fields the client reads via Update.raw_json to force a
+          // mandatory, non-dismissible security update.
+          if (critical) {
+            manifest.critical = true;
+            manifest.severity = 'critical';
+            manifest.advisory =
+              advisory || `https://github.com/${repo}/releases/tag/v${version}`;
+          }
+
+          fs.writeFileSync('latest.json', JSON.stringify(manifest, null, 2));
           console.log(fs.readFileSync('latest.json', 'utf8'));
           EOF
           gh release upload "v$VERSION" latest.json --repo "$REPO" --clobber

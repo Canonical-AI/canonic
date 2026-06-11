@@ -146,4 +146,34 @@ describe('auto-update store', () => {
     expect(store.recentlyUpdated).toBe(false)
     expect(mockApi.app.getVersion).not.toHaveBeenCalled()
   })
+
+  it('applyUpdateInfo marks a critical update mandatory with severity + advisory', () => {
+    store.applyUpdateInfo({
+      version: '0.2.5-alpha',
+      mandatory: true,
+      severity: 'critical',
+      advisory: 'https://example.com/advisory',
+    })
+    expect(store.updateAvailable).toBe(true)
+    expect(store.updateMandatory).toBe(true)
+    expect(store.updateSeverity).toBe('critical')
+    expect(store.advisoryUrl).toBe('https://example.com/advisory')
+  })
+
+  it('applyUpdateInfo leaves a normal update non-mandatory', () => {
+    store.applyUpdateInfo({ version: '0.2.5-alpha' })
+    expect(store.updateMandatory).toBe(false)
+    expect(store.updateSeverity).toBe('')
+    expect(store.advisoryUrl).toBe('')
+  })
+
+  it('openAdvisory opens the advisory URL via the bridge', () => {
+    store.applyUpdateInfo({
+      version: '0.2.5-alpha',
+      mandatory: true,
+      advisory: 'https://example.com/advisory',
+    })
+    store.openAdvisory()
+    expect(mockApi.share.openLink).toHaveBeenCalledWith('https://example.com/advisory')
+  })
 })

@@ -734,6 +734,10 @@ export const useAppStore = defineStore("app", () => {
   // "Updated to vX" + a release-notes link. Cleared once dismissed.
   const recentlyUpdated = ref(false);
   const recentlyUpdatedVersion = ref("");
+  // Security forcing: a manifest-flagged critical update can't be dismissed.
+  const updateMandatory = ref(false);
+  const updateSeverity = ref("");
+  const advisoryUrl = ref("");
 
   const releaseNotesUrl = computed(() => {
     const v = recentlyUpdated.value
@@ -744,12 +748,19 @@ export const useAppStore = defineStore("app", () => {
       : "";
   });
 
+  // Apply an `update:available` payload. Extracted so it's unit-testable
+  // without firing the IPC listener.
+  function applyUpdateInfo(info) {
+    updateInfo.value = info;
+    updateAvailable.value = true;
+    updateNoticeDismissed.value = false;
+    updateMandatory.value = !!info?.mandatory;
+    updateSeverity.value = info?.severity || "";
+    advisoryUrl.value = info?.advisory || "";
+  }
+
   if (api?.update) {
-    api.update.onAvailable?.((info) => {
-      updateInfo.value = info;
-      updateAvailable.value = true;
-      updateNoticeDismissed.value = false;
-    });
+    api.update.onAvailable?.((info) => applyUpdateInfo(info));
     api.update.onProgress?.((progress) => {
       updateAvailable.value = false;
       updateDownloading.value = true;
@@ -824,6 +835,10 @@ export const useAppStore = defineStore("app", () => {
 
   function openReleaseNotes() {
     if (releaseNotesUrl.value) api?.share?.openLink?.(releaseNotesUrl.value);
+  }
+
+  function openAdvisory() {
+    if (advisoryUrl.value) api?.share?.openLink?.(advisoryUrl.value);
   }
 
   // Called once at startup: if the previous session installed an update and the
@@ -1979,10 +1994,10 @@ export const useAppStore = defineStore("app", () => {
     demoFiles.value = cfg.files ? { ...cfg.files } : {};
     isDemoMode.value = true;
 
-    // Surface a fake available update so the auto-update flow is demoable.
+    // Surface a fake available update so the auto-update flow is demoable,
+    // including the mandatory/severity/advisory security fields.
     if (cfg.update) {
-      updateInfo.value = cfg.update;
-      updateAvailable.value = true;
+      applyUpdateInfo(cfg.update);
     }
 
     // AI Control demo data
@@ -3640,12 +3655,17 @@ export const useAppStore = defineStore("app", () => {
     updateNoticeDismissed,
     recentlyUpdated,
     recentlyUpdatedVersion,
+    updateMandatory,
+    updateSeverity,
+    advisoryUrl,
     releaseNotesUrl,
+    applyUpdateInfo,
     downloadUpdate,
     installUpdate,
     dismissUpdateNotice,
     dismissRecentlyUpdated,
     openReleaseNotes,
+    openAdvisory,
     checkRecentlyUpdated,
     commentingActive: ref(false),
     refreshDiscoveredPeers,

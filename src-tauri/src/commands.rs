@@ -2677,10 +2677,33 @@ pub async fn update_check(app: tauri::AppHandle) -> Result<Value, String> {
     let updater = app.updater().map_err(|e| e.to_string())?;
     match updater.check().await {
         Ok(Some(update)) => {
+            // Custom (unsigned) manifest fields drive security forcing. The
+            // binary itself is still signature-verified at install, so these
+            // flags can only nag/force-with-update — never run a bad binary.
+            // `critical: true` makes the update mandatory for every client old
+            // enough to see it (the plugin only returns one when out of date).
+            let raw = &update.raw_json;
+            let mandatory = raw
+                .get("critical")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let severity = raw
+                .get("severity")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let advisory = raw
+                .get("advisory")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let info = json!({
                 "version": update.version.clone(),
                 "notes": update.body.clone(),
                 "date": update.date.map(|d| d.to_string()),
+                "mandatory": mandatory,
+                "severity": severity,
+                "advisory": advisory,
             });
             *pending_update().lock().unwrap() =
                 Some(PendingUpdate { update, bytes: None });

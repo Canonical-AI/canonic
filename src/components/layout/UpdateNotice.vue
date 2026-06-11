@@ -21,6 +21,12 @@
         href="#"
         @click.prevent="store.openReleaseNotes()"
       >Release notes ↗</a>
+      <a
+        v-else-if="mandatory && store.advisoryUrl"
+        class="un-link"
+        href="#"
+        @click.prevent="store.openAdvisory()"
+      >Advisory ↗</a>
     </div>
     <button v-if="showDownload" class="un-action" @click="store.downloadUpdate()">
       Download
@@ -37,7 +43,13 @@
 <script setup>
 import { computed } from "vue";
 import { useAppStore } from "../../store";
-import { ArrowUpCircle, Download, CheckCircle2, X } from "lucide-vue-next";
+import {
+  ArrowUpCircle,
+  Download,
+  CheckCircle2,
+  ShieldAlert,
+  X,
+} from "lucide-vue-next";
 
 // placement: 'editor' = floating banner over the editor (live state, not
 // dismissible while an update is in flight; shows the post-update greeting).
@@ -55,8 +67,14 @@ const isActive = computed(
   () => store.updateAvailable || store.updateDownloading || store.updateReady,
 );
 
+// A manifest-flagged critical update can't be dismissed on either surface, and
+// the editor banner shows it from the 'available' state too (no waiting for the
+// legacy nudge).
+const mandatory = computed(() => store.updateMandatory && isActive.value);
+
 const visible = computed(() => {
   if (isGreeting.value) return true;
+  if (mandatory.value) return true;
   if (props.placement === "editor") {
     // The 'available' nudge over the editor is the legacy update-prompt; this
     // banner adds the in-flight + ready states (progress, restart) on top.
@@ -68,6 +86,7 @@ const visible = computed(() => {
 
 const variant = computed(() => {
   if (isGreeting.value) return "updated";
+  if (mandatory.value) return "critical";
   if (store.updateReady) return "ready";
   if (store.updateDownloading) return "downloading";
   return "available";
@@ -77,6 +96,7 @@ const icon = computed(
   () =>
     ({
       updated: CheckCircle2,
+      critical: ShieldAlert,
       ready: ArrowUpCircle,
       downloading: ArrowUpCircle,
       available: Download,
@@ -85,6 +105,12 @@ const icon = computed(
 
 const text = computed(() => {
   const v = store.updateInfo?.version;
+  if (mandatory.value && !isGreeting.value) {
+    if (store.updateDownloading)
+      return `Security update · downloading… ${store.downloadProgress}%`;
+    if (store.updateReady) return "Security update ready — restart to patch";
+    return v ? `Security update required · v${v}` : "Security update required";
+  }
   switch (variant.value) {
     case "updated":
       return `Updated to v${store.recentlyUpdatedVersion}`;
@@ -97,14 +123,18 @@ const text = computed(() => {
   }
 });
 
-// Download button only before the download starts.
-const showDownload = computed(() => variant.value === "available");
+// Download button before the download starts (incl. the critical 'available').
+const showDownload = computed(
+  () => variant.value === "available" || (mandatory.value && store.updateAvailable),
+);
 
 // Editor banner is dismissible only for the greeting; the sidebar widget is
-// always closable while an update is in flight.
-const dismissible = computed(
-  () => isGreeting.value || (props.placement === "sidebar" && isActive.value),
-);
+// closable while an update is in flight — but never when the update is
+// mandatory.
+const dismissible = computed(() => {
+  if (mandatory.value) return false;
+  return isGreeting.value || (props.placement === "sidebar" && isActive.value);
+});
 
 function dismiss() {
   if (isGreeting.value) store.dismissRecentlyUpdated();
@@ -199,6 +229,22 @@ function dismiss() {
 }
 .update-notice--updated .un-icon {
   color: var(--success, #3fb950);
+}
+
+/* Critical / security-mandatory update */
+.update-notice--critical {
+  border-color: var(--danger, #f85149);
+  border-left: 3px solid var(--danger, #f85149);
+}
+.update-notice--critical .un-icon,
+.update-notice--critical .un-link {
+  color: var(--danger, #f85149);
+}
+.update-notice--critical .un-action {
+  background: var(--danger, #f85149);
+}
+.update-notice--critical .un-bar-fill {
+  background: var(--danger, #f85149);
 }
 
 /* Floating banner over the editor */

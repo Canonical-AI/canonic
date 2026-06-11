@@ -11,6 +11,15 @@ export function slashTriggerAllowed({ parentOffset, charBefore }) {
   return charBefore === " ";
 }
 
+// Today's date in ISO 8601 (YYYY-MM-DD), built from local calendar components
+// so it never drifts a day near midnight (toISOString would use UTC).
+export function formatToday(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export const createSlashMenuPlugin = (tooltipRef) => {
   let lastModITime = 0;
 
@@ -160,6 +169,9 @@ function handleAction(view, pos, action) {
         if (schema.nodes.hr) {
           tr.replaceWith(mappedPos, mappedPos, schema.nodes.hr.create());
         }
+        break;
+      case "insert-today":
+        tr.insertText(formatToday(), mappedPos, mappedPos);
         break;
       case "blockquote":
       case "bullet-list":

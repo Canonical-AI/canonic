@@ -812,6 +812,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: an action is selected
   then: the trigger `/` character is removed from the document before the block is inserted
 
+* scenario: insert today's date
+  given: the slash menu is open at the root
+  when: the user selects "Today's date" (or types `today` and presses Enter)
+  then: the current date is inserted at the caret in ISO 8601 format (YYYY-MM-DD) using the local calendar day, and the trigger `/` is removed
+
 ### Agent slash commands
 
 * scenario: root menu lists Review and Build

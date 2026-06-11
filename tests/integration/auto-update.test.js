@@ -147,23 +147,28 @@ describe('auto-update store', () => {
     expect(mockApi.app.getVersion).not.toHaveBeenCalled()
   })
 
-  it('applyUpdateInfo marks a critical update mandatory with severity + advisory', () => {
+  it('applyUpdateInfo marks a critical update mandatory with advisory', () => {
     store.applyUpdateInfo({
       version: '0.2.5-alpha',
       mandatory: true,
-      severity: 'critical',
       advisory: 'https://example.com/advisory',
     })
     expect(store.updateAvailable).toBe(true)
     expect(store.updateMandatory).toBe(true)
-    expect(store.updateSeverity).toBe('critical')
     expect(store.advisoryUrl).toBe('https://example.com/advisory')
   })
 
   it('applyUpdateInfo leaves a normal update non-mandatory', () => {
     store.applyUpdateInfo({ version: '0.2.5-alpha' })
     expect(store.updateMandatory).toBe(false)
-    expect(store.updateSeverity).toBe('')
+    expect(store.advisoryUrl).toBe('')
+  })
+
+  it('updateMandatory/advisoryUrl clear when the update info is cleared', () => {
+    store.applyUpdateInfo({ version: '0.2.5-alpha', mandatory: true, advisory: 'x' })
+    expect(store.updateMandatory).toBe(true)
+    store.updateInfo = null
+    expect(store.updateMandatory).toBe(false)
     expect(store.advisoryUrl).toBe('')
   })
 

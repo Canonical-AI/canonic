@@ -2687,11 +2687,6 @@ pub async fn update_check(app: tauri::AppHandle) -> Result<Value, String> {
                 .get("critical")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            let severity = raw
-                .get("severity")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
             let advisory = raw
                 .get("advisory")
                 .and_then(|v| v.as_str())
@@ -2702,7 +2697,6 @@ pub async fn update_check(app: tauri::AppHandle) -> Result<Value, String> {
                 "notes": update.body.clone(),
                 "date": update.date.map(|d| d.to_string()),
                 "mandatory": mandatory,
-                "severity": severity,
                 "advisory": advisory,
             });
             *pending_update().lock().unwrap() =

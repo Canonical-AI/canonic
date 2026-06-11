@@ -313,6 +313,11 @@ export const useAppStore = defineStore("app", () => {
   // ── INLINE COMMENTS ──
   // ==========================================
   const comments = ref([]);
+  // Ids of comments whose anchor text no longer appears in the open doc (the
+  // text was edited since the comment was made). Populated by the editor, which
+  // is the source of truth for whether a comment highlights. Drives the
+  // "Text has changed" badge in the comments panel.
+  const staleCommentIds = ref(new Set());
 
   // ==========================================
   // ── PEER-TO-PEER SHARING ──
@@ -735,9 +740,9 @@ export const useAppStore = defineStore("app", () => {
   const recentlyUpdated = ref(false);
   const recentlyUpdatedVersion = ref("");
   // Security forcing: a manifest-flagged critical update can't be dismissed.
-  const updateMandatory = ref(false);
-  const updateSeverity = ref("");
-  const advisoryUrl = ref("");
+  // Derived from updateInfo so they clear automatically when it does.
+  const updateMandatory = computed(() => !!updateInfo.value?.mandatory);
+  const advisoryUrl = computed(() => updateInfo.value?.advisory || "");
 
   const releaseNotesUrl = computed(() => {
     const v = recentlyUpdated.value
@@ -754,13 +759,10 @@ export const useAppStore = defineStore("app", () => {
     updateInfo.value = info;
     updateAvailable.value = true;
     updateNoticeDismissed.value = false;
-    updateMandatory.value = !!info?.mandatory;
-    updateSeverity.value = info?.severity || "";
-    advisoryUrl.value = info?.advisory || "";
   }
 
   if (api?.update) {
-    api.update.onAvailable?.((info) => applyUpdateInfo(info));
+    api.update.onAvailable?.(applyUpdateInfo);
     api.update.onProgress?.((progress) => {
       updateAvailable.value = false;
       updateDownloading.value = true;
@@ -1828,8 +1830,15 @@ export const useAppStore = defineStore("app", () => {
   // ==========================================
   // ── INLINE COMMENTS ──
   // ==========================================
+  // The editor recomputes stale anchors after loading/editing; clear stale flags
+  // from the previous doc so they don't linger before the editor reports.
+  function setStaleCommentIds(ids) {
+    staleCommentIds.value = new Set(ids || []);
+  }
+
   async function loadComments() {
     if (!currentFile.value) return;
+    staleCommentIds.value = new Set();
     const docId = currentFile.value.replace(/[\\/]/g, "_");
     const saved = (await api.comments.get(docId)) || [];
     if (isDemoMode.value) {
@@ -3510,6 +3519,8 @@ export const useAppStore = defineStore("app", () => {
     isExternalRepo,
     commitLog,
     comments,
+    staleCommentIds,
+    setStaleCommentIds,
     isDirty,
     unsavedBuffer,
     fileIsUncommitted,
@@ -3649,7 +3660,6 @@ export const useAppStore = defineStore("app", () => {
     recentlyUpdated,
     recentlyUpdatedVersion,
     updateMandatory,
-    updateSeverity,
     advisoryUrl,
     releaseNotesUrl,
     applyUpdateInfo,

@@ -2,7 +2,11 @@
   <div
     v-if="visible"
     class="update-notice"
-    :class="[`update-notice--${placement}`, `update-notice--${variant}`]"
+    :class="[
+      `update-notice--${placement}`,
+      `update-notice--${phase}`,
+      { 'update-notice--critical': critical },
+    ]"
     role="status"
   >
     <component :is="icon" :size="placement === 'sidebar' ? 14 : 15" class="un-icon" aria-hidden="true" />
@@ -22,7 +26,7 @@
         @click.prevent="store.openReleaseNotes()"
       >Release notes ↗</a>
       <a
-        v-else-if="mandatory && store.advisoryUrl"
+        v-else-if="critical && store.advisoryUrl"
         class="un-link"
         href="#"
         @click.prevent="store.openAdvisory()"
@@ -67,14 +71,14 @@ const isActive = computed(
   () => store.updateAvailable || store.updateDownloading || store.updateReady,
 );
 
-// A manifest-flagged critical update can't be dismissed on either surface, and
-// the editor banner shows it from the 'available' state too (no waiting for the
-// legacy nudge).
-const mandatory = computed(() => store.updateMandatory && isActive.value);
+// Severity axis: a manifest-flagged critical update can't be dismissed on
+// either surface, and the editor banner shows it from the 'available' state
+// too (no waiting for the legacy nudge).
+const critical = computed(() => store.updateMandatory && isActive.value);
 
 const visible = computed(() => {
   if (isGreeting.value) return true;
-  if (mandatory.value) return true;
+  if (critical.value) return true;
   if (props.placement === "editor") {
     // The 'available' nudge over the editor is the legacy update-prompt; this
     // banner adds the in-flight + ready states (progress, restart) on top.
@@ -84,55 +88,45 @@ const visible = computed(() => {
   return isActive.value && !store.updateNoticeDismissed;
 });
 
-const variant = computed(() => {
+// Lifecycle phase (what's happening), orthogonal to severity (how urgent).
+const phase = computed(() => {
   if (isGreeting.value) return "updated";
-  if (mandatory.value) return "critical";
   if (store.updateReady) return "ready";
   if (store.updateDownloading) return "downloading";
   return "available";
 });
 
-const icon = computed(
-  () =>
-    ({
-      updated: CheckCircle2,
-      critical: ShieldAlert,
-      ready: ArrowUpCircle,
-      downloading: ArrowUpCircle,
-      available: Download,
-    })[variant.value],
-);
+const icon = computed(() => {
+  if (phase.value === "updated") return CheckCircle2;
+  if (critical.value) return ShieldAlert;
+  return phase.value === "available" ? Download : ArrowUpCircle;
+});
 
 const text = computed(() => {
+  if (phase.value === "updated") return `Updated to v${store.recentlyUpdatedVersion}`;
+  const noun = critical.value ? "Security update" : "Update";
   const v = store.updateInfo?.version;
-  if (mandatory.value && !isGreeting.value) {
-    if (store.updateDownloading)
-      return `Security update · downloading… ${store.downloadProgress}%`;
-    if (store.updateReady) return "Security update ready — restart to patch";
-    return v ? `Security update required · v${v}` : "Security update required";
-  }
-  switch (variant.value) {
-    case "updated":
-      return `Updated to v${store.recentlyUpdatedVersion}`;
+  switch (phase.value) {
     case "ready":
-      return "Update ready to install";
+      return critical.value
+        ? "Security update ready — restart to patch"
+        : "Update ready to install";
     case "downloading":
-      return `Downloading update… ${store.downloadProgress}%`;
+      return `${noun} · downloading… ${store.downloadProgress}%`;
     default:
+      if (critical.value)
+        return v ? `Security update required · v${v}` : "Security update required";
       return v ? `Update available · v${v}` : "Update available";
   }
 });
 
-// Download button before the download starts (incl. the critical 'available').
-const showDownload = computed(
-  () => variant.value === "available" || (mandatory.value && store.updateAvailable),
-);
+// Download button before the download starts.
+const showDownload = computed(() => phase.value === "available");
 
 // Editor banner is dismissible only for the greeting; the sidebar widget is
-// closable while an update is in flight — but never when the update is
-// mandatory.
+// closable while an update is in flight — but never when it's mandatory.
 const dismissible = computed(() => {
-  if (mandatory.value) return false;
+  if (critical.value) return false;
   return isGreeting.value || (props.placement === "sidebar" && isActive.value);
 });
 

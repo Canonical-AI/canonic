@@ -117,6 +117,18 @@
   "comments": {
     "Vision/product-vision.md": [
       {
+        "id": "demo-stale-1",
+        "author": "Ben Okafor",
+        "authorInitials": "BO",
+        "type": "selection",
+        "anchor": { "quotedText": "a local-first writing tool for PMs" },
+        "text": "Strong framing — though 'editor' might land better than 'writing tool' with the eng audience reviewing this.",
+        "resolved": false,
+        "commitOid": "demo-v1",
+        "createdAt": "2026-05-05T11:00:00.000Z",
+        "isDemo": true
+      },
+      {
         "id": "demo-own-private-1",
         "author": "You",
         "isOwn": true,

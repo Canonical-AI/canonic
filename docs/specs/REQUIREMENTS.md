@@ -640,6 +640,21 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the comments panel opens
   then: the version filter is set to "All versions" and every unresolved comment is shown
 
+* scenario: anchor text still present highlights normally
+  given: a comment whose quoted anchor text still appears in the open document
+  when: the comments panel is shown
+  then: the comment highlights in the document and shows no "text changed" warning
+
+* scenario: anchor text changed shows a warning
+  given: a comment whose quoted anchor text no longer appears in the open document (it was edited)
+  when: the comments panel is shown
+  then: the comment is marked stale and shows a "Text has changed" badge instead of a missing highlight
+
+* scenario: resolved or short anchors are never flagged stale
+  given: a resolved comment, or a comment whose quoted text is shorter than 2 characters
+  when: anchors are evaluated against the document
+  then: the comment is never marked stale
+
 ***
 
 ## Browser Commenting (BCM)

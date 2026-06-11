@@ -152,6 +152,26 @@ describe('comments store', () => {
     expect(store.comments[0].id).toBe('c3')
   })
 
+  it('setStaleCommentIds() stores ids the editor reports as stale', async () => {
+    store.setStaleCommentIds(['a', 'b'])
+    expect(store.staleCommentIds.has('a')).toBe(true)
+    expect(store.staleCommentIds.has('b')).toBe(true)
+    expect(store.staleCommentIds.has('c')).toBe(false)
+  })
+
+  it('setStaleCommentIds(null) clears the set', () => {
+    store.setStaleCommentIds(['a'])
+    store.setStaleCommentIds(null)
+    expect(store.staleCommentIds.size).toBe(0)
+  })
+
+  it('loadComments() clears stale flags from the previous doc', async () => {
+    store.setStaleCommentIds(['old'])
+    mockApi.comments.get.mockResolvedValueOnce([])
+    await store.loadComments()
+    expect(store.staleCommentIds.size).toBe(0)
+  })
+
   it('persisted data is serializable plain JSON (no Proxy)', async () => {
     await store.addComment({ id: 'cx', author: 'X', type: 'selection', anchor: { quotedText: 'hi' }, text: 'ok', resolved: false, createdAt: '' })
 

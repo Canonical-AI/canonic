@@ -9,6 +9,7 @@
 import { watch, ref, provide, computed, onUnmounted, reactive } from "vue";
 import { Milkdown, useEditor } from "@milkdown/vue";
 import { useAppStore } from "../../store";
+import { findStaleCommentIds } from "../../utils/comment-anchors.js";
 import {
     Editor,
     rootCtx,
@@ -1300,11 +1301,14 @@ const { loading, get } = useEditor((root) =>
                 ...prev,
                 editable: () => !editorReadonly.value,
             }));
-            ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
+            ctx.get(listenerCtx).markdownUpdated((lctx, markdown) => {
                 const fixed = stripEmptyLineBr(
                     markdown.replace(/\\\[\\\[/g, "[["),
                 );
                 emit("update", fixed);
+                // Re-evaluate which anchors still match after the edit.
+                const view = lctx.get(editorViewCtx);
+                if (view) reportStaleAnchors(view, props.comments || []);
             });
             ctx.update(prosePluginsCtx, (plugins) => [
                 ...plugins,
@@ -1364,7 +1368,17 @@ function dispatchHighlights(comments) {
         const view = ctx.get(editorViewCtx);
         if (!view) return;
         view.dispatch(view.state.tr.setMeta(HIGHLIGHT_KEY, comments || []));
+        reportStaleAnchors(view, comments || []);
     });
+}
+
+// The editor is the source of truth for whether a comment highlights: it
+// searches the same block-separated plain text buildDecorations uses. Report
+// comments whose anchor text is no longer found so the panel can flag them.
+function reportStaleAnchors(view, comments) {
+    const doc = view.state.doc;
+    const plain = doc.textBetween(0, doc.content.size, "\n", "\n");
+    store.setStaleCommentIds(findStaleCommentIds(plain, comments));
 }
 
 watch(loading, (isLoading) => {

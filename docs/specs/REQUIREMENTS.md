@@ -2021,6 +2021,38 @@ GNOME runtime carries glibc and webkit2gtk inside the sandbox.
   when: the pipeline reaches finalize
   then: no version bump, tag, or release is published (finalize depends on the Flatpak job)
 
+## One-Line Installer (PKG-INS)
+
+`install.sh` is the curl-pipe-sh installer. It detects OS, CPU architecture, and
+Linux distro, then downloads the matching release asset (names match Tauri's
+bundle output, e.g. `canonic_<version>_universal.dmg`,
+`canonic_<version>_amd64.AppImage`, `canonic_<version>_x86_64.flatpak`).
+
+* scenario: install on macOS
+  given: a user runs the installer on macOS (Apple Silicon)
+  when: the script detects `Darwin`
+  then: it downloads `canonic_<version>_universal.dmg`, mounts it, copies the `.app` into `/Applications`, and clears the Gatekeeper quarantine flag
+
+* scenario: install on a glibc Linux distro
+  given: a user on a glibc distro (e.g. Ubuntu, Fedora) that is neither Arch nor Alpine
+  when: the script detects the distro
+  then: it downloads the AppImage (`amd64` on x86_64, `aarch64` on arm64) to `~/.local/bin/canonic` and marks it executable
+
+* scenario: install on Arch or Alpine
+  given: a user on Arch or Alpine, x86_64 or arm64 (detected via `/etc/os-release` ID/ID_LIKE, or `/etc/arch-release` / `/etc/alpine-release`)
+  when: the script selects an install method
+  then: it installs the Flatpak matching the CPU (`canonic_<version>_x86_64.flatpak` or `canonic_<version>_aarch64.flatpak`) — adds the Flathub remote, then `flatpak install --user` — because Alpine is musl-libc and Arch ships no FUSE for AppImages
+
+* scenario: Flatpak missing on Arch or Alpine
+  given: an Arch or Alpine user without `flatpak` installed
+  when: the installer reaches the Flatpak step
+  then: it exits with a message telling them to install flatpak (`doas apk add flatpak` / `sudo pacman -S flatpak`) and re-run
+
+* scenario: pin a specific version
+  given: a user passes `--version <tag>`
+  when: the script resolves the version
+  then: it skips the GitHub "latest release" lookup and installs the named tag
+
 ## Auto-Update (UPD)
 
 Canonic updates itself in place using the Tauri updater. On launch it checks the

@@ -66,12 +66,13 @@ Full usage guide, keyboard shortcuts, and feature walkthroughs:
 curl -fsSL https://raw.githubusercontent.com/Canonical-AI/canonic/main/install.sh | sh
 ```
 
-Detects your OS and architecture, downloads the right build, and installs it.
+Detects your OS, architecture, and Linux distro, downloads the right build, and installs it.
 
-- **macOS** (Apple Silicon) → `/Applications/Canonic.app`
-- **Linux** (x64 / arm64) → `~/.local/bin/canonic` (AppImage)
+- **macOS** (Apple Silicon) → `/Applications/canonic.app`
+- **Linux** (glibc, x64 / arm64) → `~/.local/bin/canonic` (AppImage)
+- **Arch / Alpine** (x64 / arm64) → Flatpak `ai.canonic.app` (AppImage can't run on musl-libc Alpine; Arch ships no FUSE by default)
 
-To pin a specific version: `curl -fsSL ... | sh -s -- --version v0.1.2-alpha`
+To pin a specific version: `curl -fsSL ... | sh -s -- --version v0.2.2-alpha`
 
 <br />
 
@@ -84,35 +85,41 @@ brew install --cask canonic
 
 ### Linux
 
-**AppImage**
+**AppImage** (most glibc distros — Ubuntu, Fedora, …):
 
 ```bash
-chmod +x canonic-*.AppImage
-./canonic-*.AppImage
+chmod +x canonic_*.AppImage
+./canonic_*.AppImage
 ```
 
-**Flatpak** (recommended on Alpine-based / postmarketOS):
+**Flatpak** (Alpine / postmarketOS / Arch — and any musl-libc distro; x86_64 & arm64):
 
 ```bash
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-flatpak install --user canonic-*.flatpak
+flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user canonic_*.flatpak
 flatpak run ai.canonic.app
 ```
 
-**Pacman** (Arch / postmarketOS):
+**Debian / Ubuntu** (`.deb`):
 
 ```bash
-sudo pacman -U canonic-*.pacman
+sudo apt install ./canonic_*.deb
+```
+
+**Fedora / RHEL** (`.rpm`):
+
+```bash
+sudo dnf install ./canonic_*.rpm
 ```
 
 ### Direct download (all platforms)
 
 Grab the latest build for your platform from the [Releases](https://github.com/Canonical-AI/canonic/releases) page:
 
-* **macOS** — `.dmg` (Apple Silicon / Intel)
+* **macOS** — `.dmg` (universal — Apple Silicon & Intel)
 * **Windows** — `.exe`
-* **Linux x64** — `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz`
-* **Linux arm64** — `.AppImage`, `.flatpak`, `.deb`, `.pacman`, `.tar.gz` (ARM Arch, postmarketOS, PinePhone, Raspberry Pi)
+* **Linux x64** — `.AppImage`, `.flatpak`, `.deb`, `.rpm`
+* **Linux arm64** — `.AppImage`, `.deb`, `.flatpak` (Raspberry Pi, PinePhone, postmarketOS, ARM servers)
 
 <br />
 

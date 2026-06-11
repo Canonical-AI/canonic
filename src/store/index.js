@@ -313,6 +313,11 @@ export const useAppStore = defineStore("app", () => {
   // ── INLINE COMMENTS ──
   // ==========================================
   const comments = ref([]);
+  // Ids of comments whose anchor text no longer appears in the open doc (the
+  // text was edited since the comment was made). Populated by the editor, which
+  // is the source of truth for whether a comment highlights. Drives the
+  // "Text has changed" badge in the comments panel.
+  const staleCommentIds = ref(new Set());
 
   // ==========================================
   // ── PEER-TO-PEER SHARING ──
@@ -734,6 +739,10 @@ export const useAppStore = defineStore("app", () => {
   // "Updated to vX" + a release-notes link. Cleared once dismissed.
   const recentlyUpdated = ref(false);
   const recentlyUpdatedVersion = ref("");
+  // Security forcing: a manifest-flagged critical update can't be dismissed.
+  // Derived from updateInfo so they clear automatically when it does.
+  const updateMandatory = computed(() => !!updateInfo.value?.mandatory);
+  const advisoryUrl = computed(() => updateInfo.value?.advisory || "");
 
   const releaseNotesUrl = computed(() => {
     const v = recentlyUpdated.value
@@ -744,12 +753,16 @@ export const useAppStore = defineStore("app", () => {
       : "";
   });
 
+  // Apply an `update:available` payload. Extracted so it's unit-testable
+  // without firing the IPC listener.
+  function applyUpdateInfo(info) {
+    updateInfo.value = info;
+    updateAvailable.value = true;
+    updateNoticeDismissed.value = false;
+  }
+
   if (api?.update) {
-    api.update.onAvailable?.((info) => {
-      updateInfo.value = info;
-      updateAvailable.value = true;
-      updateNoticeDismissed.value = false;
-    });
+    api.update.onAvailable?.(applyUpdateInfo);
     api.update.onProgress?.((progress) => {
       updateAvailable.value = false;
       updateDownloading.value = true;
@@ -804,13 +817,7 @@ export const useAppStore = defineStore("app", () => {
     }
     // Stash the target version; on the next launch checkRecentlyUpdated() reads
     // it back to confirm the swap landed and greet the user.
-    try {
-      if (typeof localStorage !== "undefined" && version) {
-        localStorage.setItem("canonic:updatingTo", version);
-      }
-    } catch {
-      /* localStorage unavailable (tests/web) — skip the greeting */
-    }
+    if (version) storage.setItem("canonic:updatingTo", version);
     api?.update.install();
   }
 
@@ -826,15 +833,18 @@ export const useAppStore = defineStore("app", () => {
     if (releaseNotesUrl.value) api?.share?.openLink?.(releaseNotesUrl.value);
   }
 
+  function openAdvisory() {
+    if (advisoryUrl.value) api?.share?.openLink?.(advisoryUrl.value);
+  }
+
   // Called once at startup: if the previous session installed an update and the
   // running version now matches the stashed target, show the "Updated to vX"
   // greeting. Always clears the marker so it fires exactly once.
   async function checkRecentlyUpdated() {
+    const target = storage.getItem("canonic:updatingTo");
+    if (!target) return;
+    storage.removeItem("canonic:updatingTo");
     try {
-      if (typeof localStorage === "undefined") return;
-      const target = localStorage.getItem("canonic:updatingTo");
-      if (!target) return;
-      localStorage.removeItem("canonic:updatingTo");
       let current = "";
       if (api?.app?.getVersion) current = await api.app.getVersion();
       if (current && current === target) {
@@ -1820,8 +1830,15 @@ export const useAppStore = defineStore("app", () => {
   // ==========================================
   // ── INLINE COMMENTS ──
   // ==========================================
+  // The editor recomputes stale anchors after loading/editing; clear stale flags
+  // from the previous doc so they don't linger before the editor reports.
+  function setStaleCommentIds(ids) {
+    staleCommentIds.value = new Set(ids || []);
+  }
+
   async function loadComments() {
     if (!currentFile.value) return;
+    staleCommentIds.value = new Set();
     const docId = currentFile.value.replace(/[\\/]/g, "_");
     const saved = (await api.comments.get(docId)) || [];
     if (isDemoMode.value) {
@@ -1979,10 +1996,10 @@ export const useAppStore = defineStore("app", () => {
     demoFiles.value = cfg.files ? { ...cfg.files } : {};
     isDemoMode.value = true;
 
-    // Surface a fake available update so the auto-update flow is demoable.
+    // Surface a fake available update so the auto-update flow is demoable,
+    // including the mandatory/severity/advisory security fields.
     if (cfg.update) {
-      updateInfo.value = cfg.update;
-      updateAvailable.value = true;
+      applyUpdateInfo(cfg.update);
     }
 
     // AI Control demo data
@@ -3502,6 +3519,8 @@ export const useAppStore = defineStore("app", () => {
     isExternalRepo,
     commitLog,
     comments,
+    staleCommentIds,
+    setStaleCommentIds,
     isDirty,
     unsavedBuffer,
     fileIsUncommitted,
@@ -3640,12 +3659,16 @@ export const useAppStore = defineStore("app", () => {
     updateNoticeDismissed,
     recentlyUpdated,
     recentlyUpdatedVersion,
+    updateMandatory,
+    advisoryUrl,
     releaseNotesUrl,
+    applyUpdateInfo,
     downloadUpdate,
     installUpdate,
     dismissUpdateNotice,
     dismissRecentlyUpdated,
     openReleaseNotes,
+    openAdvisory,
     checkRecentlyUpdated,
     commentingActive: ref(false),
     refreshDiscoveredPeers,

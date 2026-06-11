@@ -3,7 +3,10 @@
   "template": "pm-framework",
   "update": {
     "version": "0.3.0",
-    "notes": "Faster workspace search, new editor themes, and inline comment improvements."
+    "notes": "Security patch plus faster workspace search and new editor themes.",
+    "mandatory": true,
+    "severity": "critical",
+    "advisory": "https://github.com/Canonical-AI/canonic/releases/tag/v0.3.0"
   },
   "files": {
     "Vision/product-vision.md": "# Product Vision\n\n> What we're building and why it matters.\n\n## Vision Statement\n\nCanonic is a local-first document editor for product managers — built on Git — that makes version control, peer review, and AI-assisted thinking feel native to how good PMs already work.\n\n## Problem We're Solving\n\nProduct managers write documents — PRDs, strategies, roadmaps — in tools that treat them as ephemeral notes. Notion, Google Docs, and Confluence have no concept of history, branching, or structured review. Decisions get made in comments that disappear. `Final_v3_APPROVED.docx` is still the state of the art.\n\nThe real problem isn't the format. It's that there's no shared ritual for saying \"this document is ready to build from.\" Engineers have pull requests. PMs have Slack threads.\n\n## Why Now\n\nThree things converged:\n\n1. **Remote-first teams normalized async review.** The \"walk over and ask\" fallback is gone. Docs need to stand alone — and when they don't, the cost is a sprint built on the wrong requirements.\n2. **AI can now act as a thinking partner.** The bottleneck isn't writing speed — it's thinking quality. Claude can challenge your reasoning before you've committed to it.\n3. **Local-first is having a moment.** Developers are exhausted by SaaS tools that hold their data hostage. PMs are starting to feel the same way.\n\n## Who This Is For\n\nB2B product managers at 20–200 person companies who ship software. They write documents before building things. They collaborate with engineers and designers who have opinions. They care about their decisions aging well — they want to look back at *why* they decided something, not just *what*.\n\nNot for: enterprise PMOs, agencies, or anyone who needs a PM tool to also be a project tracker.\n",
@@ -113,6 +116,18 @@
   ],
   "comments": {
     "Vision/product-vision.md": [
+      {
+        "id": "demo-stale-1",
+        "author": "Ben Okafor",
+        "authorInitials": "BO",
+        "type": "selection",
+        "anchor": { "quotedText": "a local-first writing tool for PMs" },
+        "text": "Strong framing — though 'editor' might land better than 'writing tool' with the eng audience reviewing this.",
+        "resolved": false,
+        "commitOid": "demo-v1",
+        "createdAt": "2026-05-05T11:00:00.000Z",
+        "isDemo": true
+      },
       {
         "id": "demo-own-private-1",
         "author": "You",

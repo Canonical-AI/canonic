@@ -72,6 +72,7 @@ import {
     Hammer,
     Bot,
     Settings,
+    Calendar,
 } from "lucide-vue-next";
 import { useAppStore } from "../../../store";
 
@@ -90,6 +91,12 @@ let onCloseCallback = null;
 const MENU_DATA = {
     main: [
         { id: "insert", label: "Insert", icon: Type, submenu: "insert" },
+        {
+            id: "today",
+            label: "Today's date",
+            icon: Calendar,
+            action: "insert-today",
+        },
         {
             id: "review",
             label: "Review with agent",

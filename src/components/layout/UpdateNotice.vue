@@ -2,7 +2,11 @@
   <div
     v-if="visible"
     class="update-notice"
-    :class="[`update-notice--${placement}`, `update-notice--${variant}`]"
+    :class="[
+      `update-notice--${placement}`,
+      `update-notice--${phase}`,
+      { 'update-notice--critical': critical },
+    ]"
     role="status"
   >
     <component :is="icon" :size="placement === 'sidebar' ? 14 : 15" class="un-icon" aria-hidden="true" />
@@ -21,6 +25,12 @@
         href="#"
         @click.prevent="store.openReleaseNotes()"
       >Release notes ↗</a>
+      <a
+        v-else-if="critical && store.advisoryUrl"
+        class="un-link"
+        href="#"
+        @click.prevent="store.openAdvisory()"
+      >Advisory ↗</a>
     </div>
     <button v-if="showDownload" class="un-action" @click="store.downloadUpdate()">
       Download
@@ -37,7 +47,13 @@
 <script setup>
 import { computed } from "vue";
 import { useAppStore } from "../../store";
-import { ArrowUpCircle, Download, CheckCircle2, X } from "lucide-vue-next";
+import {
+  ArrowUpCircle,
+  Download,
+  CheckCircle2,
+  ShieldAlert,
+  X,
+} from "lucide-vue-next";
 
 // placement: 'editor' = floating banner over the editor (live state, not
 // dismissible while an update is in flight; shows the post-update greeting).
@@ -55,8 +71,14 @@ const isActive = computed(
   () => store.updateAvailable || store.updateDownloading || store.updateReady,
 );
 
+// Severity axis: a manifest-flagged critical update can't be dismissed on
+// either surface, and the editor banner shows it from the 'available' state
+// too (no waiting for the legacy nudge).
+const critical = computed(() => store.updateMandatory && isActive.value);
+
 const visible = computed(() => {
   if (isGreeting.value) return true;
+  if (critical.value) return true;
   if (props.placement === "editor") {
     // The 'available' nudge over the editor is the legacy update-prompt; this
     // banner adds the in-flight + ready states (progress, restart) on top.
@@ -66,45 +88,47 @@ const visible = computed(() => {
   return isActive.value && !store.updateNoticeDismissed;
 });
 
-const variant = computed(() => {
+// Lifecycle phase (what's happening), orthogonal to severity (how urgent).
+const phase = computed(() => {
   if (isGreeting.value) return "updated";
   if (store.updateReady) return "ready";
   if (store.updateDownloading) return "downloading";
   return "available";
 });
 
-const icon = computed(
-  () =>
-    ({
-      updated: CheckCircle2,
-      ready: ArrowUpCircle,
-      downloading: ArrowUpCircle,
-      available: Download,
-    })[variant.value],
-);
+const icon = computed(() => {
+  if (phase.value === "updated") return CheckCircle2;
+  if (critical.value) return ShieldAlert;
+  return phase.value === "available" ? Download : ArrowUpCircle;
+});
 
 const text = computed(() => {
+  if (phase.value === "updated") return `Updated to v${store.recentlyUpdatedVersion}`;
+  const noun = critical.value ? "Security update" : "Update";
   const v = store.updateInfo?.version;
-  switch (variant.value) {
-    case "updated":
-      return `Updated to v${store.recentlyUpdatedVersion}`;
+  switch (phase.value) {
     case "ready":
-      return "Update ready to install";
+      return critical.value
+        ? "Security update ready — restart to patch"
+        : "Update ready to install";
     case "downloading":
-      return `Downloading update… ${store.downloadProgress}%`;
+      return `${noun} · downloading… ${store.downloadProgress}%`;
     default:
+      if (critical.value)
+        return v ? `Security update required · v${v}` : "Security update required";
       return v ? `Update available · v${v}` : "Update available";
   }
 });
 
-// Download button only before the download starts.
-const showDownload = computed(() => variant.value === "available");
+// Download button before the download starts.
+const showDownload = computed(() => phase.value === "available");
 
 // Editor banner is dismissible only for the greeting; the sidebar widget is
-// always closable while an update is in flight.
-const dismissible = computed(
-  () => isGreeting.value || (props.placement === "sidebar" && isActive.value),
-);
+// closable while an update is in flight — but never when it's mandatory.
+const dismissible = computed(() => {
+  if (critical.value) return false;
+  return isGreeting.value || (props.placement === "sidebar" && isActive.value);
+});
 
 function dismiss() {
   if (isGreeting.value) store.dismissRecentlyUpdated();
@@ -199,6 +223,22 @@ function dismiss() {
 }
 .update-notice--updated .un-icon {
   color: var(--success, #3fb950);
+}
+
+/* Critical / security-mandatory update */
+.update-notice--critical {
+  border-color: var(--danger, #f85149);
+  border-left: 3px solid var(--danger, #f85149);
+}
+.update-notice--critical .un-icon,
+.update-notice--critical .un-link {
+  color: var(--danger, #f85149);
+}
+.update-notice--critical .un-action {
+  background: var(--danger, #f85149);
+}
+.update-notice--critical .un-bar-fill {
+  background: var(--danger, #f85149);
 }
 
 /* Floating banner over the editor */

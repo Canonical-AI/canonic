@@ -640,6 +640,21 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the comments panel opens
   then: the version filter is set to "All versions" and every unresolved comment is shown
 
+* scenario: anchor text still present highlights normally
+  given: a comment whose quoted anchor text still appears in the open document
+  when: the comments panel is shown
+  then: the comment highlights in the document and shows no "text changed" warning
+
+* scenario: anchor text changed shows a warning
+  given: a comment whose quoted anchor text no longer appears in the open document (it was edited)
+  when: the comments panel is shown
+  then: the comment is marked stale and shows a "Text has changed" badge instead of a missing highlight
+
+* scenario: resolved or short anchors are never flagged stale
+  given: a resolved comment, or a comment whose quoted text is shorter than 2 characters
+  when: anchors are evaluated against the document
+  then: the comment is never marked stale
+
 ***
 
 ## Browser Commenting (BCM)
@@ -811,6 +826,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the user typed `/` to open the menu
   when: an action is selected
   then: the trigger `/` character is removed from the document before the block is inserted
+
+* scenario: insert today's date
+  given: the slash menu is open at the root
+  when: the user selects "Today's date" (or types `today` and presses Enter)
+  then: the current date is inserted at the caret in ISO 8601 format (YYYY-MM-DD) using the local calendar day, and the trigger `/` is removed
 
 ### Agent slash commands
 
@@ -2016,6 +2036,38 @@ GNOME runtime carries glibc and webkit2gtk inside the sandbox.
   when: the pipeline reaches finalize
   then: no version bump, tag, or release is published (finalize depends on the Flatpak job)
 
+## One-Line Installer (PKG-INS)
+
+`install.sh` is the curl-pipe-sh installer. It detects OS, CPU architecture, and
+Linux distro, then downloads the matching release asset (names match Tauri's
+bundle output, e.g. `canonic_<version>_universal.dmg`,
+`canonic_<version>_amd64.AppImage`, `canonic_<version>_x86_64.flatpak`).
+
+* scenario: install on macOS
+  given: a user runs the installer on macOS (Apple Silicon)
+  when: the script detects `Darwin`
+  then: it downloads `canonic_<version>_universal.dmg`, mounts it, copies the `.app` into `/Applications`, and clears the Gatekeeper quarantine flag
+
+* scenario: install on a glibc Linux distro
+  given: a user on a glibc distro (e.g. Ubuntu, Fedora) that is neither Arch nor Alpine
+  when: the script detects the distro
+  then: it downloads the AppImage (`amd64` on x86_64, `aarch64` on arm64) to `~/.local/bin/canonic` and marks it executable
+
+* scenario: install on Arch or Alpine
+  given: a user on Arch or Alpine, x86_64 or arm64 (detected via `/etc/os-release` ID/ID_LIKE, or `/etc/arch-release` / `/etc/alpine-release`)
+  when: the script selects an install method
+  then: it installs the Flatpak matching the CPU (`canonic_<version>_x86_64.flatpak` or `canonic_<version>_aarch64.flatpak`) — adds the Flathub remote, then `flatpak install --user` — because Alpine is musl-libc and Arch ships no FUSE for AppImages
+
+* scenario: Flatpak missing on Arch or Alpine
+  given: an Arch or Alpine user without `flatpak` installed
+  when: the installer reaches the Flatpak step
+  then: it exits with a message telling them to install flatpak (`doas apk add flatpak` / `sudo pacman -S flatpak`) and re-run
+
+* scenario: pin a specific version
+  given: a user passes `--version <tag>`
+  when: the script resolves the version
+  then: it skips the GitHub "latest release" lookup and installs the named tag
+
 ## Auto-Update (UPD)
 
 Canonic updates itself in place using the Tauri updater. On launch it checks the
@@ -2238,11 +2290,33 @@ pinned in `tauri.conf.json`, so an unsigned or tampered package is rejected.
   when: the app starts
   then: no greeting is shown and the stored target is cleared
 
+### Mandatory security updates
+
+* scenario: a critical update can't be dismissed
+  given: the release manifest marks the update `critical`
+  when: the update is detected
+  then: the over-editor banner and the left-panel widget both show a red "Security update required" notice with no close button (overriding the usual dismiss)
+
+* scenario: advisory link is shown for security updates
+  given: a critical update whose manifest includes an advisory URL
+  when: the security banner is shown
+  then: it includes an "Advisory" link that opens the advisory in the browser
+
+* scenario: forcing is best-effort and non-destructive
+  given: the critical flag lives in the unsigned part of the manifest
+  when: the client enforces it
+  then: it only nags/forces-with-update — the downloaded binary is still signature-verified before install, so a tampered flag can never run a malicious build
+
+* scenario: releases can be flagged critical from CI
+  given: a release is published
+  when: the `mark_critical` workflow input is true or the merged PR has the `security-critical` label
+  then: `latest.json` is written with `critical: true`, `severity: critical`, and an advisory URL
+
 ### Demo Mode
 
 * scenario: update flow is demoable end to end
   given: the app is in demo mode
-  when: the user downloads and restarts the fake update
-  then: progress animates, then an "Updated to v0.3.0" greeting with a release-notes link is shown — no real binary or network is touched
+  when: the user downloads and restarts the fake (critical) update
+  then: a non-dismissible "Security update required" banner is shown, progress animates, then an "Updated to v0.3.0" greeting with a release-notes link — no real binary or network is touched
 
 *Last updated: 2026-06-10*

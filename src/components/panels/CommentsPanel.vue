@@ -56,11 +56,18 @@
           </span>
         </div>
 
-        <div v-if="comment.anchor?.quotedText" class="quoted-text">
+        <div
+          v-if="comment.anchor?.quotedText"
+          class="quoted-text"
+          :class="{ stale: isStale(comment) }"
+        >
           "{{ truncate(comment.anchor.quotedText, 80) }}"
         </div>
         <div v-else-if="comment.anchor?.lineNumber" class="line-ref">
           Line {{ comment.anchor.lineNumber }}
+        </div>
+        <div v-if="isStale(comment)" class="text-changed" title="The quoted text was edited, so this comment can no longer be highlighted in the document.">
+          ⚠ Text has changed
         </div>
 
         <p class="comment-text">{{ comment.text }}</p>
@@ -166,6 +173,13 @@ function formatTime(iso) {
 
 function truncate(text, len) {
   return text.length > len ? text.slice(0, len) + '…' : text
+}
+
+// A comment is stale when its anchor text no longer appears in the open doc.
+// The editor reports these ids (it owns the highlight match); the panel shows a
+// "Text has changed" badge instead of a highlight that would silently go missing.
+function isStale(comment) {
+  return store.staleCommentIds.has(comment.id)
 }
 
 // ── Version filter ──
@@ -352,6 +366,22 @@ async function submitReply(commentId) {
   background: var(--bg-hover);
   border-radius: 4px;
   border-left: 2px solid var(--accent);
+}
+
+.quoted-text.stale {
+  color: var(--text-muted);
+  border-left-color: var(--text-muted);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.text-changed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  color: var(--warning, #d97706);
+  margin-bottom: 6px;
 }
 
 .line-ref {

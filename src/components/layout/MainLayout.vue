@@ -24,34 +24,6 @@
             </div>
             <div class="titlebar-center" data-tauri-drag-region></div>
             <div class="titlebar-right" @mousedown="onTitlebarRightMouseDown">
-                <!-- Update indicator -->
-                <template v-if="updateReady">
-                    <button
-                        class="icon-btn"
-                        @click="installUpdate"
-                        title="Restart and install update"
-                    >
-                        <ArrowUpCircle :size="15" />
-                    </button>
-                </template>
-                <template v-else-if="updateDownloading">
-                    <div
-                        class="icon-btn"
-                        :title="'Downloading update ' + downloadProgress + '%'"
-                    >
-                        <ArrowUpCircle :size="15" style="opacity: 0.5" />
-                    </div>
-                </template>
-                <template v-else-if="updateAvailable">
-                    <button
-                        class="icon-btn"
-                        @click="downloadUpdate"
-                        title="Download available update"
-                    >
-                        <ArrowUpCircle :size="15" />
-                    </button>
-                </template>
-
                 <!-- Font toggle -->
                 <button
                     class="icon-btn"
@@ -1122,13 +1094,19 @@ const {
     updateAvailable,
     updateDownloading,
     updateInfo,
-    downloadProgress,
 } = storeToRefs(store);
-const { downloadUpdate, installUpdate } = store;
+const { downloadUpdate } = store;
 
 const showUpdatePrompt = ref(false);
 watch(updateAvailable, (val) => {
-    if (val && !updateDownloading.value && !updateReady.value) {
+    // A mandatory update is carried by the non-dismissible UpdateNotice banner;
+    // skip the gentle (dismissible) legacy nudge so the messaging isn't mixed.
+    if (
+        val &&
+        !updateDownloading.value &&
+        !updateReady.value &&
+        !store.updateMandatory
+    ) {
         setTimeout(() => {
             showUpdatePrompt.value = true;
         }, 2000);

@@ -815,13 +815,7 @@ export const useAppStore = defineStore("app", () => {
     }
     // Stash the target version; on the next launch checkRecentlyUpdated() reads
     // it back to confirm the swap landed and greet the user.
-    try {
-      if (typeof localStorage !== "undefined" && version) {
-        localStorage.setItem("canonic:updatingTo", version);
-      }
-    } catch {
-      /* localStorage unavailable (tests/web) — skip the greeting */
-    }
+    if (version) storage.setItem("canonic:updatingTo", version);
     api?.update.install();
   }
 
@@ -845,11 +839,10 @@ export const useAppStore = defineStore("app", () => {
   // running version now matches the stashed target, show the "Updated to vX"
   // greeting. Always clears the marker so it fires exactly once.
   async function checkRecentlyUpdated() {
+    const target = storage.getItem("canonic:updatingTo");
+    if (!target) return;
+    storage.removeItem("canonic:updatingTo");
     try {
-      if (typeof localStorage === "undefined") return;
-      const target = localStorage.getItem("canonic:updatingTo");
-      if (!target) return;
-      localStorage.removeItem("canonic:updatingTo");
       let current = "";
       if (api?.app?.getVersion) current = await api.app.getVersion();
       if (current && current === target) {

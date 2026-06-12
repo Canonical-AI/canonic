@@ -1297,8 +1297,8 @@ function toggleDistractionFree() {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 16px;
-    height: 44px;
+    padding: 0 12px;
+    height: 36px;
     background: var(--bg-titlebar);
     border-bottom: 1px solid var(--border);
     user-select: none;
@@ -1344,8 +1344,8 @@ function toggleDistractionFree() {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: 6px;
     border: none;
     background: transparent;
@@ -1373,8 +1373,8 @@ function toggleDistractionFree() {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border: none;
     border-radius: 6px;
     background: transparent;

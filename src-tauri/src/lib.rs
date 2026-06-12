@@ -66,11 +66,9 @@ pub fn run() {
         use tauri_plugin_decorum::WebviewWindowExt;
         if let Some(window) = app.get_webview_window("main") {
             commands::apply_window_effects(&window);
-            // Center the native traffic-light buttons within the 44px custom
-            // titlebar: 12px left inset, y=16 ≈ (44 - button_height)/2. These
-            // match decorum's own resize constants so the one-shot placement and
-            // the resize positioner agree (no drift on resize).
-            let _ = window.set_traffic_lights_inset(12.0, 16.0);
+            // Center the native traffic-light buttons within the 36px custom
+            // titlebar: 12px left inset, y=12 ≈ (36 - button_height)/2.
+            let _ = window.set_traffic_lights_inset(12.0, 12.0);
         }
       }
 

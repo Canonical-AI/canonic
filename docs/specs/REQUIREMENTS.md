@@ -293,6 +293,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user opens the Discover tab
   then: that peer appears in the list with its author name and online status
 
+* scenario: own share is not listed as a peer
+  given: the user has started a share, so their own service is advertised over mDNS
+  when: the Discover tab resolves services on the network
+  then: the user's own service is skipped and never shown as a peer
+
 * scenario: manual connect by share link
   given: a peer can't be found via discovery
   when: the user pastes the peer's share link into the manual-connect field and submits

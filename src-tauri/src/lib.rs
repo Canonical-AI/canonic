@@ -6,9 +6,21 @@ pub mod discovery;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  #[allow(unused_mut)]
+  let mut builder = tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_opener::init());
+
+  // macOS-only: register decorum so the native traffic-light buttons are
+  // repositioned (and kept in place on resize) to sit centered in our custom
+  // 44px titlebar. The crate dependency is target-gated in Cargo.toml, so this
+  // does not touch Linux/Windows builds.
+  #[cfg(target_os = "macos")]
+  {
+    builder = builder.plugin(tauri_plugin_decorum::init());
+  }
+
+  builder
     .setup(|app| {
       // Cache the AppHandle globally so background threads can emit events
       commands::set_app_handle(app.handle().clone());
@@ -51,8 +63,14 @@ pub fn run() {
       #[cfg(target_os = "macos")]
       {
         use tauri::Manager;
+        use tauri_plugin_decorum::WebviewWindowExt;
         if let Some(window) = app.get_webview_window("main") {
             commands::apply_window_effects(&window);
+            // Center the native traffic-light buttons within the 44px custom
+            // titlebar: 12px left inset, y=16 ≈ (44 - button_height)/2. These
+            // match decorum's own resize constants so the one-shot placement and
+            // the resize positioner agree (no drift on resize).
+            let _ = window.set_traffic_lights_inset(12.0, 16.0);
         }
       }
 

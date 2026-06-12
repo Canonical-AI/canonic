@@ -49,5 +49,8 @@ ammonia = "4.0.1"
 rustc-hash = "2.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 
-
-
+# macOS-only: insets/repositions the native traffic-light buttons so they sit
+# centered in our 44px custom titlebar (Overlay titleBarStyle). Not compiled on
+# other platforms.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-decorum = "1.1.1"

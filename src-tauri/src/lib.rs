@@ -23,7 +23,23 @@ pub fn run() {
       mcp::start_mcp_server(app.handle().clone());
 
       // Build the native application menu (emits menu:* events to the renderer).
+      // macOS only: there it becomes the global menu bar. On Linux/Windows
+      // `set_menu` attaches an in-window GTK/Win32 menu bar that collides with
+      // our custom Vue titlebar (the stray "Canonic"/"Edit" strip), so we rely
+      // on AppMenu.vue there instead.
+      #[cfg(target_os = "macos")]
       let _ = commands::build_app_menu(app.handle());
+
+      // Frameless custom chrome on Linux/Windows: drop the native window
+      // decorations so our themed titlebar + window controls are the only chrome.
+      // macOS keeps its decorations (traffic lights overlay via titleBarStyle).
+      #[cfg(all(desktop, not(target_os = "macos")))]
+      {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window("main") {
+          let _ = window.set_decorations(false);
+        }
+      }
 
       // Start peer discovery browser
       let _ = discovery::start_discovery();

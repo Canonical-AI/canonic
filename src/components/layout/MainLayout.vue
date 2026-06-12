@@ -116,6 +116,35 @@
                 >
                     <Settings :size="15" />
                 </button>
+
+                <!-- Window controls — themed min/max/close for the frameless
+                     Linux/Windows chrome. macOS uses its native traffic lights. -->
+                <div v-if="!isMac" class="window-controls">
+                    <button
+                        class="win-btn"
+                        title="Minimize"
+                        aria-label="Minimize"
+                        @click="minimizeWindow"
+                    >
+                        <Minus :size="15" />
+                    </button>
+                    <button
+                        class="win-btn"
+                        title="Maximize"
+                        aria-label="Maximize"
+                        @click="toggleMaximizeWindow"
+                    >
+                        <Square :size="12" />
+                    </button>
+                    <button
+                        class="win-btn win-btn--close"
+                        title="Close"
+                        aria-label="Close"
+                        @click="closeWindow"
+                    >
+                        <X :size="15" />
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -604,6 +633,9 @@ import {
     ChevronRight,
     Eye,
     EyeOff,
+    Minus,
+    Square,
+    X,
 } from "lucide-vue-next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import FileTree from "../sidebar/FileTree.vue";
@@ -655,6 +687,12 @@ function onTitlebarRightMouseDown(e) {
     currentWindow.setFocus();
     e.stopPropagation();
 }
+
+// Window controls for the frameless Linux/Windows chrome. (.catch swallows the
+// rejection if the command isn't permitted — e.g. running outside Tauri.)
+const minimizeWindow = () => currentWindow.minimize().catch(() => {});
+const toggleMaximizeWindow = () => currentWindow.toggleMaximize().catch(() => {});
+const closeWindow = () => currentWindow.close().catch(() => {});
 
 // Drag a doc from the file tree onto the active editor pane to open it there.
 // Capture phase so we intercept before the ProseMirror editor's own drop handler.
@@ -1321,6 +1359,38 @@ function toggleDistractionFree() {
 .icon-btn:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
+}
+
+/* Frameless window controls (Linux/Windows). Themed via vars so they track
+   the active theme instead of the OS-drawn native buttons. */
+.window-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 6px;
+}
+.win-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+.win-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.win-btn--close:hover {
+    background: var(--danger, #e5484d);
+    color: #fff;
 }
 
 .content {

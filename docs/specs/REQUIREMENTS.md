@@ -126,6 +126,27 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ***
 
+## Window Chrome (CHR)
+
+> Canonic draws its own titlebar on every platform. On Windows/Linux the window is frameless (no native decorations) with themed minimize/maximize/close controls; macOS keeps native traffic lights via `titleBarStyle`.
+
+* scenario: frameless themed controls on Windows and Linux
+  given: the app is running on Windows or Linux
+  when: the window is shown
+  then: there are no native window decorations, and the titlebar shows themed minimize, maximize, and close buttons that follow the active theme
+
+* scenario: window controls operate the window
+  given: the app is running on Windows or Linux
+  when: the user clicks minimize, maximize, or close
+  then: the window minimizes, toggles maximize, or closes respectively
+
+* scenario: macOS keeps native traffic lights
+  given: the app is running on macOS
+  when: the window is shown
+  then: the native traffic-light controls are used (no custom min/max/close buttons) and the titlebar reserves space for them
+
+***
+
 ## Workspace Templates (WKS)
 
 > When creating a new workspace the user picks a template. Blank gives an empty repo. PM Framework scaffolds a full directory hierarchy with twelve starter documents.

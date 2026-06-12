@@ -386,6 +386,8 @@ pub fn app_edit_action(_action: String) -> Result<(), String> {
 // menu:open-settings (Cmd+,) and the standard edit roles (handled natively by the
 // webview). Menu item ids that start with "menu:" are forwarded to the renderer as
 // Tauri events so the existing window.canonic.menu.* listeners keep working.
+// Only invoked on macOS (global menu bar); Linux/Windows use the custom AppMenu.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn build_app_menu(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 

@@ -107,6 +107,74 @@ unsafe fn set_window_blur_radius(window_number: isize, radius: i32) {
     }
 }
 
+/// Round the window's content corners to match a standard macOS window.
+/// Because the window is `transparent: true` (so the custom titlebar + private
+/// backdrop blur show through), AppKit no longer clips it to the system corner
+/// radius — the corners render square. Rounding the content view's layer and
+/// refreshing the shadow restores the native look. Equivalent ObjC:
+/// `content.wantsLayer = YES; content.layer.cornerRadius = r;
+///  content.layer.masksToBounds = YES; [win setHasShadow:YES]; [win invalidateShadow];`
+/// Must run on the main thread. No-op off macOS.
+#[cfg(target_os = "macos")]
+unsafe fn round_window_corners(ns_window: *mut std::ffi::c_void, radius: f64) {
+    use std::ffi::c_void;
+
+    // objc_msgSend is variadic at the ABI level; re-type the one declared symbol
+    // for each call shape (matches set_ns_window_appearance's approach). The f64
+    // shape is required so CGFloat lands in the FP register per the ABI.
+    use std::os::raw::c_char;
+    type Base = unsafe extern "C" fn(*mut c_void, *mut c_void) -> isize;
+    type MsgObj = unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void;
+    type MsgObjArg = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) -> *mut c_void;
+    type MsgCStr = unsafe extern "C" fn(*mut c_void, *mut c_void, *const c_char) -> *mut c_void;
+    type MsgSetBool = unsafe extern "C" fn(*mut c_void, *mut c_void, i8);
+    type MsgSetF64 = unsafe extern "C" fn(*mut c_void, *mut c_void, f64);
+    type MsgVoid = unsafe extern "C" fn(*mut c_void, *mut c_void);
+    let base: Base = objc_msgSend;
+    let msg_obj = std::mem::transmute::<Base, MsgObj>(base);
+    let msg_obj_arg = std::mem::transmute::<Base, MsgObjArg>(base);
+    let msg_cstr = std::mem::transmute::<Base, MsgCStr>(base);
+    let msg_set_bool = std::mem::transmute::<Base, MsgSetBool>(base);
+    let msg_set_f64 = std::mem::transmute::<Base, MsgSetF64>(base);
+    let msg_void = std::mem::transmute::<Base, MsgVoid>(base);
+
+    // NSView *content = [ns_window contentView];
+    let content = msg_obj(ns_window, sel_registerName(c"contentView".as_ptr()));
+    if content.is_null() {
+        return;
+    }
+    // content.wantsLayer = YES;
+    msg_set_bool(content, sel_registerName(c"setWantsLayer:".as_ptr()), 1);
+
+    // CALayer *layer = [content layer]; layer.cornerRadius = radius; layer.masksToBounds = YES;
+    let layer = msg_obj(content, sel_registerName(c"layer".as_ptr()));
+    if !layer.is_null() {
+        msg_set_f64(layer, sel_registerName(c"setCornerRadius:".as_ptr()), radius);
+        msg_set_bool(layer, sel_registerName(c"setMasksToBounds:".as_ptr()), 1);
+
+        // layer.cornerCurve = kCACornerCurveContinuous (@"continuous"). Without
+        // this a CALayer draws a plain circular arc; macOS native windows use the
+        // "squircle" continuous corner, so a circular one looks subtly off next to
+        // a native window. Build the NSString @"continuous" and set it.
+        let ns_string_class = objc_getClass(c"NSString".as_ptr());
+        if !ns_string_class.is_null() {
+            let continuous = msg_cstr(
+                ns_string_class,
+                sel_registerName(c"stringWithUTF8String:".as_ptr()),
+                c"continuous".as_ptr(),
+            );
+            if !continuous.is_null() {
+                msg_obj_arg(layer, sel_registerName(c"setCornerCurve:".as_ptr()), continuous);
+            }
+        }
+    }
+
+    // [ns_window setHasShadow:YES]; [ns_window invalidateShadow]; — recompute the
+    // drop shadow so it follows the rounded shape instead of the square frame.
+    msg_set_bool(ns_window, sel_registerName(c"setHasShadow:".as_ptr()), 1);
+    msg_void(ns_window, sel_registerName(c"invalidateShadow".as_ptr()));
+}
+
 #[cfg(target_os = "macos")]
 pub fn apply_window_effects(window: &tauri::WebviewWindow) {
     if let Ok(config) = config_read() {
@@ -126,6 +194,11 @@ pub fn apply_window_effects(window: &tauri::WebviewWindow) {
                 let window_number: isize = objc_msgSend(ns_window, sel);
                 let radius = if blur { 20 } else { 0 };
                 set_window_blur_radius(window_number, radius);
+
+                // Restore the standard macOS rounded corners + shadow that the
+                // transparent window would otherwise lose. Match the native window
+                // edge radius — clipping rounder than it leaves a corner gap.
+                round_window_corners(ns_window, 13.0);
             }
         }
     }

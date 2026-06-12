@@ -127,7 +127,32 @@ Source of truth for product requirements. When a requirement changes, update thi
 * scenario: compact layout keeps the sidebar toggles reachable
   given: the window is below the small-screen threshold
   when: the user taps the left or right panel toggle in the compact header
-  then: the corresponding sidebar docks open (pushing the editor, narrower than on a full window) or closes, without needing the menu, and the toggle reflects the current open/closed state
+  then: the corresponding sidebar opens as a centered floating popover modal (with backdrop) or closes, and the toggle reflects the current open/closed state
+
+* scenario: compact layout focus mode auto-activates
+  given: the window is below the small-screen threshold
+  when: the compact layout is active and the user has not manually overridden focus mode
+  then: focus mode is ON (sidebars hidden, panels as floating popovers), and the focus mode toggle in the header shows active state
+
+* scenario: user can override focus mode on small windows
+  given: focus mode is ON (small window)
+  when: the user taps the focus mode toggle button
+  then: focus mode turns OFF, sidebars dock open narrower (pushing the editor), and the manual override persists until the user removes it
+
+* scenario: user can enter focus mode on large windows
+  given: focus mode is OFF (large window, sidebars visible)
+  when: the user taps the focus mode toggle button
+  then: focus mode turns ON (sidebars hidden, floating popovers), and the manual override persists
+
+* scenario: focus mode sidebar toggle opens floating popover
+  given: focus mode is ON
+  when: the user taps the left panel toggle button
+  then: the left sidebar appears as a centered floating modal with backdrop; tapping the backdrop or the close button dismisses it
+
+* scenario: focus mode right panel toggle opens floating popover
+  given: focus mode is ON and a file is open
+  when: the user taps the right panel toggle button
+  then: the right panel appears as a centered floating modal with backdrop; tapping the backdrop or the close button dismisses it
 
 ***
 

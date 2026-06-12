@@ -4,6 +4,7 @@
         :class="{
             'is-resizing': isResizing,
             'layout-compact': store.isCompactLayout,
+            'layout--focus': store.focusMode,
             'layout-mac': isMac,
         }"
     >
@@ -97,15 +98,16 @@
                 <!-- Focus mode toggle -->
                 <button
                     class="icon-btn"
-                    :class="{ active: store.distractionFreeMode }"
+                    :class="{ active: store.focusMode }"
                     :title="
-                        store.distractionFreeMode
+                        store.focusMode
                             ? 'Exit Focus Mode'
-                            : 'Enter Focus Mode (Distraction-free)'
+                            : 'Enter Focus Mode'
                     "
-                    @click="toggleDistractionFree"
+                    @click="toggleFocusMode"
                 >
-                    <Eye :size="15" />
+                    <EyeOff v-if="store.focusMode" :size="15" />
+                    <Eye v-else :size="15" />
                 </button>
 
                 <!-- Settings -->
@@ -169,32 +171,34 @@
                 <span class="app-name">canonic</span>
             </div>
             <div class="mobile-header-right" @mousedown="onTitlebarRightMouseDown">
-                <!-- Focus mode toggle button in header to exit Focus Mode if manually entered -->
-                <button
-                    v-if="store.distractionFreeMode"
-                    class="mobile-icon-btn active-focus"
-                    title="Exit Focus Mode"
-                    @click="store.distractionFreeMode = false"
-                >
-                    <EyeOff :size="14" />
-                </button>
-                <!-- Sidebar toggles so the panels stay reachable in compact mode -->
+                <!-- Focus mode toggle -->
                 <button
                     class="mobile-icon-btn"
-                    :class="{ 'active-focus': !store.sidebarCollapsed }"
-                    :title="store.sidebarCollapsed ? 'Show files sidebar' : 'Hide files sidebar'"
-                    @click="store.sidebarCollapsed = !store.sidebarCollapsed"
+                    :class="{ 'active-focus': store.focusMode }"
+                    :title="store.focusMode ? 'Exit Focus Mode' : 'Enter Focus Mode'"
+                    @click="toggleFocusMode"
                 >
-                    <PanelLeftOpen v-if="store.sidebarCollapsed" :size="14" />
+                    <EyeOff v-if="store.focusMode" :size="14" />
+                    <Eye v-else :size="14" />
+                </button>
+                <!-- Sidebar toggles: in focus mode they open floating popovers;
+                     otherwise they dock/undock the sidebars. -->
+                <button
+                    class="mobile-icon-btn"
+                    :class="{ 'active-focus': leftPanelOpen }"
+                    :title="leftPanelBtnTitle"
+                    @click="toggleLeftPanel"
+                >
+                    <PanelLeftOpen v-if="!leftPanelOpen" :size="14" />
                     <PanelLeftClose v-else :size="14" />
                 </button>
                 <button
                     class="mobile-icon-btn"
-                    :class="{ 'active-focus': !store.rightPanelCollapsed }"
-                    :title="store.rightPanelCollapsed ? 'Show panel' : 'Hide panel'"
-                    @click="store.rightPanelCollapsed = !store.rightPanelCollapsed"
+                    :class="{ 'active-focus': rightPanelOpen }"
+                    :title="rightPanelBtnTitle"
+                    @click="toggleRightPanel"
                 >
-                    <PanelRightOpen v-if="store.rightPanelCollapsed" :size="14" />
+                    <PanelRightOpen v-if="!rightPanelOpen" :size="14" />
                     <PanelRightClose v-else :size="14" />
                 </button>
                 <button
@@ -299,12 +303,12 @@
                 <div class="dropdown-section">
                     <button
                         class="dropdown-item"
-                        @click="toggleDistractionFree"
+                        @click="toggleFocusMode"
                     >
-                        <Eye :size="14" v-if="!store.distractionFreeMode" />
+                        <Eye :size="14" v-if="!store.focusMode" />
                         <EyeOff :size="14" v-else />
                         <span>{{
-                            store.distractionFreeMode
+                            store.focusMode
                                 ? "Exit Focus Mode"
                                 : "Focus Mode"
                         }}</span>
@@ -322,23 +326,28 @@
             <aside
                 class="sidebar"
                 :class="{
-                    'sidebar--collapsed': store.sidebarCollapsed,
+                    'sidebar--collapsed': !store.focusMode && store.sidebarCollapsed,
+                    'sidebar--focus-floating': store.focusMode && focusFloatingPanel === 'left',
                 }"
             >
                 <div class="sidebar-tabs">
                     <button
                         class="tab sidebar-toggle"
                         :title="
-                            store.sidebarCollapsed
-                                ? 'Expand sidebar'
-                                : 'Collapse sidebar'
+                            store.focusMode
+                                ? 'Close panel'
+                                : store.sidebarCollapsed
+                                  ? 'Expand sidebar'
+                                  : 'Collapse sidebar'
                         "
                         @click="
-                            store.sidebarCollapsed = !store.sidebarCollapsed
+                            store.focusMode
+                                ? (focusFloatingPanel = null)
+                                : (store.sidebarCollapsed = !store.sidebarCollapsed)
                         "
                     >
                         <PanelLeftClose
-                            v-if="!store.sidebarCollapsed"
+                            v-if="!store.sidebarCollapsed || store.focusMode"
                             :size="15"
                         />
                         <PanelLeftOpen v-else :size="15" />
@@ -450,10 +459,11 @@
                 v-if="store.currentFile || store.peerFileContent"
                 class="right-panel"
                 :class="{
-                    'right-panel--collapsed': store.rightPanelCollapsed,
+                    'right-panel--collapsed': !store.focusMode && store.rightPanelCollapsed,
+                    'right-panel--focus-floating': store.focusMode && focusFloatingPanel === 'right',
                 }"
                 :style="
-                    store.rightPanelCollapsed
+                    store.focusMode || store.rightPanelCollapsed
                         ? {}
                         : {
                               width: rightPanelWidth + 'px',
@@ -462,7 +472,7 @@
                 "
             >
                 <div
-                    v-if="!store.rightPanelCollapsed"
+                    v-if="!store.focusMode && !store.rightPanelCollapsed"
                     class="resize-handle"
                     @mousedown="onResizeStart"
                 />
@@ -476,17 +486,20 @@
                     <button
                         class="tab panel-toggle"
                         :title="
-                            store.rightPanelCollapsed
-                                ? 'Expand panel'
-                                : 'Collapse panel'
+                            store.focusMode
+                                ? 'Close panel'
+                                : store.rightPanelCollapsed
+                                  ? 'Expand panel'
+                                  : 'Collapse panel'
                         "
                         @click="
-                            store.rightPanelCollapsed =
-                                !store.rightPanelCollapsed
+                            store.focusMode
+                                ? (focusFloatingPanel = null)
+                                : (store.rightPanelCollapsed = !store.rightPanelCollapsed)
                         "
                     >
                         <PanelRightClose
-                            v-if="!store.rightPanelCollapsed"
+                            v-if="!store.rightPanelCollapsed || store.focusMode"
                             :size="15"
                         />
                         <PanelRightOpen v-else :size="15" />
@@ -571,6 +584,13 @@
                 </button>
             </div>
         </Transition>
+
+        <!-- Focus mode floating panel backdrop -->
+        <div
+            v-if="store.focusMode && focusFloatingPanel"
+            class="focus-floating-backdrop"
+            @click="focusFloatingPanel = null"
+        />
 
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
@@ -1167,7 +1187,10 @@ async function newDoc() {
 }
 
 function handleTabClick(tab) {
-    if (store.sidebarCollapsed) {
+    if (store.focusMode) {
+        store.sidebarTab = tab;
+        focusFloatingPanel.value = "left";
+    } else if (store.sidebarCollapsed) {
         store.sidebarCollapsed = false;
         store.sidebarTab = tab;
     } else {
@@ -1176,7 +1199,10 @@ function handleTabClick(tab) {
 }
 
 function handleRightTabClick(tab) {
-    if (store.rightPanelCollapsed) {
+    if (store.focusMode) {
+        store.rightPanelTab = tab;
+        focusFloatingPanel.value = "right";
+    } else if (store.rightPanelCollapsed) {
         store.rightPanelCollapsed = false;
         store.rightPanelTab = tab;
     } else {
@@ -1243,16 +1269,80 @@ async function runAppMenuItem(item) {
     }
 }
 
+// ── Focus mode & floating panels ───────────────────────────────────────────
+const focusFloatingPanel = ref(null); // null | 'left' | 'right'
+
+// Whether left panel *appears* open (in focus mode: floating panel is open;
+// otherwise: sidebar is not collapsed).
+const leftPanelOpen = computed(() =>
+    store.focusMode
+        ? focusFloatingPanel.value === "left"
+        : !store.sidebarCollapsed,
+);
+const rightPanelOpen = computed(() =>
+    store.focusMode
+        ? focusFloatingPanel.value === "right"
+        : !store.rightPanelCollapsed,
+);
+
+const leftPanelBtnTitle = computed(() => {
+    if (store.focusMode)
+        return focusFloatingPanel.value === "left"
+            ? "Close files"
+            : "Files";
+    return store.sidebarCollapsed ? "Show files sidebar" : "Hide files sidebar";
+});
+const rightPanelBtnTitle = computed(() => {
+    if (store.focusMode)
+        return focusFloatingPanel.value === "right" ? "Close panel" : "Panel";
+    return store.rightPanelCollapsed ? "Show panel" : "Hide panel";
+});
+
+function toggleLeftPanel() {
+    if (store.focusMode) {
+        focusFloatingPanel.value =
+            focusFloatingPanel.value === "left" ? null : "left";
+    } else {
+        store.sidebarCollapsed = !store.sidebarCollapsed;
+    }
+}
+
+function toggleRightPanel() {
+    if (store.focusMode) {
+        focusFloatingPanel.value =
+            focusFloatingPanel.value === "right" ? null : "right";
+    } else {
+        store.rightPanelCollapsed = !store.rightPanelCollapsed;
+    }
+}
+
+function toggleFocusMode() {
+    mobileMenuOpen.value = false;
+    focusFloatingPanel.value = null;
+    store.setFocusMode(!store.focusMode);
+}
+
 function openMobileTab(side, tab) {
     mobileMenuOpen.value = false;
-    if (side === "left") {
-        store.sidebarTab = tab;
-        store.sidebarCollapsed = false;
-        store.rightPanelCollapsed = true;
+    if (store.focusMode) {
+        // In focus mode: open the floating popover for that side.
+        if (side === "left") {
+            store.sidebarTab = tab;
+            focusFloatingPanel.value = "left";
+        } else {
+            store.rightPanelTab = tab;
+            focusFloatingPanel.value = "right";
+        }
     } else {
-        store.rightPanelTab = tab;
-        store.rightPanelCollapsed = false;
-        store.sidebarCollapsed = true;
+        if (side === "left") {
+            store.sidebarTab = tab;
+            store.sidebarCollapsed = false;
+            store.rightPanelCollapsed = true;
+        } else {
+            store.rightPanelTab = tab;
+            store.rightPanelCollapsed = false;
+            store.sidebarCollapsed = true;
+        }
     }
 }
 
@@ -1260,16 +1350,8 @@ function openMobileSearch() {
     mobileMenuOpen.value = false;
     store.sidebarCollapsed = true;
     store.rightPanelCollapsed = true;
+    focusFloatingPanel.value = null;
     toggleSearchView();
-}
-
-function toggleDistractionFree() {
-    mobileMenuOpen.value = false;
-    store.distractionFreeMode = !store.distractionFreeMode;
-    if (store.distractionFreeMode) {
-        store.sidebarCollapsed = true;
-        store.rightPanelCollapsed = true;
-    }
 }
 </script>
 
@@ -2084,5 +2166,53 @@ function toggleDistractionFree() {
 
 .layout-compact .resize-handle {
     display: none !important;
+}
+
+/* ── Focus Mode ──
+   Sidebars hidden entirely. Panels open as centered floating popover modals. */
+.layout--focus .sidebar:not(.sidebar--focus-floating) {
+    display: none !important;
+}
+.layout--focus .right-panel:not(.right-panel--focus-floating) {
+    display: none !important;
+}
+
+/* Floating popover modal styles for focus mode */
+.sidebar--focus-floating,
+.right-panel--focus-floating {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    display: flex !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(92vw, 520px) !important;
+    height: min(82vh, 680px) !important;
+    max-height: 82vh !important;
+    border-radius: 12px;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    z-index: 1001 !important;
+    overflow: hidden;
+}
+
+.sidebar--focus-floating {
+    border-right: none !important;
+}
+
+.right-panel--focus-floating {
+    border-left: none !important;
+}
+
+/* Focus floating backdrop */
+.focus-floating-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1000;
 }
 </style>

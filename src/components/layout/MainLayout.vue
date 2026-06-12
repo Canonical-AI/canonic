@@ -178,6 +178,25 @@
                 >
                     <EyeOff :size="14" />
                 </button>
+                <!-- Sidebar toggles so the panels stay reachable in compact mode -->
+                <button
+                    class="mobile-icon-btn"
+                    :class="{ 'active-focus': !store.sidebarCollapsed }"
+                    :title="store.sidebarCollapsed ? 'Show files sidebar' : 'Hide files sidebar'"
+                    @click="store.sidebarCollapsed = !store.sidebarCollapsed"
+                >
+                    <PanelLeftOpen v-if="store.sidebarCollapsed" :size="14" />
+                    <PanelLeftClose v-else :size="14" />
+                </button>
+                <button
+                    class="mobile-icon-btn"
+                    :class="{ 'active-focus': !store.rightPanelCollapsed }"
+                    :title="store.rightPanelCollapsed ? 'Show panel' : 'Hide panel'"
+                    @click="store.rightPanelCollapsed = !store.rightPanelCollapsed"
+                >
+                    <PanelRightOpen v-if="store.rightPanelCollapsed" :size="14" />
+                    <PanelRightClose v-else :size="14" />
+                </button>
                 <button
                     class="mobile-icon-btn"
                     @click="showSettings = true"
@@ -304,7 +323,6 @@
                 class="sidebar"
                 :class="{
                     'sidebar--collapsed': store.sidebarCollapsed,
-                    'sidebar--floating': sidebarFloating,
                 }"
             >
                 <div class="sidebar-tabs">
@@ -433,17 +451,14 @@
                 class="right-panel"
                 :class="{
                     'right-panel--collapsed': store.rightPanelCollapsed,
-                    'right-panel--floating': panelFloating,
                 }"
                 :style="
                     store.rightPanelCollapsed
                         ? {}
-                        : panelFloating
-                          ? {}
-                          : {
-                                width: rightPanelWidth + 'px',
-                                transition: isResizing ? 'none' : undefined,
-                            }
+                        : {
+                              width: rightPanelWidth + 'px',
+                              transition: isResizing ? 'none' : undefined,
+                          }
                 "
             >
                 <div
@@ -556,18 +571,6 @@
                 </button>
             </div>
         </Transition>
-
-        <!-- Backdrop overlays for compact modals -->
-        <div
-            v-if="store.isCompactLayout && !store.sidebarCollapsed"
-            class="mobile-backdrop"
-            @click="store.sidebarCollapsed = true"
-        />
-        <div
-            v-if="store.isCompactLayout && !store.rightPanelCollapsed"
-            class="mobile-backdrop"
-            @click="store.rightPanelCollapsed = true"
-        />
 
         <!-- Modals -->
         <NewDocModal v-if="showNewDoc" @close="showNewDoc = false" />
@@ -1171,14 +1174,6 @@ function handleTabClick(tab) {
         store.sidebarTab = tab;
     }
 }
-
-const panelFloating = computed(
-    () => store.isCompactLayout && !store.rightPanelCollapsed,
-);
-
-const sidebarFloating = computed(
-    () => store.isCompactLayout && !store.sidebarCollapsed,
-);
 
 function handleRightTabClick(tab) {
     if (store.rightPanelCollapsed) {
@@ -2069,18 +2064,10 @@ function toggleDistractionFree() {
     font-size: 0.78rem;
 }
 
-/* Overrides for sidebar and right panel in compact mode */
+/* Compact mode: sidebars stay docked (flow in the flex layout, push content)
+   but are capped narrower so they fit a small window. Hidden when collapsed. */
 .layout-compact .sidebar {
-    position: fixed !important;
-    top: 36px !important;
-    left: 0 !important;
-    bottom: 0 !important;
-    z-index: 1000 !important;
-    width: 260px !important;
-    height: calc(100vh - 36px) !important;
-    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.25) !important;
-    border-right: 1px solid var(--border) !important;
-    background: var(--bg-sidebar) !important;
+    width: min(240px, 42vw) !important;
 }
 
 .layout-compact .sidebar--collapsed {
@@ -2088,72 +2075,14 @@ function toggleDistractionFree() {
 }
 
 .layout-compact .right-panel {
-    position: fixed !important;
-    top: 36px !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    z-index: 1000 !important;
-    width: 300px !important;
-    height: calc(100vh - 36px) !important;
-    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.25) !important;
-    border-left: 1px solid var(--border) !important;
-    background: var(--bg-sidebar) !important;
+    width: min(300px, 46vw) !important;
 }
 
 .layout-compact .right-panel--collapsed {
     display: none !important;
 }
 
-/* Compact mode: left sidebar as centered floating modal */
-.layout-compact .sidebar.sidebar--floating,
-.sidebar.sidebar--floating {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-    width: min(92vw, 520px) !important;
-    height: min(82vh, 680px) !important;
-    max-height: 82vh !important;
-    border-radius: 12px;
-    border: 1px solid var(--border) !important;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
-    z-index: 1001 !important;
-    overflow: hidden;
-}
-
-/* Compact mode: right panel as centered floating modal (all tabs) */
-.layout-compact .right-panel.right-panel--floating,
-.right-panel.right-panel--floating {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: translate(-50%, -50%) !important;
-    width: min(92vw, 520px) !important;
-    height: min(82vh, 680px) !important;
-    max-height: 82vh !important;
-    border-radius: 12px;
-    border: 1px solid var(--border) !important;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
-    z-index: 1001 !important;
-    overflow: hidden;
-}
-
 .layout-compact .resize-handle {
     display: none !important;
-}
-
-/* Backdrop */
-.mobile-backdrop {
-    position: fixed;
-    top: 36px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 999;
 }
 </style>

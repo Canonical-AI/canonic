@@ -124,6 +124,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user opens the compact menu and taps "Menu"
   then: it expands in place to the same File / Edit / Config actions (no separate hamburger) and tapping an action runs it and closes the menu
 
+* scenario: compact layout keeps the sidebar toggles reachable
+  given: the window is below the small-screen threshold
+  when: the user taps the left or right panel toggle in the compact header
+  then: the corresponding sidebar docks open (pushing the editor, narrower than on a full window) or closes, without needing the menu, and the toggle reflects the current open/closed state
+
 ***
 
 ## Window Controls (WCTL)

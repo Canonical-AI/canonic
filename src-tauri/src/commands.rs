@@ -2641,31 +2641,19 @@ fn parse_peer_address(input: &str) -> Result<(String, u16, String), String> {
 
     // Drop any path segment, keep host:port (and maybe :token in the bare form).
     let hostport = hostport_path.split('/').next().unwrap_or(hostport_path);
-    let (host, port) = if token.is_empty() {
-        let parts: Vec<&str> = hostport.split(':').collect();
-        match parts.as_slice() {
-            [h, p] => (
-                h.to_string(),
-                p.parse::<u16>().map_err(|_| "Invalid port number".to_string())?,
-            ),
-            [h, p, t] => {
-                token = (*t).to_string();
-                (
-                    h.to_string(),
-                    p.parse::<u16>().map_err(|_| "Invalid port number".to_string())?,
-                )
-            }
-            _ => return Err("Expected host:port (with a token)".to_string()),
+    let parts: Vec<&str> = hostport.split(':').collect();
+    let host = parts.first().copied().unwrap_or("").to_string();
+    let port = parts
+        .get(1)
+        .ok_or_else(|| "Address is missing a port".to_string())?
+        .parse::<u16>()
+        .map_err(|_| "Invalid port number".to_string())?;
+    // Bare host:port:token form carries the token as a third segment.
+    if token.is_empty() {
+        if let Some(t) = parts.get(2) {
+            token = (*t).to_string();
         }
-    } else {
-        let (h, p) = hostport
-            .rsplit_once(':')
-            .ok_or_else(|| "Address is missing a port".to_string())?;
-        (
-            h.to_string(),
-            p.parse::<u16>().map_err(|_| "Invalid port number".to_string())?,
-        )
-    };
+    }
 
     if host.is_empty() {
         return Err("Address is missing a host".to_string());
@@ -2676,6 +2664,26 @@ fn parse_peer_address(input: &str) -> Result<(String, u16, String), String> {
     Ok((host, port, token))
 }
 
+/// Fetch and parse a peer's share manifest over HTTP. Shared by manual connect
+/// and peers_fetch_manifest. Returns the raw manifest JSON.
+async fn fetch_peer_manifest(host: &str, port: u64, token: &str) -> Result<Value, String> {
+    let url = format!("http://{}:{}/manifest?token={}", host, port, token);
+    let res = reqwest::Client::new()
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach {}:{} — {}", host, port, e))?;
+    if res.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err("Wrong or missing token for this peer".to_string());
+    }
+    if !res.status().is_success() {
+        return Err(format!("Peer responded with status {}", res.status()));
+    }
+    res.json::<Value>()
+        .await
+        .map_err(|e| format!("Could not read peer manifest: {}", e))
+}
+
 /// Connect to a peer by manually-entered share link/address when mDNS discovery
 /// can't find it (e.g. a flatpak sandbox or a segmented network). Validates the
 /// address by fetching the peer's manifest, then registers it like a discovered
@@ -2684,24 +2692,7 @@ fn parse_peer_address(input: &str) -> Result<(String, u16, String), String> {
 pub async fn peers_connect_manual(address: String) -> Result<Value, String> {
     let (host, port, token) = parse_peer_address(&address)?;
 
-    let url = format!("http://{}:{}/manifest?token={}", host, port, token);
-    let client = reqwest::Client::new();
-    let res = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Could not reach {}:{} — {}", host, port, e))?;
-
-    if res.status() == reqwest::StatusCode::FORBIDDEN {
-        return Err("Wrong or missing token for this peer".to_string());
-    }
-    if !res.status().is_success() {
-        return Err(format!("Peer responded with status {}", res.status()));
-    }
-    let manifest = res
-        .json::<Value>()
-        .await
-        .map_err(|e| format!("Could not read peer manifest: {}", e))?;
+    let manifest = fetch_peer_manifest(&host, port as u64, &token).await?;
 
     let author = manifest
         .get("author")
@@ -2755,19 +2746,7 @@ pub async fn peers_fetch_manifest(id: String) -> Result<Value, String> {
     let port = peer.get("port").and_then(|p| p.as_u64()).unwrap_or(0);
     let token = peer.get("token").and_then(|t| t.as_str()).unwrap_or("");
 
-    let url = format!("http://{}:{}/manifest?token={}", host, port, token);
-    
-    let client = reqwest::Client::new();
-    let res = client.get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("HTTP request failed: {}", e))?;
-
-    if !res.status().is_success() {
-        return Err(format!("HTTP error status: {}", res.status()));
-    }
-
-    let val = res.json::<Value>().await.map_err(|e| format!("Failed to parse response: {}", e))?;
+    let val = fetch_peer_manifest(host, port, token).await?;
     Ok(json!({
         "success": true,
         "files": val.get("files").unwrap_or(&json!([])),

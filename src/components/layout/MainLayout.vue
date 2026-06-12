@@ -1293,7 +1293,7 @@ function toggleDistractionFree() {
     align-items: center;
     justify-content: space-between;
     padding: 0 12px;
-    height: 36px;
+    height: var(--titlebar-height);
     background: var(--bg-titlebar);
     border-bottom: 1px solid var(--border);
     user-select: none;
@@ -1906,7 +1906,7 @@ function toggleDistractionFree() {
     align-items: center;
     justify-content: space-between;
     padding: 0 12px;
-    height: 36px;
+    height: var(--titlebar-height);
     background: var(--bg-titlebar);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -1984,7 +1984,7 @@ function toggleDistractionFree() {
 /* Menu dropdown */
 .mobile-menu-dropdown {
     position: absolute;
-    top: 36px;
+    top: var(--titlebar-height);
     left: 12px;
     background: var(--bg-surface);
     border: 1px solid var(--border-mid);

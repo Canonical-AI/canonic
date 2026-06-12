@@ -4,6 +4,12 @@ pub mod mcp;
 pub mod server;
 pub mod discovery;
 
+/// Height (px) of the custom titlebar. Mirrors the `--titlebar-height` CSS var
+/// in src/assets/main.css — keep them in sync; used to vertically center the
+/// macOS traffic-light buttons.
+#[cfg(target_os = "macos")]
+const TITLEBAR_HEIGHT: f32 = 36.0;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   #[allow(unused_mut)]
@@ -13,7 +19,7 @@ pub fn run() {
 
   // macOS-only: register decorum so the native traffic-light buttons are
   // repositioned (and kept in place on resize) to sit centered in our custom
-  // 44px titlebar. The crate dependency is target-gated in Cargo.toml, so this
+  // titlebar. The crate dependency is target-gated in Cargo.toml, so this
   // does not touch Linux/Windows builds.
   #[cfg(target_os = "macos")]
   {
@@ -66,9 +72,9 @@ pub fn run() {
         use tauri_plugin_decorum::WebviewWindowExt;
         if let Some(window) = app.get_webview_window("main") {
             commands::apply_window_effects(&window);
-            // Center the native traffic-light buttons within the 36px custom
-            // titlebar: 12px left inset, y=12 ≈ (36 - button_height)/2.
-            let _ = window.set_traffic_lights_inset(12.0, 12.0);
+            // Vertically center the native traffic-light buttons in the custom
+            // titlebar: 12px left inset, y = (height − ~12px button)/2.
+            let _ = window.set_traffic_lights_inset(12.0, (TITLEBAR_HEIGHT - 12.0) / 2.0);
         }
       }
 

@@ -15,6 +15,10 @@
        the titlebar/menu). color-scheme inherits, so dark themes get this and only
        the light themes below override it. */
     color-scheme: dark;
+    /* Custom titlebar / compact mobile-header height. Single source of truth —
+       the macOS traffic-light inset in src-tauri/src/lib.rs is derived from the
+       same value, so keep them in sync. */
+    --titlebar-height: 36px;
     /* Backgrounds — from HAL2001 surface hierarchy */
     --bg-base: #0c0e12; /* background */
     --bg-titlebar: #111519; /* just above base */

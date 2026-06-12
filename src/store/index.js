@@ -688,6 +688,15 @@ export const useAppStore = defineStore("app", () => {
     discoveredPeers.value = peers;
   }
 
+  // Insert or replace a peer in discoveredPeers, keyed by id. Shared by the
+  // peers:found listener and manual connect.
+  function upsertDiscoveredPeer(peer) {
+    const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
+    if (idx >= 0) discoveredPeers.value[idx] = peer;
+    else discoveredPeers.value.push(peer);
+    return peer;
+  }
+
   // Manually connect to a peer by share link / host:port:token when mDNS can't
   // find it (flatpak sandbox, segmented Wi-Fi, AP isolation). Resolves to the
   // connected peer or throws with a human-readable reason.
@@ -695,18 +704,11 @@ export const useAppStore = defineStore("app", () => {
     const trimmed = (address || "").trim();
     if (!trimmed) throw new Error("Enter a share link or host:port");
 
-    const upsert = (peer) => {
-      const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
-      if (idx >= 0) discoveredPeers.value[idx] = peer;
-      else discoveredPeers.value.push(peer);
-      return peer;
-    };
-
     if (isDemoMode.value) {
       // Demo: fabricate a connected peer so the flow is interactive offline.
       const hostport = trimmed.replace(/^\w+:\/\//, "").split(/[/?]/)[0];
       const [host, port] = hostport.split(":");
-      return upsert({
+      return upsertDiscoveredPeer({
         id: hostport || "demo-peer",
         name: "Manual Peer",
         host: host || "127.0.0.1",
@@ -720,7 +722,7 @@ export const useAppStore = defineStore("app", () => {
 
     // Backend also emits peers:found; upsert directly so the UI updates even if
     // that listener hasn't attached yet.
-    return upsert(await api.peers.connectManual(trimmed));
+    return upsertDiscoveredPeer(await api.peers.connectManual(trimmed));
   }
   const peerFileContent = ref(null); // { peer, relPath, content } | null
   const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
@@ -981,9 +983,7 @@ export const useAppStore = defineStore("app", () => {
   // Wire peer discovery IPC listeners
   if (api.peers.onFound) {
     api.peers.onFound((peer) => {
-      const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
-      if (idx >= 0) discoveredPeers.value[idx] = peer;
-      else discoveredPeers.value.push(peer);
+      upsertDiscoveredPeer(peer);
     });
     api.peers.onLost(({ id }) => {
       const idx = discoveredPeers.value.findIndex((p) => p.id === id);

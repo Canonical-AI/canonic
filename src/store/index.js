@@ -687,6 +687,41 @@ export const useAppStore = defineStore("app", () => {
     const peers = await api.peers.listDiscovered();
     discoveredPeers.value = peers;
   }
+
+  // Manually connect to a peer by share link / host:port:token when mDNS can't
+  // find it (flatpak sandbox, segmented Wi-Fi, AP isolation). Resolves to the
+  // connected peer or throws with a human-readable reason.
+  async function connectPeerManual(address) {
+    const trimmed = (address || "").trim();
+    if (!trimmed) throw new Error("Enter a share link or host:port");
+
+    const upsert = (peer) => {
+      const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
+      if (idx >= 0) discoveredPeers.value[idx] = peer;
+      else discoveredPeers.value.push(peer);
+      return peer;
+    };
+
+    if (isDemoMode.value) {
+      // Demo: fabricate a connected peer so the flow is interactive offline.
+      const hostport = trimmed.replace(/^\w+:\/\//, "").split(/[/?]/)[0];
+      const [host, port] = hostport.split(":");
+      return upsert({
+        id: hostport || "demo-peer",
+        name: "Manual Peer",
+        host: host || "127.0.0.1",
+        port: Number(port) || 0,
+        scope: "workspace",
+        permission: "comment",
+        online: true,
+        manual: true,
+      });
+    }
+
+    // Backend also emits peers:found; upsert directly so the UI updates even if
+    // that listener hasn't attached yet.
+    return upsert(await api.peers.connectManual(trimmed));
+  }
   const peerFileContent = ref(null); // { peer, relPath, content } | null
   const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
   const peerFileComments = ref([]); // comments visible in sidebar when viewing a peer file
@@ -3642,6 +3677,7 @@ export const useAppStore = defineStore("app", () => {
     editorRevision,
     externalReloadAt,
     reloadCurrentFromDisk,
+    connectPeerManual,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,

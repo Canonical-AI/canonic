@@ -18,6 +18,7 @@ const mockApi = {
     favorite: vi.fn().mockResolvedValue({ success: true }),
     unfavorite: vi.fn().mockResolvedValue({ success: true }),
     fetchManifest: vi.fn().mockResolvedValue({ success: true, files: ['notes.md'] }),
+    connectManual: vi.fn().mockResolvedValue({ id: '192.168.1.5:41234', name: 'dana', host: '192.168.1.5', port: 41234, online: true, manual: true }),
     openFile: vi.fn().mockResolvedValue({ success: true, content: '# Notes', filePath: 'notes.md' }),
     onFound: vi.fn(),
     offFound: vi.fn(),
@@ -89,10 +90,37 @@ describe('peers store', () => {
     store.favoritedPeerIds.add('charlie@host')
     expect(store.favoritedPeers).toHaveLength(1)
     expect(store.favoritedPeers[0].online).toBe(false)
-    
+
     store.discoveredPeers.push({ id: 'charlie@host', name: 'charlie', online: true })
     expect(store.favoritedPeers).toHaveLength(1)
     expect(store.favoritedPeers[0].online).toBe(true)
+  })
+
+  it('connectPeerManual() validates via IPC and adds the peer to discoveredPeers', async () => {
+    const peer = await store.connectPeerManual('  http://192.168.1.5:41234/?token=abc  ')
+    expect(mockApi.peers.connectManual).toHaveBeenCalledWith('http://192.168.1.5:41234/?token=abc')
+    expect(peer.id).toBe('192.168.1.5:41234')
+    expect(store.discoveredPeers.find(p => p.id === '192.168.1.5:41234')).toBeTruthy()
+  })
+
+  it('connectPeerManual() upserts rather than duplicating an existing peer', async () => {
+    await store.connectPeerManual('http://192.168.1.5:41234/?token=abc')
+    await store.connectPeerManual('http://192.168.1.5:41234/?token=abc')
+    expect(store.discoveredPeers.filter(p => p.id === '192.168.1.5:41234')).toHaveLength(1)
+  })
+
+  it('connectPeerManual() rejects an empty address without calling IPC', async () => {
+    await expect(store.connectPeerManual('   ')).rejects.toThrow()
+    expect(mockApi.peers.connectManual).not.toHaveBeenCalled()
+  })
+
+  it('connectPeerManual() in demo mode fabricates a peer without IPC', async () => {
+    store.isDemoMode = true
+    const peer = await store.connectPeerManual('http://10.0.0.9:8080/?token=x')
+    expect(mockApi.peers.connectManual).not.toHaveBeenCalled()
+    expect(peer.id).toBe('10.0.0.9:8080')
+    expect(peer.manual).toBe(true)
+    expect(store.discoveredPeers.find(p => p.id === '10.0.0.9:8080')).toBeTruthy()
   })
 })
 

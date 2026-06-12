@@ -126,7 +126,7 @@ Source of truth for product requirements. When a requirement changes, update thi
 
 ***
 
-## Window Chrome (CHR)
+## Window Controls (WCTL)
 
 > Canonic draws its own titlebar on every platform. On Windows/Linux the window is frameless (no native decorations) with themed minimize/maximize/close controls; macOS keeps native traffic lights via `titleBarStyle`.
 
@@ -276,6 +276,32 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: a .canonicignore file exists with entries matching certain directories
   when: the user shares with scope directory or workspace
   then: the matching directories are excluded from the shared manifest
+
+***
+
+## Peer Discovery (PEER)
+
+> Peers sharing on the same LAN are found automatically over mDNS and listed in the Discover tab. When discovery can't reach a peer (flatpak sandbox, AP isolation, a different subnet), the user can connect manually by pasting the share link.
+
+* scenario: discovered peers listed
+  given: another instance has an active share on the same network
+  when: the user opens the Discover tab
+  then: that peer appears in the list with its author name and online status
+
+* scenario: manual connect by share link
+  given: a peer can't be found via discovery
+  when: the user pastes the peer's share link into the manual-connect field and submits
+  then: the app validates the link against the peer's manifest and adds it to the Discover list as a connected peer
+
+* scenario: manual connect rejects a bad token
+  given: the user enters an address whose token is wrong or missing
+  when: they submit the manual-connect field
+  then: no peer is added and an inline error explains the token is required/incorrect
+
+* scenario: manual connect in demo mode
+  given: the app is in demo mode
+  when: the user submits the manual-connect field
+  then: a sample connected peer is added so the flow is interactive without a network
 
 ***
 

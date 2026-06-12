@@ -2528,6 +2528,147 @@ pub fn peers_unfavorite(id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Parse a manually-entered peer address into (host, port, token). Accepts the
+/// share URL Canonic hands out (`http://host:port/?token=…`), a bare
+/// `host:port:token`, or a `canonic://open?url=…` deep link. A token is
+/// required — the share endpoints 403 without it.
+fn parse_peer_address(input: &str) -> Result<(String, u16, String), String> {
+    let trimmed = input.trim();
+
+    // Unwrap a canonic:// deep link to the inner http URL.
+    let s = if let Some(rest) = trimmed.strip_prefix("canonic://open?url=") {
+        urlencoding::decode(rest)
+            .map(|c| c.into_owned())
+            .unwrap_or_else(|_| rest.to_string())
+    } else {
+        trimmed.to_string()
+    };
+    let s = s.trim();
+
+    let body = s
+        .strip_prefix("http://")
+        .or_else(|| s.strip_prefix("https://"))
+        .unwrap_or(s);
+
+    // Split the query string off and pull `token` out of it.
+    let (hostport_path, query) = match body.split_once('?') {
+        Some((hp, q)) => (hp, Some(q)),
+        None => (body, None),
+    };
+    let mut token = String::new();
+    if let Some(q) = query {
+        for pair in q.split('&') {
+            if let Some(v) = pair.strip_prefix("token=") {
+                token = urlencoding::decode(v)
+                    .map(|c| c.into_owned())
+                    .unwrap_or_else(|_| v.to_string());
+            }
+        }
+    }
+
+    // Drop any path segment, keep host:port (and maybe :token in the bare form).
+    let hostport = hostport_path.split('/').next().unwrap_or(hostport_path);
+    let (host, port) = if token.is_empty() {
+        let parts: Vec<&str> = hostport.split(':').collect();
+        match parts.as_slice() {
+            [h, p] => (
+                h.to_string(),
+                p.parse::<u16>().map_err(|_| "Invalid port number".to_string())?,
+            ),
+            [h, p, t] => {
+                token = (*t).to_string();
+                (
+                    h.to_string(),
+                    p.parse::<u16>().map_err(|_| "Invalid port number".to_string())?,
+                )
+            }
+            _ => return Err("Expected host:port (with a token)".to_string()),
+        }
+    } else {
+        let (h, p) = hostport
+            .rsplit_once(':')
+            .ok_or_else(|| "Address is missing a port".to_string())?;
+        (
+            h.to_string(),
+            p.parse::<u16>().map_err(|_| "Invalid port number".to_string())?,
+        )
+    };
+
+    if host.is_empty() {
+        return Err("Address is missing a host".to_string());
+    }
+    if token.is_empty() {
+        return Err("A share token is required — paste the full share link".to_string());
+    }
+    Ok((host, port, token))
+}
+
+/// Connect to a peer by manually-entered share link/address when mDNS discovery
+/// can't find it (e.g. a flatpak sandbox or a segmented network). Validates the
+/// address by fetching the peer's manifest, then registers it like a discovered
+/// peer so the rest of the peer flow (files, comments) works unchanged.
+#[tauri::command]
+pub async fn peers_connect_manual(address: String) -> Result<Value, String> {
+    let (host, port, token) = parse_peer_address(&address)?;
+
+    let url = format!("http://{}:{}/manifest?token={}", host, port, token);
+    let client = reqwest::Client::new();
+    let res = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach {}:{} — {}", host, port, e))?;
+
+    if res.status() == reqwest::StatusCode::FORBIDDEN {
+        return Err("Wrong or missing token for this peer".to_string());
+    }
+    if !res.status().is_success() {
+        return Err(format!("Peer responded with status {}", res.status()));
+    }
+    let manifest = res
+        .json::<Value>()
+        .await
+        .map_err(|e| format!("Could not read peer manifest: {}", e))?;
+
+    let author = manifest
+        .get("author")
+        .and_then(|a| a.as_str())
+        .unwrap_or("Peer")
+        .to_string();
+    let scope = manifest
+        .get("scope")
+        .and_then(|s| s.as_str())
+        .unwrap_or("workspace")
+        .to_string();
+    let tagged_only = manifest
+        .get("taggedOnly")
+        .and_then(|t| t.as_bool())
+        .unwrap_or(false);
+
+    let peer_id = format!("{}:{}", host, port);
+    // The manifest doesn't expose the share permission; default optimistically —
+    // the server still enforces the real permission on every request.
+    let peer = json!({
+        "id": peer_id,
+        "name": author,
+        "host": host,
+        "port": port,
+        "token": token,
+        "scope": scope,
+        "permission": "comment",
+        "taggedOnly": tagged_only,
+        "online": true,
+        "manual": true
+    });
+
+    register_discovered_peer(peer_id.clone(), peer.clone());
+    if let Some(app) = app_handle() {
+        use tauri::Emitter;
+        let _ = app.emit("peers:found", peer.clone());
+    }
+    Ok(peer)
+}
+
 #[tauri::command]
 pub async fn peers_fetch_manifest(id: String) -> Result<Value, String> {
     let peer = {

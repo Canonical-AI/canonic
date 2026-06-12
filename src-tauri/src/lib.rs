@@ -137,6 +137,7 @@ pub fn run() {
       commands::peers_favorite,
       commands::peers_unfavorite,
       commands::peers_fetch_manifest,
+      commands::peers_connect_manual,
       commands::peers_open_file,
       commands::cleanup_reset_config,
       commands::cleanup_delete_workspace,

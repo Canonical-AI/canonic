@@ -424,6 +424,7 @@ async function refreshDiscover() {
     return
   }
   discovering.value = true
+  const started = Date.now()
   try {
     await store.refreshDiscoveredPeers()
     // Clear local cache on refresh so we try loading again
@@ -431,6 +432,10 @@ async function refreshDiscover() {
       delete peerFiles[key]
     }
   } finally {
+    // Keep the spinner up briefly — reading the cache is near-instant, so
+    // without this the refresh just flickers and feels like it did nothing.
+    const elapsed = Date.now() - started
+    if (elapsed < 600) await new Promise((r) => setTimeout(r, 600 - elapsed))
     discovering.value = false
   }
 }

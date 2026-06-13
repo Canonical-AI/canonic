@@ -142,6 +142,7 @@ window.canonic = {
     getWorkspaceStats: () => invoke('share_workspace_stats'),
     listActive: () => invoke('share_list_active'),
     onNetworkChanged: (cb) => addListener('share:network-changed', cb),
+    onDiscoverable: (cb) => addListener('share:discoverable', cb),
     offNetworkChanged: (cb) => removeListener('share:network-changed'),
   },
 

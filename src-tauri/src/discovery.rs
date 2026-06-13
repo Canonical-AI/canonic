@@ -49,6 +49,10 @@ pub fn start_discovery() -> Result<(), String> {
                             .unwrap_or(false)
                         {
                             log::info!("mDNS: resolved own service {fullname} (hidden from peer list)");
+                            // Resolving our own advertised service proves the mDNS
+                            // advertise+browse path works on this machine. Surface
+                            // it as a "discoverable" signal instead of a peer.
+                            let _ = app.emit("share:discoverable", ());
                             continue;
                         }
                         let token = info.get_property_val_str("token").unwrap_or("").to_string();

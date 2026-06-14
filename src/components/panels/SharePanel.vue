@@ -12,6 +12,19 @@
       </p>
     </div>
 
+    <!-- Discoverability: confirmed once the app resolves its own advertised
+         service over mDNS. If it stays unverified while sharing, mDNS is being
+         blocked (Local Network permission / network). -->
+    <div
+      v-if="anySharing"
+      class="discover-banner"
+      :class="store.networkDiscoverable ? 'discover-banner--ok' : 'discover-banner--pending'"
+    >
+      <component :is="store.networkDiscoverable ? Wifi : WifiOff" :size="12" />
+      <span v-if="store.networkDiscoverable">Discoverable on your local network</span>
+      <span v-else>Advertising… not verified yet. If peers can't find you, allow “Local Network” for Canonic in System Settings → Privacy &amp; Security.</span>
+    </div>
+
     <!-- Not yet sharing -->
     <div v-if="!store.shareInfo" class="share-action">
       <button class="start-btn" @click="startShare" :disabled="loading">
@@ -202,11 +215,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '../../store'
-import { Share2, Users, Eye, ExternalLink, FolderSync } from 'lucide-vue-next'
+import { Share2, Users, Eye, ExternalLink, FolderSync, Wifi, WifiOff } from 'lucide-vue-next'
 
 const store = useAppStore()
+
+// Any share active → the workspace is being advertised over mDNS.
+const anySharing = computed(() =>
+  !!(store.shareInfo || store.workspaceShareInfo || store.sharesByFile['__all_workspaces__'])
+)
 const loading = ref(false)
 const wsLoading = ref(false)
 const allWsLoading = ref(false)
@@ -372,6 +390,32 @@ function relativeTime(ms) {
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0 0 10px;
+}
+
+/* ── Discoverability banner ── */
+.discover-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+}
+.discover-banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.discover-banner--ok {
+  color: var(--success, #3fb950);
+  border-color: color-mix(in srgb, var(--success, #3fb950) 40%, transparent);
+  background: color-mix(in srgb, var(--success, #3fb950) 10%, transparent);
+}
+.discover-banner--pending {
+  color: var(--text-muted);
+  background: var(--bg-hover);
 }
 
 /* ── Share action ── */

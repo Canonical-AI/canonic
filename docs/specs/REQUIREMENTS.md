@@ -124,6 +124,57 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user opens the compact menu and taps "Menu"
   then: it expands in place to the same File / Edit / Config actions (no separate hamburger) and tapping an action runs it and closes the menu
 
+* scenario: compact layout keeps the sidebar toggles reachable
+  given: the window is below the small-screen threshold
+  when: the user taps the left or right panel toggle in the compact header
+  then: the corresponding sidebar opens as a centered floating popover modal (with backdrop) or closes, and the toggle reflects the current open/closed state
+
+* scenario: compact layout focus mode auto-activates
+  given: the window is below the small-screen threshold
+  when: the compact layout is active and the user has not manually overridden focus mode
+  then: focus mode is ON (sidebars hidden, panels as floating popovers), and the focus mode toggle in the header shows active state
+
+* scenario: user can override focus mode on small windows
+  given: focus mode is ON (small window)
+  when: the user taps the focus mode toggle button
+  then: focus mode turns OFF, sidebars dock open narrower (pushing the editor), and the manual override persists until the user removes it
+
+* scenario: user can enter focus mode on large windows
+  given: focus mode is OFF (large window, sidebars visible)
+  when: the user taps the focus mode toggle button
+  then: focus mode turns ON (sidebars hidden, floating popovers), and the manual override persists
+
+* scenario: focus mode sidebar toggle opens floating popover
+  given: focus mode is ON
+  when: the user taps the left panel toggle button
+  then: the left sidebar appears as a centered floating modal with backdrop; tapping the backdrop or the close button dismisses it
+
+* scenario: focus mode right panel toggle opens floating popover
+  given: focus mode is ON and a file is open
+  when: the user taps the right panel toggle button
+  then: the right panel appears as a centered floating modal with backdrop; tapping the backdrop or the close button dismisses it
+
+***
+
+## Window Controls (WCTL)
+
+> Canonic draws its own titlebar on every platform. On Windows/Linux the window is frameless (no native decorations) with themed minimize/maximize/close controls; macOS keeps native traffic lights via `titleBarStyle`.
+
+* scenario: frameless themed controls on Windows and Linux
+  given: the app is running on Windows or Linux
+  when: the window is shown
+  then: there are no native window decorations, and the titlebar shows themed minimize, maximize, and close buttons that follow the active theme
+
+* scenario: window controls operate the window
+  given: the app is running on Windows or Linux
+  when: the user clicks minimize, maximize, or close
+  then: the window minimizes, toggles maximize, or closes respectively
+
+* scenario: macOS keeps native traffic lights
+  given: the app is running on macOS
+  when: the window is shown
+  then: the native traffic-light controls are used (no custom min/max/close buttons) and the titlebar reserves space for them
+
 ***
 
 ## Workspace Templates (WKS)
@@ -255,6 +306,37 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: a .canonicignore file exists with entries matching certain directories
   when: the user shares with scope directory or workspace
   then: the matching directories are excluded from the shared manifest
+
+***
+
+## Peer Discovery (PEER)
+
+> Peers sharing on the same LAN are found automatically over mDNS and listed in the Discover tab. When discovery can't reach a peer (flatpak sandbox, AP isolation, a different subnet), the user can connect manually by pasting the share link.
+
+* scenario: discovered peers listed
+  given: another instance has an active share on the same network
+  when: the user opens the Discover tab
+  then: that peer appears in the list with its author name and online status
+
+* scenario: own share is not listed as a peer
+  given: the user has started a share, so their own service is advertised over mDNS
+  when: the Discover tab resolves services on the network
+  then: the user's own service is skipped and never shown as a peer
+
+* scenario: manual connect by share link
+  given: a peer can't be found via discovery
+  when: the user pastes the peer's share link into the manual-connect field and submits
+  then: the app validates the link against the peer's manifest and adds it to the Discover list as a connected peer
+
+* scenario: manual connect rejects a bad token
+  given: the user enters an address whose token is wrong or missing
+  when: they submit the manual-connect field
+  then: no peer is added and an inline error explains the token is required/incorrect
+
+* scenario: manual connect in demo mode
+  given: the app is in demo mode
+  when: the user submits the manual-connect field
+  then: a sample connected peer is added so the flow is interactive without a network
 
 ***
 

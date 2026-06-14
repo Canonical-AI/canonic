@@ -22,6 +22,13 @@ fn resolved_peers() -> &'static Mutex<HashMap<String, String>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Fullnames of services this instance has announced, so the browser can skip
+/// resolving itself — the user shouldn't see their own share listed as a peer.
+fn my_services() -> &'static Mutex<std::collections::HashSet<String>> {
+    static MINE: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+    MINE.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
 pub fn start_discovery() -> Result<(), String> {
     let mdns = get_mdns_daemon()?;
     let service_type = "_canonic._tcp.local.";
@@ -33,6 +40,21 @@ pub fn start_discovery() -> Result<(), String> {
                 use tauri::Emitter;
                 match event {
                     mdns_sd::ServiceEvent::ServiceResolved(info) => {
+                        let fullname = info.get_fullname().to_string();
+                        // Skip our own announced services so the user never sees
+                        // their own share listed as a peer.
+                        if my_services()
+                            .lock()
+                            .map(|m| m.contains(&fullname))
+                            .unwrap_or(false)
+                        {
+                            log::info!("mDNS: resolved own service {fullname} (hidden from peer list)");
+                            // Resolving our own advertised service proves the mDNS
+                            // advertise+browse path works on this machine. Surface
+                            // it as a "discoverable" signal instead of a peer.
+                            let _ = app.emit("share:discoverable", ());
+                            continue;
+                        }
                         let token = info.get_property_val_str("token").unwrap_or("").to_string();
                         let scope = info.get_property_val_str("scope").unwrap_or("").to_string();
                         let permission = info.get_property_val_str("permission").unwrap_or("").to_string();
@@ -48,7 +70,7 @@ pub fn start_discovery() -> Result<(), String> {
 
                         let peer_id = format!("{}:{}", host, info.get_port());
                         if let Ok(mut cache) = resolved_peers().lock() {
-                            cache.insert(info.get_fullname().to_string(), peer_id.clone());
+                            cache.insert(fullname.clone(), peer_id.clone());
                         }
 
                         let peer = serde_json::json!({
@@ -123,21 +145,10 @@ pub fn announce_share(
 
     mdns.register(my_service).map_err(|e| e.to_string())?;
 
-    // loopback notify
-    if let Some(app) = crate::commands::app_handle() {
-        use tauri::Emitter;
-        let _ = app.emit("peers:found", serde_json::json!({
-            "id": format!("127.0.0.1:{}", port),
-            "name": author,
-            "host": "127.0.0.1",
-            "port": port,
-            "token": token,
-            "scope": scope,
-            "permission": permission,
-            "taggedOnly": tagged_only,
-            "online": true,
-            "isSelf": true
-        }));
+    // Remember our own fullname so the browser skips resolving ourselves.
+    let fullname = format!("{}._canonic._tcp.local.", instance_name);
+    if let Ok(mut mine) = my_services().lock() {
+        mine.insert(fullname);
     }
 
     Ok(())
@@ -149,11 +160,63 @@ pub fn unannounce_share(port: u16) -> Result<(), String> {
     let instance_name = format!("{}-{}", author, port);
     let fullname = format!("{}._canonic._tcp.local.", instance_name);
     mdns.unregister(&fullname).map_err(|e| e.to_string())?;
-
-    if let Some(app) = crate::commands::app_handle() {
-        use tauri::Emitter;
-        let _ = app.emit("peers:lost", serde_json::json!({ "id": format!("127.0.0.1:{}", port) }));
+    if let Ok(mut mine) = my_services().lock() {
+        mine.remove(&fullname);
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mdns_sd::ServiceEvent;
+    use std::time::{Duration, Instant};
+
+    /// Local self-discovery smoke test: announce a `_canonic._tcp` service and
+    /// confirm the same daemon's browser resolves it via real multicast. Proves
+    /// the mDNS announce+browse stack works on this machine without a second
+    /// computer. Ignored by default (real multicast; flaky in CI and needs the
+    /// macOS local-network permission). Run manually:
+    ///   cargo test --lib discovery::tests::self_discovery -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn self_discovery() {
+        let daemon = ServiceDaemon::new().expect("create mdns daemon");
+        let service_type = "_canonic._tcp.local.";
+        let receiver = daemon.browse(service_type).expect("browse");
+
+        let ip = crate::server::get_lan_ip();
+        assert_ne!(
+            ip, "127.0.0.1",
+            "get_lan_ip fell back to loopback — no non-loopback IPv4 interface"
+        );
+
+        let instance = format!("selftest-{}", std::process::id());
+        let host = format!("{}.local.", instance);
+        let mut props = HashMap::new();
+        props.insert("token".to_string(), "selftest".to_string());
+        props.insert("author".to_string(), "selftest".to_string());
+        let info = ServiceInfo::new(service_type, &instance, &host, &ip, 45999, Some(props))
+            .expect("build service info");
+        daemon.register(info).expect("register service");
+
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            if let Ok(ServiceEvent::ServiceResolved(info)) =
+                receiver.recv_timeout(Duration::from_millis(500))
+            {
+                if info.get_fullname().contains(&instance) {
+                    eprintln!(
+                        "self-resolved: {} addrs={:?} port={}",
+                        info.get_fullname(),
+                        info.get_addresses(),
+                        info.get_port()
+                    );
+                    return;
+                }
+            }
+        }
+        panic!("mDNS self-discovery failed: own service not resolved within 10s");
+    }
 }

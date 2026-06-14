@@ -4,11 +4,29 @@ pub mod mcp;
 pub mod server;
 pub mod discovery;
 
+/// Height (px) of the custom titlebar. Mirrors the `--titlebar-height` CSS var
+/// in src/assets/main.css — keep them in sync; used to vertically center the
+/// macOS traffic-light buttons.
+#[cfg(target_os = "macos")]
+const TITLEBAR_HEIGHT: f32 = 36.0;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  #[allow(unused_mut)]
+  let mut builder = tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_opener::init());
+
+  // macOS-only: register decorum so the native traffic-light buttons are
+  // repositioned (and kept in place on resize) to sit centered in our custom
+  // titlebar. The crate dependency is target-gated in Cargo.toml, so this
+  // does not touch Linux/Windows builds.
+  #[cfg(target_os = "macos")]
+  {
+    builder = builder.plugin(tauri_plugin_decorum::init());
+  }
+
+  builder
     .setup(|app| {
       // Cache the AppHandle globally so background threads can emit events
       commands::set_app_handle(app.handle().clone());
@@ -23,7 +41,23 @@ pub fn run() {
       mcp::start_mcp_server(app.handle().clone());
 
       // Build the native application menu (emits menu:* events to the renderer).
+      // macOS only: there it becomes the global menu bar. On Linux/Windows
+      // `set_menu` attaches an in-window GTK/Win32 menu bar that collides with
+      // our custom Vue titlebar (the stray "Canonic"/"Edit" strip), so we rely
+      // on AppMenu.vue there instead.
+      #[cfg(target_os = "macos")]
       let _ = commands::build_app_menu(app.handle());
+
+      // Frameless custom chrome on Linux/Windows: drop the native window
+      // decorations so our themed titlebar + window controls are the only chrome.
+      // macOS keeps its decorations (traffic lights overlay via titleBarStyle).
+      #[cfg(all(desktop, not(target_os = "macos")))]
+      {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window("main") {
+          let _ = window.set_decorations(false);
+        }
+      }
 
       // Start peer discovery browser
       let _ = discovery::start_discovery();
@@ -35,8 +69,12 @@ pub fn run() {
       #[cfg(target_os = "macos")]
       {
         use tauri::Manager;
+        use tauri_plugin_decorum::WebviewWindowExt;
         if let Some(window) = app.get_webview_window("main") {
             commands::apply_window_effects(&window);
+            // Vertically center the native traffic-light buttons in the custom
+            // titlebar: 12px left inset, y = (height − ~12px button)/2.
+            let _ = window.set_traffic_lights_inset(12.0, (TITLEBAR_HEIGHT - 12.0) / 2.0);
         }
       }
 
@@ -121,6 +159,7 @@ pub fn run() {
       commands::peers_favorite,
       commands::peers_unfavorite,
       commands::peers_fetch_manifest,
+      commands::peers_connect_manual,
       commands::peers_open_file,
       commands::cleanup_reset_config,
       commands::cleanup_delete_workspace,

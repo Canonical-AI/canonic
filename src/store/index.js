@@ -365,6 +365,38 @@ export const useAppStore = defineStore("app", () => {
     storage.setItem("canonic:distractionFreeMode", String(val));
   });
 
+  // focusMode: when ON sidebars hidden entirely, panels in floating popovers.
+  // Auto-toggles on window resize unless user has set a manual override.
+  const FOCUS_BREAKPOINT = 768;
+  const focusModeManualOverride = ref(false);
+  const focusMode = ref(
+    storage.getItem("canonic:focusMode") === "true",
+  );
+  watch(focusMode, (val) => {
+    storage.setItem("canonic:focusMode", String(val));
+  });
+  // Auto-set focusMode based on window size when no manual override.
+  function _syncFocusMode() {
+    if (!focusModeManualOverride.value) {
+      focusMode.value = window.innerWidth < FOCUS_BREAKPOINT;
+    }
+  }
+  if (
+    typeof window !== "undefined" &&
+    typeof window.addEventListener === "function"
+  ) {
+    _syncFocusMode();
+    window.addEventListener("resize", _syncFocusMode);
+  }
+  function setFocusMode(on) {
+    focusModeManualOverride.value = true;
+    focusMode.value = on;
+  }
+  function clearFocusModeOverride() {
+    focusModeManualOverride.value = false;
+    _syncFocusMode();
+  }
+
   const isCompactLayout = computed(() => isSmallScreen.value);
 
   // Window transparency preference (set from config in applyAppearanceSettings).
@@ -687,11 +719,52 @@ export const useAppStore = defineStore("app", () => {
     const peers = await api.peers.listDiscovered();
     discoveredPeers.value = peers;
   }
+
+  // Insert or replace a peer in discoveredPeers, keyed by id. Shared by the
+  // peers:found listener and manual connect.
+  function upsertDiscoveredPeer(peer) {
+    const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
+    if (idx >= 0) discoveredPeers.value[idx] = peer;
+    else discoveredPeers.value.push(peer);
+    return peer;
+  }
+
+  // Manually connect to a peer by share link / host:port:token when mDNS can't
+  // find it (flatpak sandbox, segmented Wi-Fi, AP isolation). Resolves to the
+  // connected peer or throws with a human-readable reason.
+  async function connectPeerManual(address) {
+    const trimmed = (address || "").trim();
+    if (!trimmed) throw new Error("Enter a share link or host:port");
+
+    if (isDemoMode.value) {
+      // Demo: fabricate a connected peer so the flow is interactive offline.
+      const hostport = trimmed.replace(/^\w+:\/\//, "").split(/[/?]/)[0];
+      const [host, port] = hostport.split(":");
+      return upsertDiscoveredPeer({
+        id: hostport || "demo-peer",
+        name: "Manual Peer",
+        host: host || "127.0.0.1",
+        port: Number(port) || 0,
+        scope: "workspace",
+        permission: "comment",
+        online: true,
+        manual: true,
+      });
+    }
+
+    // Backend also emits peers:found; upsert directly so the UI updates even if
+    // that listener hasn't attached yet.
+    return upsertDiscoveredPeer(await api.peers.connectManual(trimmed));
+  }
   const peerFileContent = ref(null); // { peer, relPath, content } | null
   const navBack = ref(null); // { path, name } | null — for wiki-link back navigation
   const peerFileComments = ref([]); // comments visible in sidebar when viewing a peer file
   const activeCommentId = ref(null); // drives bidirectional scroll between sidebar and viewer
   const networkChanged = ref(false);
+  // True once the app has resolved its own advertised share over mDNS, proving
+  // the advertise+browse path works on this machine (used as a "discoverable"
+  // indicator while sharing). Reset when a new share starts.
+  const networkDiscoverable = ref(false);
   const externalChangeNotice = ref(null); // { file, at } when active doc changed on disk while dirty
   const editorRevision = ref(0); // bump to force editor remount (e.g. after reload-from-disk)
   const externalReloadAt = ref(0); // bump on external fs change so reference panes reload from disk
@@ -946,9 +1019,7 @@ export const useAppStore = defineStore("app", () => {
   // Wire peer discovery IPC listeners
   if (api.peers.onFound) {
     api.peers.onFound((peer) => {
-      const idx = discoveredPeers.value.findIndex((p) => p.id === peer.id);
-      if (idx >= 0) discoveredPeers.value[idx] = peer;
-      else discoveredPeers.value.push(peer);
+      upsertDiscoveredPeer(peer);
     });
     api.peers.onLost(({ id }) => {
       const idx = discoveredPeers.value.findIndex((p) => p.id === id);
@@ -966,6 +1037,12 @@ export const useAppStore = defineStore("app", () => {
   if (api.share.onNetworkChanged) {
     api.share.onNetworkChanged(() => {
       networkChanged.value = true;
+    });
+  }
+
+  if (api.share.onDiscoverable) {
+    api.share.onDiscoverable(() => {
+      networkDiscoverable.value = true;
     });
   }
 
@@ -2045,6 +2122,7 @@ export const useAppStore = defineStore("app", () => {
 
   async function startShare(options) {
     if (!workspacePath.value || !currentFile.value) return;
+    networkDiscoverable.value = false;
     const cleanOptions = JSON.parse(JSON.stringify(options || {}));
     const result = await api.share.start(
       workspacePath.value,
@@ -2071,6 +2149,7 @@ export const useAppStore = defineStore("app", () => {
 
   async function startWorkspaceShare() {
     if (!workspacePath.value) return;
+    networkDiscoverable.value = false;
     const cfg = config.value || (await loadConfig());
     const options = {
       permission: cfg?.sharingDefaults?.permission || "view",
@@ -2090,6 +2169,7 @@ export const useAppStore = defineStore("app", () => {
   }
 
   async function startAllWorkspacesShare() {
+    networkDiscoverable.value = false;
     const cfg = config.value || (await loadConfig());
     const workspaces = recentWorkspaces.value.map((w) => ({
       path: w.path,
@@ -3543,6 +3623,10 @@ export const useAppStore = defineStore("app", () => {
     splitStacked,
     isSmallScreen,
     distractionFreeMode,
+    focusMode,
+    focusModeManualOverride,
+    setFocusMode,
+    clearFocusModeOverride,
     isCompactLayout,
     isDemoMode,
     demoPeers,
@@ -3638,10 +3722,12 @@ export const useAppStore = defineStore("app", () => {
     peerFileComments,
     activeCommentId,
     networkChanged,
+    networkDiscoverable,
     externalChangeNotice,
     editorRevision,
     externalReloadAt,
     reloadCurrentFromDisk,
+    connectPeerManual,
     favoritePeer,
     unfavoritePeer,
     openPeerFile,

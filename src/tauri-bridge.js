@@ -142,6 +142,7 @@ window.canonic = {
     getWorkspaceStats: () => invoke('share_workspace_stats'),
     listActive: () => invoke('share_list_active'),
     onNetworkChanged: (cb) => addListener('share:network-changed', cb),
+    onDiscoverable: (cb) => addListener('share:discoverable', cb),
     offNetworkChanged: (cb) => removeListener('share:network-changed'),
   },
 
@@ -152,6 +153,7 @@ window.canonic = {
     favorite: (id) => invoke('peers_favorite', { id }),
     unfavorite: (id) => invoke('peers_unfavorite', { id }),
     fetchManifest: (id) => invoke('peers_fetch_manifest', { id }),
+    connectManual: (address) => invoke('peers_connect_manual', { address }),
     openFile: (id, relPath, wsName) => invoke('peers_open_file', { id, relPath, wsName }),
     onFound: (cb) => addListener('peers:found', cb),
     offFound: (cb) => removeListener('peers:found'),

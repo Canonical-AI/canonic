@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Local-network / Bonjour declaration. Required on macOS 14+ for the mDNS
+      peer discovery (src-tauri/src/discovery.rs) to work at all: without
+      NSBonjourServices the OS silently blocks browsing/advertising the
+      _canonic._tcp service, and NSLocalNetworkUsageDescription drives the
+      one-time "allow local network" permission prompt. Tauri merges this file
+      into the bundled app's Info.plist.
+    -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Canonic uses the local network to discover nearby peers and share documents directly between machines.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_canonic._tcp</string>
+    </array>
+</dict>
+</plist>

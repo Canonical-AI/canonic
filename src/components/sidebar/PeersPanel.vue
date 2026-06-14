@@ -154,6 +154,29 @@
         </button>
       </div>
 
+      <!-- Manual connect — for when mDNS can't find a peer (flatpak sandbox,
+           segmented Wi-Fi, AP isolation). Paste the share link. -->
+      <form class="manual-connect" @submit.prevent="connectManual">
+        <input
+          v-model="manualAddress"
+          class="manual-input"
+          type="text"
+          placeholder="Paste a share link to connect…"
+          spellcheck="false"
+          :disabled="connecting"
+        />
+        <button
+          class="manual-btn"
+          type="submit"
+          title="Connect"
+          :disabled="connecting || !manualAddress.trim()"
+        >
+          <Loader v-if="connecting" :size="13" class="spin" />
+          <Link2 v-else :size="13" />
+        </button>
+      </form>
+      <div v-if="connectError" class="manual-error">{{ connectError }}</div>
+
       <div v-if="!discovering && store.discoveredPeers.length === 0" class="empty-hint">
         No Canonic peers found on this network.
       </div>
@@ -237,7 +260,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { useAppStore } from '../../store'
-import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw, FolderSync } from 'lucide-vue-next'
+import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw, FolderSync, Link2 } from 'lucide-vue-next'
 import demoConfig from "../../demo/config.json"
 
 const store = useAppStore()
@@ -375,12 +398,33 @@ async function switchToDiscover() {
   await refreshDiscover()
 }
 
+// Manual connect by share link (mDNS fallback).
+const manualAddress = ref('')
+const connecting = ref(false)
+const connectError = ref('')
+
+async function connectManual() {
+  const addr = manualAddress.value.trim()
+  if (!addr || connecting.value) return
+  connecting.value = true
+  connectError.value = ''
+  try {
+    await store.connectPeerManual(addr)
+    manualAddress.value = ''
+  } catch (err) {
+    connectError.value = err?.message || String(err) || 'Could not connect'
+  } finally {
+    connecting.value = false
+  }
+}
+
 async function refreshDiscover() {
   if (store.isDemoMode) {
     // Demo mode uses demoConfig but we could also just leave it
     return
   }
   discovering.value = true
+  const started = Date.now()
   try {
     await store.refreshDiscoveredPeers()
     // Clear local cache on refresh so we try loading again
@@ -388,6 +432,10 @@ async function refreshDiscover() {
       delete peerFiles[key]
     }
   } finally {
+    // Keep the spinner up briefly — reading the cache is near-instant, so
+    // without this the refresh just flickers and feels like it did nothing.
+    const elapsed = Date.now() - started
+    if (elapsed < 600) await new Promise((r) => setTimeout(r, 600 - elapsed))
     discovering.value = false
   }
 }
@@ -567,6 +615,55 @@ function toggleFavorite(peer) {
   font-size: 0.8125rem;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.manual-connect {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 4px;
+}
+.manual-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--bg-surface, var(--bg-hover));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+}
+.manual-input:focus {
+  border-color: var(--accent);
+}
+.manual-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  flex-shrink: 0;
+  background: var(--bg-surface, var(--bg-hover));
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.manual-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.manual-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.manual-error {
+  padding: 2px 12px 6px;
+  font-size: 0.75rem;
+  color: var(--danger, #e5484d);
+  line-height: 1.4;
 }
 
 .peer-group {

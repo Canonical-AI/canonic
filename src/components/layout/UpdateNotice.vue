@@ -244,7 +244,7 @@ function dismiss() {
 /* Floating banner over the editor */
 .update-notice--editor {
   position: fixed;
-  top: 52px;
+  top: calc(var(--titlebar-height) + 8px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;

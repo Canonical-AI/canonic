@@ -9,7 +9,9 @@
     <!-- Tab bar -->
     <div class="tab-bar">
       <button class="tab" :class="{ active: view === 'favorites' }" @click="view = 'favorites'">Favorites</button>
-      <button class="tab" :class="{ active: view === 'discover' }" @click="switchToDiscover">Discover</button>
+      <button class="tab" :class="{ active: view === 'discover' }" @click="switchToDiscover">
+        Discover<span v-if="store.discoveredPeers.length" class="tab-badge">{{ store.discoveredPeers.length }}</span>
+      </button>
     </div>
 
     <!-- FAVORITES VIEW -->
@@ -258,7 +260,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useAppStore } from '../../store'
 import { FileText, Star, AlertTriangle, Loader, Eye, RefreshCw, FolderSync, Link2 } from 'lucide-vue-next'
 import demoConfig from "../../demo/config.json"
@@ -268,6 +270,13 @@ const api = window.canonic
 
 const view = ref('favorites')
 const discovering = ref(false)
+
+// Pull the backend's already-resolved peers when the panel opens so the Discover
+// tab's count badge reflects reality immediately (peers found before the panel
+// mounted), even while the user is on the Favorites tab.
+onMounted(() => {
+  if (!store.isDemoMode) refreshDiscover()
+})
 
 // Demo mode keeps its sample peers (Priya, Ben) in demoPeers, separate from the
 // live favoritedPeers list, so count both for the header.
@@ -575,6 +584,20 @@ function toggleFavorite(peer) {
 }
 .tab:hover { color: var(--text-secondary); }
 .tab.active { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 500; }
+
+.tab-badge {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
 
 .discover-header {
   display: flex;

@@ -100,6 +100,7 @@ pub fn run() {
       commands::app_open_config,
       commands::app_edit_action,
       commands::set_window_theme,
+      commands::app_platform,
       commands::window_controls_side,
       commands::telemetry_log,
       commands::dialog_confirm,

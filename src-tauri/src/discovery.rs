@@ -35,76 +35,86 @@ pub fn start_discovery() -> Result<(), String> {
     let receiver = mdns.browse(service_type).map_err(|e| e.to_string())?;
 
     std::thread::spawn(move || {
+        use tauri::Emitter;
+        // The registry (register/unregister) is updated unconditionally so the
+        // pull-based UI refresh (peers_list_discovered) always reflects reality;
+        // the event emit is best-effort (only if the app handle is up yet). This
+        // makes discovery resilient to events that arrive before the frontend
+        // listener attaches or before the handle is cached.
         while let Ok(event) = receiver.recv() {
-            if let Some(app) = crate::commands::app_handle() {
-                use tauri::Emitter;
-                match event {
-                    mdns_sd::ServiceEvent::ServiceResolved(info) => {
-                        let fullname = info.get_fullname().to_string();
-                        // Skip our own announced services so the user never sees
-                        // their own share listed as a peer.
-                        if my_services()
-                            .lock()
-                            .map(|m| m.contains(&fullname))
-                            .unwrap_or(false)
-                        {
-                            log::info!("mDNS: resolved own service {fullname} (hidden from peer list)");
-                            // Resolving our own advertised service proves the mDNS
-                            // advertise+browse path works on this machine. Surface
-                            // it as a "discoverable" signal instead of a peer.
+            match event {
+                mdns_sd::ServiceEvent::ServiceResolved(info) => {
+                    let fullname = info.get_fullname().to_string();
+                    // Skip our own announced services so the user never sees
+                    // their own share listed as a peer.
+                    if my_services()
+                        .lock()
+                        .map(|m| m.contains(&fullname))
+                        .unwrap_or(false)
+                    {
+                        log::info!("mDNS: resolved own service {fullname} (hidden from peer list)");
+                        // Resolving our own advertised service proves the mDNS
+                        // advertise+browse path works on this machine. Surface
+                        // it as a "discoverable" signal instead of a peer.
+                        if let Some(app) = crate::commands::app_handle() {
                             let _ = app.emit("share:discoverable", ());
-                            continue;
                         }
-                        let token = info.get_property_val_str("token").unwrap_or("").to_string();
-                        let scope = info.get_property_val_str("scope").unwrap_or("").to_string();
-                        let permission = info.get_property_val_str("permission").unwrap_or("").to_string();
-                        let author = info.get_property_val_str("author")
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| info.get_fullname().to_string());
-                        let tagged_only = info.get_property_val_str("taggedOnly")
-                            .map(|v| v == "true")
-                            .unwrap_or(false);
-                        let host = info.get_property_val_str("ip")
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| info.get_addresses().iter().next().map(|a| a.to_string()).unwrap_or_else(|| "127.0.0.1".to_string()));
+                        continue;
+                    }
+                    let token = info.get_property_val_str("token").unwrap_or("").to_string();
+                    let scope = info.get_property_val_str("scope").unwrap_or("").to_string();
+                    let permission = info.get_property_val_str("permission").unwrap_or("").to_string();
+                    let author = info.get_property_val_str("author")
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| info.get_fullname().to_string());
+                    let tagged_only = info.get_property_val_str("taggedOnly")
+                        .map(|v| v == "true")
+                        .unwrap_or(false);
+                    let host = info.get_property_val_str("ip")
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| info.get_addresses().iter().next().map(|a| a.to_string()).unwrap_or_else(|| "127.0.0.1".to_string()));
 
-                        let peer_id = format!("{}:{}", host, info.get_port());
-                        if let Ok(mut cache) = resolved_peers().lock() {
-                            cache.insert(fullname.clone(), peer_id.clone());
-                        }
+                    let peer_id = format!("{}:{}", host, info.get_port());
+                    log::info!("mDNS: resolved peer {fullname} at {peer_id}");
+                    if let Ok(mut cache) = resolved_peers().lock() {
+                        cache.insert(fullname.clone(), peer_id.clone());
+                    }
 
-                        let peer = serde_json::json!({
-                            "id": peer_id,
-                            "name": author,
-                            "host": host,
-                            "port": info.get_port(),
-                            "token": token,
-                            "scope": scope,
-                            "permission": permission,
-                            "taggedOnly": tagged_only,
-                            "online": true
-                        });
-                        // Make the peer reachable by peers_fetch_manifest / peers_open_file.
-                        crate::commands::register_discovered_peer(peer_id.clone(), peer.clone());
+                    let peer = serde_json::json!({
+                        "id": peer_id,
+                        "name": author,
+                        "host": host,
+                        "port": info.get_port(),
+                        "token": token,
+                        "scope": scope,
+                        "permission": permission,
+                        "taggedOnly": tagged_only,
+                        "online": true
+                    });
+                    // Make the peer reachable by peers_fetch_manifest / peers_open_file.
+                    crate::commands::register_discovered_peer(peer_id.clone(), peer.clone());
+                    if let Some(app) = crate::commands::app_handle() {
                         let _ = app.emit("peers:found", peer);
                     }
-                    mdns_sd::ServiceEvent::ServiceRemoved(_, name) => {
-                        let fullname = name.to_string();
-                        let id = if let Ok(cache) = resolved_peers().lock() {
-                            cache.get(&fullname).cloned()
-                        } else {
-                            None
-                        };
-                        if let Some(peer_id) = id {
-                            crate::commands::unregister_discovered_peer(&peer_id);
+                }
+                mdns_sd::ServiceEvent::ServiceRemoved(_, name) => {
+                    let fullname = name.to_string();
+                    let id = if let Ok(cache) = resolved_peers().lock() {
+                        cache.get(&fullname).cloned()
+                    } else {
+                        None
+                    };
+                    if let Some(peer_id) = id {
+                        crate::commands::unregister_discovered_peer(&peer_id);
+                        if let Some(app) = crate::commands::app_handle() {
                             let _ = app.emit("peers:lost", serde_json::json!({ "id": peer_id }));
-                            if let Ok(mut cache) = resolved_peers().lock() {
-                                cache.remove(&fullname);
-                            }
+                        }
+                        if let Ok(mut cache) = resolved_peers().lock() {
+                            cache.remove(&fullname);
                         }
                     }
-                    _ => {}
                 }
+                _ => {}
             }
         }
     });
@@ -179,6 +189,34 @@ mod tests {
     /// computer. Ignored by default (real multicast; flaky in CI and needs the
     /// macOS local-network permission). Run manually:
     ///   cargo test --lib discovery::tests::self_discovery -- --ignored --nocapture
+    /// Diagnostic: browse with the real mdns-sd lib for 12s and print every
+    /// event — proves whether THIS machine's browser resolves other Canonic
+    /// shares on the LAN, without building the app. Run (bypassing RTK so the
+    /// prints aren't swallowed):
+    ///   rtk proxy cargo test --manifest-path src-tauri/Cargo.toml --lib \
+    ///     discovery::tests::browse_and_list -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn browse_and_list() {
+        let daemon = ServiceDaemon::new().expect("create mdns daemon");
+        let receiver = daemon.browse("_canonic._tcp.local.").expect("browse");
+        let deadline = Instant::now() + Duration::from_secs(12);
+        while Instant::now() < deadline {
+            match receiver.recv_timeout(Duration::from_millis(500)) {
+                Ok(ServiceEvent::ServiceFound(_, name)) => eprintln!("FOUND: {name}"),
+                Ok(ServiceEvent::ServiceResolved(info)) => eprintln!(
+                    "RESOLVED: {} addrs={:?} port={}",
+                    info.get_fullname(),
+                    info.get_addresses(),
+                    info.get_port()
+                ),
+                Ok(other) => eprintln!("EVENT: {other:?}"),
+                Err(_) => {}
+            }
+        }
+        eprintln!("browse_and_list: done");
+    }
+
     #[test]
     #[ignore]
     fn self_discovery() {

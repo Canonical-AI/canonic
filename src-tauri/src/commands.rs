@@ -231,6 +231,15 @@ pub fn set_window_theme(scheme: String) {
 #[tauri::command]
 pub fn set_window_theme(_scheme: String) {}
 
+/// The host OS ("macos" | "linux" | "windows" | …). The frontend uses this for
+/// reliable platform branching instead of the deprecated `navigator.platform`,
+/// which some Linux WebKitGTK builds report inconsistently (causing the macOS
+/// code path — hidden window controls, traffic-light padding — to wrongly fire).
+#[tauri::command]
+pub fn app_platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
 /// Which side the desktop places window controls (min/max/close), so the
 /// frameless custom titlebar can match the user's window-management settings.
 /// Linux: read the GNOME `button-layout` gsetting (covers GNOME and the many

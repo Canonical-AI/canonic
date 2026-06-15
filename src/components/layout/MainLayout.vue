@@ -213,6 +213,10 @@
                 >
                     <Settings :size="14" />
                 </button>
+                <!-- Frameless window controls: a narrow window is in compact
+                     mode (no titlebar), so without these there'd be no way to
+                     minimize/close on Linux/Windows. macOS uses traffic lights. -->
+                <WindowControls v-if="!isMac" />
             </div>
 
             <!-- Compact Navigation Menu Popover -->
@@ -984,6 +988,17 @@ onMounted(async () => {
     // Load version info
     if (window.canonic?.app?.getVersion) {
         store.appVersion = await window.canonic.app.getVersion();
+    }
+
+    // Reliable platform from the backend — navigator.platform is unreliable on
+    // Linux WebKitGTK and can wrongly trigger the macOS path (hidden window
+    // controls, traffic-light padding). Correct isMac before the side lookup.
+    if (window.canonic?.app?.platform) {
+        try {
+            isMac.value = (await window.canonic.app.platform()) === "macos";
+        } catch {
+            /* keep the navigator-based guess */
+        }
     }
 
     // Match the frameless window controls to the desktop's button side. Fire and

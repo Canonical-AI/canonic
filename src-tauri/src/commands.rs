@@ -231,7 +231,47 @@ pub fn set_window_theme(scheme: String) {
 #[tauri::command]
 pub fn set_window_theme(_scheme: String) {}
 
-
+/// Which side the desktop places window controls (min/max/close), so the
+/// frameless custom titlebar can match the user's window-management settings.
+/// Linux: read the GNOME `button-layout` gsetting (covers GNOME and the many
+/// GTK desktops that honor it); anything else falls back to "right". Windows
+/// always places them right. macOS uses native traffic lights and never calls
+/// this. Returns "left" or "right".
+#[tauri::command]
+pub fn window_controls_side() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        let Ok(out) = std::process::Command::new("gsettings")
+            .args([
+                "get",
+                "org.gnome.desktop.wm.preferences",
+                "button-layout",
+            ])
+            .output()
+        else {
+            return "right".to_string();
+        };
+        if !out.status.success() {
+            return "right".to_string();
+        }
+        // e.g. 'appmenu:minimize,maximize,close' (controls on the right) or
+        // 'close,minimize,maximize:appmenu' (controls on the left). The segment
+        // before ':' is rendered on the left of the titlebar.
+        let layout = String::from_utf8_lossy(&out.stdout);
+        let left = layout.split(':').next().unwrap_or("");
+        if ["close", "minimize", "maximize"]
+            .iter()
+            .any(|w| left.contains(w))
+        {
+            return "left".to_string();
+        }
+        "right".to_string()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        "right".to_string()
+    }
+}
 
 
 // --- Config ---

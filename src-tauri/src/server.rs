@@ -56,16 +56,54 @@ fn get_ws_clients() -> WsClients {
     ws_clients().clone()
 }
 
-// Helper to get LAN IP
+// Pick the IPv4 address other machines on the LAN can actually reach. Naively
+// taking the first non-loopback IPv4 is fragile: VPNs / iCloud Private Relay
+// (utun*), Apple AWDL, bridges and VM/container adapters all expose IPv4s that
+// aren't routable from a peer — and a loopback fallback yields a link that works
+// on the sharing machine but "can't be reached" from anywhere else.
 pub fn get_lan_ip() -> String {
-    if let Ok(addrs) = if_addrs::get_if_addrs() {
-        for addr in addrs {
-            if !addr.is_loopback() && addr.ip().is_ipv4() {
-                return addr.ip().to_string();
-            }
-        }
-    }
-    "127.0.0.1".to_string()
+    use std::net::IpAddr;
+
+    let addrs = match if_addrs::get_if_addrs() {
+        Ok(a) => a,
+        Err(_) => return "127.0.0.1".to_string(),
+    };
+
+    // Real IPv4 candidates: not loopback, not link-local (169.254/16 APIPA).
+    let candidates: Vec<(String, std::net::Ipv4Addr)> = addrs
+        .into_iter()
+        .filter(|iface| !iface.is_loopback())
+        .filter_map(|iface| match iface.ip() {
+            IpAddr::V4(v4) if !v4.is_link_local() => Some((iface.name, v4)),
+            _ => None,
+        })
+        .collect();
+
+    choose_lan_ip(&candidates)
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "127.0.0.1".to_string())
+}
+
+/// Interface-name prefixes that are never the primary LAN link: VPN/tunnels,
+/// Apple AWDL/low-latency WLAN, bridges, and VM/container adapters.
+fn is_virtual_iface(name: &str) -> bool {
+    const SKIP: &[&str] = &[
+        "utun", "tun", "tap", "ppp", "ipsec", "awdl", "llw", "gif", "stf",
+        "bridge", "vmnet", "vboxnet", "veth", "docker", "anpi", "ap",
+    ];
+    SKIP.iter().any(|p| name.starts_with(p))
+}
+
+/// Choose the IPv4 a peer on the LAN can reach, from a pre-filtered candidate
+/// list (no loopback / link-local). Prefers a private-range address on a
+/// physical interface; falls back to any physical interface, then any candidate.
+fn choose_lan_ip(candidates: &[(String, std::net::Ipv4Addr)]) -> Option<std::net::Ipv4Addr> {
+    candidates
+        .iter()
+        .find(|(name, ip)| !is_virtual_iface(name) && ip.is_private())
+        .or_else(|| candidates.iter().find(|(name, _)| !is_virtual_iface(name)))
+        .or_else(|| candidates.first())
+        .map(|(_, ip)| *ip)
 }
 
 // CSP for the served share pages. They are static formatted markdown — no script of
@@ -1000,6 +1038,49 @@ pub fn stop_sharing_server(key: &str) -> Result<u16, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::Ipv4Addr;
+
+    fn cand(name: &str, ip: [u8; 4]) -> (String, Ipv4Addr) {
+        (name.to_string(), Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]))
+    }
+
+    #[test]
+    fn choose_lan_ip_prefers_physical_private_over_vpn() {
+        // iCloud Private Relay / VPN (utun) listed before the real Wi-Fi (en0).
+        let candidates = vec![
+            cand("utun3", [10, 23, 45, 6]),
+            cand("en0", [192, 168, 1, 154]),
+        ];
+        assert_eq!(
+            choose_lan_ip(&candidates),
+            Some(Ipv4Addr::new(192, 168, 1, 154))
+        );
+    }
+
+    #[test]
+    fn choose_lan_ip_skips_bridge_and_awdl() {
+        let candidates = vec![
+            cand("bridge0", [192, 168, 64, 1]),
+            cand("awdl0", [169, 254, 0, 2]),
+            cand("en0", [192, 168, 1, 50]),
+        ];
+        assert_eq!(
+            choose_lan_ip(&candidates),
+            Some(Ipv4Addr::new(192, 168, 1, 50))
+        );
+    }
+
+    #[test]
+    fn choose_lan_ip_falls_back_to_vpn_when_no_physical() {
+        // A VPN address still beats nothing (and beats the loopback fallback).
+        let candidates = vec![cand("utun0", [100, 64, 0, 9])];
+        assert_eq!(choose_lan_ip(&candidates), Some(Ipv4Addr::new(100, 64, 0, 9)));
+    }
+
+    #[test]
+    fn choose_lan_ip_none_when_empty() {
+        assert_eq!(choose_lan_ip(&[]), None);
+    }
 
     #[test]
     fn render_doc_page_strips_active_content() {

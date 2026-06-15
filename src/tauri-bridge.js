@@ -41,6 +41,9 @@ window.canonic = {
     // Pin the native macOS window appearance to the active theme's scheme
     // ("dark" | "light") so vibrancy/titlebar/menus follow the theme, not the OS.
     setWindowTheme: (scheme) => invoke('set_window_theme', { scheme }),
+    // Which side ("left"|"right") the desktop puts window controls, so the
+    // frameless custom titlebar matches the user's window-management settings.
+    windowControlsSide: () => invoke('window_controls_side'),
   },
 
   // Telemetry

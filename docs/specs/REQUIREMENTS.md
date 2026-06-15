@@ -154,6 +154,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: the user taps the right panel toggle button
   then: the right panel appears as a centered floating modal with backdrop; tapping the backdrop or the close button dismisses it
 
+* scenario: focus mode on a large window exposes panel toggles
+  given: focus mode is ON on a large (non-compact) window, so the sidebars are hidden
+  when: the user looks at the titlebar
+  then: left and right panel toggle buttons are shown in the titlebar, and tapping one opens that panel as a floating popover (the only way to reach the hidden sidebars without leaving focus mode)
+
+* scenario: focus mode floating modal fills a small screen
+  given: focus mode is ON and the window is a small/compact screen
+  when: a panel opens as a floating popover modal
+  then: the modal uses most of the viewport (it is not shrunk to the narrow docked-sidebar width), leaving only a small margin
+
 ***
 
 ## Window Controls (WCTL)
@@ -164,6 +174,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: the app is running on Windows or Linux
   when: the window is shown
   then: there are no native window decorations, and the titlebar shows themed minimize, maximize, and close buttons that follow the active theme
+
+* scenario: controls respect the desktop's configured side
+  given: the app is running on Linux with a desktop whose window-button layout is set to the left (e.g. GNOME `button-layout`)
+  when: the window is shown
+  then: the themed window controls render on the left of the titlebar; on a right-configured desktop (and on Windows) they render on the right
 
 * scenario: window controls operate the window
   given: the app is running on Windows or Linux
@@ -306,6 +321,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: a .canonicignore file exists with entries matching certain directories
   when: the user shares with scope directory or workspace
   then: the matching directories are excluded from the shared manifest
+
+* scenario: share link uses a LAN-reachable address
+  given: the sharing machine has virtual/VPN interfaces alongside its real LAN interface (e.g. iCloud Private Relay or a VPN tunnel)
+  when: a share is started and the link/advertised address is built
+  then: the address is the machine's real private-LAN IPv4 (not a VPN/tunnel/bridge address and never loopback), so another machine on the same network can reach it
 
 ***
 

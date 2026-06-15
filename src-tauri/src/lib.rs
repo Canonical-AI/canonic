@@ -50,7 +50,9 @@ pub fn run() {
 
       // Frameless custom chrome on Linux/Windows: drop the native window
       // decorations so our themed titlebar + window controls are the only chrome.
-      // macOS keeps its decorations (traffic lights overlay via titleBarStyle).
+      // The controls are placed on the side the desktop is configured for (see
+      // window_controls_side). macOS keeps its decorations (traffic-light overlay
+      // via titleBarStyle).
       #[cfg(all(desktop, not(target_os = "macos")))]
       {
         use tauri::Manager;
@@ -98,6 +100,7 @@ pub fn run() {
       commands::app_open_config,
       commands::app_edit_action,
       commands::set_window_theme,
+      commands::window_controls_side,
       commands::telemetry_log,
       commands::dialog_confirm,
       commands::dialog_open_directory,

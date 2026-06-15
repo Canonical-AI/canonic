@@ -408,47 +408,47 @@ html.window-transparency[data-theme="tokyo"] {
    and --bg-body alias --bg-surface/--bg-base, so they re-opaque in this scope
    too without being listed. Floater classes: see selector list. */
 
-html.window-transparency :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #161a21;
     --bg-base: #0c0e12;
 }
-html.window-transparency[data-theme="auteur"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="auteur"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #24232a;
     --bg-base: #1a0f15;
 }
-html.window-transparency[data-theme="paper"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="paper"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #ffffff;
     --bg-base: #f6f4f7;
 }
-html.window-transparency[data-theme="mocha"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="mocha"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #313244;
     --bg-base: #1e1e2e;
 }
-html.window-transparency[data-theme="macchiato"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="macchiato"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #363a4f;
     --bg-base: #24273a;
 }
-html.window-transparency[data-theme="latte"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="latte"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #ffffff;
     --bg-base: #eff1f5;
 }
-html.window-transparency[data-theme="dracula"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="dracula"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #282a36;
     --bg-base: #1e1f29;
 }
-html.window-transparency[data-theme="nord"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="nord"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #434c5e;
     --bg-base: #2e3440;
 }
-html.window-transparency[data-theme="solarized"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="solarized"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #073642;
     --bg-base: #002b36;
 }
-html.window-transparency[data-theme="gruvbox"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="gruvbox"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #32302f;
     --bg-base: #282828;
 }
-html.window-transparency[data-theme="tokyo"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency[data-theme="tokyo"] :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-surface: #24283b;
     --bg-base: #1a1b26;
 }
@@ -458,7 +458,7 @@ html.window-transparency[data-theme="tokyo"] :is(.modal, .agent-popup, .slash-to
    `--bg-secondary: var(--bg-surface)` would keep the transparent root value
    here. Declaring it again on the floater makes it resolve against the floater's
    now-opaque --bg-surface (set per theme above). Theme-agnostic via var(). */
-html.window-transparency :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown) {
+html.window-transparency :is(.modal, .agent-popup, .slash-tooltip, .wiki-tooltip, .context-menu, .floating-toolbar, .table-toolbar, .switcher-popover, .branch-menu, .agent-selector, .update-prompt, .app-menu-dropdown, .sidebar--focus-floating, .right-panel--focus-floating) {
     --bg-secondary: var(--bg-surface);
     --bg-body: var(--bg-base);
 }

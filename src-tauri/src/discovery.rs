@@ -189,6 +189,34 @@ mod tests {
     /// computer. Ignored by default (real multicast; flaky in CI and needs the
     /// macOS local-network permission). Run manually:
     ///   cargo test --lib discovery::tests::self_discovery -- --ignored --nocapture
+    /// Diagnostic: browse with the real mdns-sd lib for 12s and print every
+    /// event — proves whether THIS machine's browser resolves other Canonic
+    /// shares on the LAN, without building the app. Run (bypassing RTK so the
+    /// prints aren't swallowed):
+    ///   rtk proxy cargo test --manifest-path src-tauri/Cargo.toml --lib \
+    ///     discovery::tests::browse_and_list -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn browse_and_list() {
+        let daemon = ServiceDaemon::new().expect("create mdns daemon");
+        let receiver = daemon.browse("_canonic._tcp.local.").expect("browse");
+        let deadline = Instant::now() + Duration::from_secs(12);
+        while Instant::now() < deadline {
+            match receiver.recv_timeout(Duration::from_millis(500)) {
+                Ok(ServiceEvent::ServiceFound(_, name)) => eprintln!("FOUND: {name}"),
+                Ok(ServiceEvent::ServiceResolved(info)) => eprintln!(
+                    "RESOLVED: {} addrs={:?} port={}",
+                    info.get_fullname(),
+                    info.get_addresses(),
+                    info.get_port()
+                ),
+                Ok(other) => eprintln!("EVENT: {other:?}"),
+                Err(_) => {}
+            }
+        }
+        eprintln!("browse_and_list: done");
+    }
+
     #[test]
     #[ignore]
     fn self_discovery() {

@@ -9,13 +9,14 @@
 # The release workflow copies the built amd64 .deb to flatpak/canonic.deb before
 # invoking flatpak-builder, so the `path: canonic.deb` source resolves.
 #
-# runtime-version pinned to '47': the GNOME 47 runtime provides webkit2gtk-4.1,
-# which Tauri v2 links against. Bump in lockstep with the flatpak-builder
-# container tag in release.yml. If a future runtime drops webkit2gtk-4.1, the
-# app fails to start — keep these two versions matched and known-good.
+# runtime-version pinned to '50': the GNOME 50 runtime provides webkit2gtk-4.1,
+# which Tauri v2 links against (GNOME 47 and 48 are end-of-life). Bump in lockstep
+# with the runtime install in release.yml. GNOME runtimes go EOL roughly when the
+# version+2 ships, so track a current branch; if a future runtime drops
+# webkit2gtk-4.1 the app fails to start — keep these two versions matched.
 id: ai.canonic.app
 runtime: org.gnome.Platform
-runtime-version: "47"
+runtime-version: "50"
 sdk: org.gnome.Sdk
 command: canonic
 

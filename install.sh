@@ -180,8 +180,12 @@ case "$PLATFORM" in
         flathub https://flathub.org/repo/flathub.flatpakrepo \
         || warn "Could not add Flathub remote; runtime download may fail."
 
+      # --noninteractive disables flatpak's animated progress UI. Over a
+      # `curl … | sh` pipe that UI emits terminal cursor-position queries whose
+      # replies aren't consumed and leak as `^[[..R` noise; it also auto-answers
+      # the runtime EOL/migration prompt instead of blocking on stdin.
       info "Installing Canonic Flatpak…"
-      flatpak install --user -y "${TMPDIR}/${ASSET}" \
+      flatpak install --user -y --noninteractive "${TMPDIR}/${ASSET}" \
         || err "flatpak install failed"
       LAUNCH_HINT="flatpak run ai.canonic.app"
     else

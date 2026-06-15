@@ -2717,8 +2717,11 @@ fn parse_peer_address(input: &str) -> Result<(String, u16, String), String> {
 /// and peers_fetch_manifest. Returns the raw manifest JSON.
 async fn fetch_peer_manifest(host: &str, port: u64, token: &str) -> Result<Value, String> {
     let url = format!("http://{}:{}/manifest?token={}", host, port, token);
+    // Fail fast: a firewall that DROPs (rather than refuses) the share port would
+    // otherwise hang the request indefinitely. 8s is plenty on a LAN.
     let res = reqwest::Client::new()
         .get(&url)
+        .timeout(std::time::Duration::from_secs(8))
         .send()
         .await
         .map_err(|e| format!("Could not reach {}:{} — {}", host, port, e))?;

@@ -1025,6 +1025,9 @@ export const useAppStore = defineStore("app", () => {
       const idx = discoveredPeers.value.findIndex((p) => p.id === id);
       if (idx >= 0) discoveredPeers.value.splice(idx, 1);
     });
+    // Recover peers the backend resolved before this listener attached — live
+    // peers:found events aren't buffered, but the backend registry is.
+    if (!isDemoMode.value) refreshDiscoveredPeers().catch(() => {});
   }
 
   // Wire backup completion listener

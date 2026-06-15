@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "canonic",
   "mainBinaryName": "canonic",
-  "version": "0.2.7-alpha",
+  "version": "0.2.8-alpha",
   "identifier": "ai.canonic.app",
   "build": {
     "frontendDist": "../dist",

@@ -16,6 +16,12 @@
             @mousedown="onTitlebarMouseDown"
         >
             <div class="titlebar-left" data-tauri-drag-region>
+                <!-- Window controls on the left when the desktop is configured
+                     that way (e.g. GNOME button-layout). macOS uses native
+                     traffic lights, so the custom controls never render there. -->
+                <WindowControls
+                    v-if="!isMac && windowControlsSide === 'left'"
+                />
                 <img src="/canonical-logo.svg" alt="" class="titlebar-logo" />
                 <span class="app-name">canonic</span>
                 <AppMenu
@@ -95,6 +101,28 @@
                     </div>
                 </div>
 
+                <!-- Focus-mode panel toggles: focus hides the docked sidebars,
+                     so these are the only way to open them as floating panels
+                     on a wide screen (compact mode has its own header toggles). -->
+                <template v-if="store.focusMode">
+                    <button
+                        class="icon-btn"
+                        :class="{ active: leftPanelOpen }"
+                        :title="leftPanelBtnTitle"
+                        @click="toggleLeftPanel"
+                    >
+                        <PanelLeftOpen :size="15" />
+                    </button>
+                    <button
+                        class="icon-btn"
+                        :class="{ active: rightPanelOpen }"
+                        :title="rightPanelBtnTitle"
+                        @click="toggleRightPanel"
+                    >
+                        <PanelRightOpen :size="15" />
+                    </button>
+                </template>
+
                 <!-- Focus mode toggle -->
                 <button
                     class="icon-btn"
@@ -119,34 +147,11 @@
                     <Settings :size="15" />
                 </button>
 
-                <!-- Window controls — themed min/max/close for the frameless
-                     Linux/Windows chrome. macOS uses its native traffic lights. -->
-                <div v-if="!isMac" class="window-controls">
-                    <button
-                        class="win-btn"
-                        title="Minimize"
-                        aria-label="Minimize"
-                        @click="minimizeWindow"
-                    >
-                        <Minus :size="15" />
-                    </button>
-                    <button
-                        class="win-btn"
-                        title="Maximize"
-                        aria-label="Maximize"
-                        @click="toggleMaximizeWindow"
-                    >
-                        <Square :size="12" />
-                    </button>
-                    <button
-                        class="win-btn win-btn--close"
-                        title="Close"
-                        aria-label="Close"
-                        @click="closeWindow"
-                    >
-                        <X :size="15" />
-                    </button>
-                </div>
+                <!-- Window controls on the right (Windows, and Linux desktops
+                     that keep controls on the right). -->
+                <WindowControls
+                    v-if="!isMac && windowControlsSide === 'right'"
+                />
             </div>
         </div>
 
@@ -347,7 +352,7 @@
                         "
                     >
                         <PanelLeftClose
-                            v-if="!store.sidebarCollapsed || store.focusMode"
+                            v-if="leftExpanded"
                             :size="15"
                         />
                         <PanelLeftOpen v-else :size="15" />
@@ -381,7 +386,7 @@
                     </button>
                 </div>
 
-                <template v-if="!store.sidebarCollapsed">
+                <template v-if="leftExpanded">
                     <FileTree v-if="store.sidebarTab === 'files'" />
                     <PeersPanel v-else-if="store.sidebarTab === 'peers'" />
                     <HintsPanel
@@ -479,7 +484,7 @@
                 <div
                     class="panel-tabs"
                     :class="{
-                        'panel-tabs--collapsed': store.rightPanelCollapsed,
+                        'panel-tabs--collapsed': !rightExpanded,
                     }"
                 >
                     <!-- Collapse toggle (leftmost when collapsed, topmost when open) -->
@@ -499,7 +504,7 @@
                         "
                     >
                         <PanelRightClose
-                            v-if="!store.rightPanelCollapsed || store.focusMode"
+                            v-if="rightExpanded"
                             :size="15"
                         />
                         <PanelRightOpen v-else :size="15" />
@@ -545,20 +550,14 @@
                         <Share2 :size="15" />
                     </button>
                 </div>
-                <div
-                    v-show="!store.rightPanelCollapsed"
-                    class="panel-content-wrap"
-                >
+                <div v-show="rightExpanded" class="panel-content-wrap">
                     <CommentsPanel v-if="store.rightPanelTab === 'comments'" />
                     <HistoryPanel v-if="store.rightPanelTab === 'history'" />
                     <SharePanel v-if="store.rightPanelTab === 'share'" />
                 </div>
                 <!-- AgentPanel replaces old AI chat. -->
                 <AgentPanel
-                    v-show="
-                        store.rightPanelTab === 'agent' &&
-                        !store.rightPanelCollapsed
-                    "
+                    v-show="store.rightPanelTab === 'agent' && rightExpanded"
                 />
             </aside>
         </div>
@@ -656,9 +655,6 @@ import {
     ChevronRight,
     Eye,
     EyeOff,
-    Minus,
-    Square,
-    X,
 } from "lucide-vue-next";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import FileTree from "../sidebar/FileTree.vue";
@@ -679,6 +675,7 @@ import NewDocModal from "../modals/NewDocModal.vue";
 import SettingsModal from "../modals/SettingsModal.vue";
 import ConfirmModal from "../modals/ConfirmModal.vue";
 import AppMenu from "./AppMenu.vue";
+import WindowControls from "./WindowControls.vue";
 import DemoBanner from "./DemoBanner.vue";
 import AgentSessionPill from "./AgentSessionPill.vue";
 import ExternalChangeToast from "./ExternalChangeToast.vue";
@@ -710,12 +707,6 @@ function onTitlebarRightMouseDown(e) {
     currentWindow.setFocus();
     e.stopPropagation();
 }
-
-// Window controls for the frameless Linux/Windows chrome. (.catch swallows the
-// rejection if the command isn't permitted — e.g. running outside Tauri.)
-const minimizeWindow = () => currentWindow.minimize().catch(() => {});
-const toggleMaximizeWindow = () => currentWindow.toggleMaximize().catch(() => {});
-const closeWindow = () => currentWindow.close().catch(() => {});
 
 // Drag a doc from the file tree onto the active editor pane to open it there.
 // Capture phase so we intercept before the ProseMirror editor's own drop handler.
@@ -769,6 +760,10 @@ const isMac = ref(
     typeof navigator !== "undefined" &&
         /Mac|iPhone|iPad/.test(navigator.platform || ""),
 );
+
+// Side the desktop puts window controls on ("left"|"right"); resolved from the
+// OS at mount so the frameless custom controls match the user's WM settings.
+const windowControlsSide = ref("right");
 const THEME_KEY = "canonic:theme";
 
 // TODO: this needs to be all configable not hard coded
@@ -989,6 +984,20 @@ onMounted(async () => {
     // Load version info
     if (window.canonic?.app?.getVersion) {
         store.appVersion = await window.canonic.app.getVersion();
+    }
+
+    // Match the frameless window controls to the desktop's button side. Fire and
+    // forget — the gsettings subprocess shouldn't stall the rest of mount; the
+    // ref defaults to "right" and updates reactively when it resolves.
+    if (!isMac.value && window.canonic?.app?.windowControlsSide) {
+        window.canonic.app
+            .windowControlsSide()
+            .then((side) => {
+                windowControlsSide.value = side;
+            })
+            .catch(() => {
+                /* keep default "right" */
+            });
     }
 
     // After an applied update, greet with "Updated to vX" + release-notes link.
@@ -1285,6 +1294,17 @@ const rightPanelOpen = computed(() =>
         : !store.rightPanelCollapsed,
 );
 
+// In focus mode the panel opens as a floating popover that is always fully
+// expanded — the persisted collapsed flags only govern the docked (non-focus)
+// layout. Without this the floating panel inherited the collapsed state and
+// showed a vertical icon strip with no content.
+const leftExpanded = computed(
+    () => store.focusMode || !store.sidebarCollapsed,
+);
+const rightExpanded = computed(
+    () => store.focusMode || !store.rightPanelCollapsed,
+);
+
 const leftPanelBtnTitle = computed(() => {
     if (store.focusMode)
         return focusFloatingPanel.value === "left"
@@ -1438,36 +1458,19 @@ function openMobileSearch() {
     color: var(--text-primary);
 }
 
-/* Frameless window controls (Linux/Windows). Themed via vars so they track
-   the active theme instead of the OS-drawn native buttons. */
-.window-controls {
-    display: flex;
-    align-items: center;
-    gap: 2px;
+.icon-btn.active {
+    background: var(--accent-muted);
+    color: var(--accent);
+}
+
+/* Spacing for the frameless window controls depending on which side they land.
+   The component only renders in the matching slot, so the parent selector is
+   enough — no per-side modifier class needed. */
+.titlebar-left :deep(.window-controls) {
+    margin-right: 8px;
+}
+.titlebar-right :deep(.window-controls) {
     margin-left: 6px;
-}
-.win-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-muted);
-    cursor: pointer;
-    transition:
-        background 0.15s,
-        color 0.15s;
-}
-.win-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-}
-.win-btn--close:hover {
-    background: var(--danger, #e5484d);
-    color: #fff;
 }
 
 .content {
@@ -2177,9 +2180,12 @@ function openMobileSearch() {
     display: none !important;
 }
 
-/* Floating popover modal styles for focus mode */
-.sidebar--focus-floating,
-.right-panel--focus-floating {
+/* Floating popover modal styles for focus mode. Scoped under .layout--focus so
+   the specificity beats the compact-mode width override (.layout-compact
+   .sidebar) — otherwise the modal collapsed to ~42vw with huge margins when
+   focus + compact were both active on small screens. */
+.layout--focus .sidebar--focus-floating,
+.layout--focus .right-panel--focus-floating {
     position: fixed !important;
     top: 50% !important;
     left: 50% !important;
@@ -2190,6 +2196,10 @@ function openMobileSearch() {
     width: min(92vw, 520px) !important;
     height: min(82vh, 680px) !important;
     max-height: 82vh !important;
+    /* Opaque surface — these float over content, so they must not show the
+       editor through them (the bars use the translucent --bg-sidebar in blur
+       mode; --bg-surface is re-opaqued for floaters in main.css). */
+    background: var(--bg-surface) !important;
     border-radius: 12px;
     border: 1px solid var(--border) !important;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
@@ -2197,11 +2207,23 @@ function openMobileSearch() {
     overflow: hidden;
 }
 
-.sidebar--focus-floating {
+/* Small screens: fill more of the viewport so the modal doesn't float in a sea
+   of margin. */
+@media (max-width: 640px) {
+    .layout--focus .sidebar--focus-floating,
+    .layout--focus .right-panel--focus-floating {
+        width: 94vw !important;
+        height: 90vh !important;
+        max-height: 90vh !important;
+        border-radius: 10px;
+    }
+}
+
+.layout--focus .sidebar--focus-floating {
     border-right: none !important;
 }
 
-.right-panel--focus-floating {
+.layout--focus .right-panel--focus-floating {
     border-left: none !important;
 }
 

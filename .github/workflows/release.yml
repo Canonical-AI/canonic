@@ -223,7 +223,7 @@ jobs:
     # Wrap each arch's .deb (from the `build` job) into a distro-agnostic
     # .flatpak bundle (installs on Alpine, Arch, Fedora, Ubuntu, …). Built
     # NATIVELY per-arch on matching runners: x86_64 on ubuntu-latest, aarch64 on
-    # ubuntu-24.04-arm. We do NOT use the `bilelmoussaoui/...:gnome-47` container
+    # ubuntu-24.04-arm. We do NOT use the `bilelmoussaoui/...:gnome-50` container
     # because it ships no arm64 image (docker pull fails on arm64 runners) —
     # instead flatpak-builder is apt-installed and the GNOME runtime pulled from
     # Flathub, which works identically on both arches. The runtime version below
@@ -259,13 +259,13 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       - name: Install GNOME runtime + SDK (native arch)
-        # The manifest builds against org.gnome.{Platform,Sdk}//47. Flathub
+        # The manifest builds against org.gnome.{Platform,Sdk}//50. Flathub
         # serves both x86_64 and aarch64, so this resolves to the runner's arch.
         run: |
           flatpak remote-add --if-not-exists --user \
             flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub \
-            org.gnome.Platform//47 org.gnome.Sdk//47
+            org.gnome.Platform//50 org.gnome.Sdk//50
 
       - name: Download Linux build (.deb)
         uses: actions/download-artifact@v8

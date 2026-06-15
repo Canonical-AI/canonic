@@ -108,7 +108,8 @@
               <Loader :size="12" class="spin" /> Loading files…
             </div>
             <div v-else-if="peerFiles[peer.id] === null" class="peer-files-error">
-              Could not load files. <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
+              <div class="peer-files-error-msg">{{ peerFilesError[peer.id] || 'Could not load files.' }}</div>
+              <button class="load-files-btn" @click.stop="loadFiles(peer)">Try again</button>
             </div>
             <div v-else class="peer-files">
               <div v-if="!peerFiles[peer.id] || peerFiles[peer.id].length === 0" class="peer-files-empty">No files shared.</div>
@@ -284,6 +285,7 @@ const favoritesCount = computed(
   () => (store.isDemoMode ? store.demoPeers.length : 0) + store.favoritedPeers.length
 )
 const peerFiles = reactive({}) // peerId -> string[] | null | undefined
+const peerFilesError = reactive({}) // peerId -> error message string
 const peerFilesExpanded = reactive({}) // peerId -> boolean
 const dirExpansion = reactive({}) // peerId:dirKey -> boolean
 
@@ -472,6 +474,7 @@ function groupedPeerFiles(peerId) {
 
 async function loadFiles(peer) {
   peerFiles[peer.id] = undefined // show loading state
+  peerFilesError[peer.id] = ''
   try {
     const result = await api.peers.fetchManifest(peer.id)
     // The manifest now includes scope metadata
@@ -482,6 +485,9 @@ async function loadFiles(peer) {
       peerFiles[peer.id] = null
     }
   } catch (err) {
+    // Surface the real reason (e.g. "Could not reach 192.168.x:port — …") so a
+    // firewall / unreachable host is obvious instead of a generic failure.
+    peerFilesError[peer.id] = String(err?.message || err || '')
     peerFiles[peer.id] = null
   }
 }
@@ -894,6 +900,12 @@ function toggleFavorite(peer) {
   padding: 3px 12px 4px 42px;
   font-size: 0.775rem;
   color: var(--text-muted);
+}
+
+.peer-files-error-msg {
+  color: var(--danger, #e5484d);
+  word-break: break-word;
+  margin-bottom: 3px;
 }
 
 .load-files-btn {

@@ -3446,14 +3446,36 @@ pub fn agent_cancel(_session_id: String) -> Result<Value, String> {
 }
 
 // --- AI Control Preset & Sessions ---
+
+/// True when running inside a Flatpak sandbox. The sandbox has its own PATH and
+/// filesystem, so host-installed CLI agents (claude/gemini/codex live on the
+/// host, not in the GNOME runtime) are invisible unless we run them on the host.
+pub fn in_flatpak() -> bool {
+    std::path::Path::new("/.flatpak-info").exists()
+}
+
+/// Build a Command that runs `program args` on the host, transparently using
+/// `flatpak-spawn --host` when sandboxed. Requires --talk-name=org.freedesktop
+/// .Flatpak in the manifest (the Flatpak Development portal).
+fn host_command(program: &str, args: &[&str]) -> std::process::Command {
+    if in_flatpak() {
+        let mut c = std::process::Command::new("flatpak-spawn");
+        c.arg("--host").arg(program).args(args);
+        c
+    } else {
+        let mut c = std::process::Command::new(program);
+        c.args(args);
+        c
+    }
+}
+
 fn is_installed(binary: &str) -> bool {
     #[cfg(windows)]
     let cmd = "where";
     #[cfg(not(windows))]
     let cmd = "which";
 
-    std::process::Command::new(cmd)
-        .arg(binary)
+    host_command(cmd, &[binary])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -3506,8 +3528,7 @@ fn list_models(agent_id: &str) -> (Vec<String>, Option<String>, String) {
             _ => "",
         };
         if is_installed(binary) {
-            if let Ok(output) = std::process::Command::new(binary)
-                .args(run_args)
+            if let Ok(output) = host_command(binary, &run_args)
                 .output()
             {
                 if output.status.success() {
@@ -3907,31 +3928,59 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
         pixel_height: 0,
     }).map_err(|e| e.to_string())?;
 
-    let mut cmd = portable_pty::CommandBuilder::new(&exec_bin);
-    cmd.args(&exec_args);
-    if let Some(dir) = &params.cwd {
-        cmd.cwd(dir);
-    }
-
-    if let Some(mcp) = params.mcp_port {
-        let token = crate::mcp::get_token().unwrap_or_default();
-        cmd.env("CANONIC_MCP_URL", format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
-        cmd.env("CANONIC_MCP_SSE", format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
-        cmd.env("CANONIC_MCP_TOKEN", &token);
-    }
-    cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
-    cmd.env("TERM", "xterm-256color");
-
     let color_fgbg = if params.color_scheme.as_deref() == Some("light") {
         "0;15"
     } else {
         "15;0"
     };
-    cmd.env("COLORFGBG", color_fgbg);
 
-    for (k, v) in std::env::vars() {
-        cmd.env(k, v);
+    // Env the agent should see. (The MCP server listens on the host's 127.0.0.1;
+    // under Flatpak --share=network shares the host loopback, so a host-spawned
+    // agent reaches it on the same address.)
+    let mut envs: Vec<(String, String)> = Vec::new();
+    if let Some(mcp) = params.mcp_port {
+        let token = crate::mcp::get_token().unwrap_or_default();
+        envs.push(("CANONIC_MCP_URL".into(), format!("http://127.0.0.1:{}/mcp?token={}", mcp, token)));
+        envs.push(("CANONIC_MCP_SSE".into(), format!("http://127.0.0.1:{}/sse?token={}", mcp, token)));
+        envs.push(("CANONIC_MCP_TOKEN".into(), token));
     }
+    envs.push(("GEMINI_CLI_TRUST_WORKSPACE".into(), "true".into()));
+    envs.push(("TERM".into(), "xterm-256color".into()));
+    envs.push(("COLORFGBG".into(), color_fgbg.to_string()));
+
+    let cmd = if in_flatpak() {
+        // Agents are installed on the host, not in the sandbox. Run via
+        // `flatpak-spawn --host [--directory=cwd] [--env=K=V …] <bin> <args>`.
+        // cmd.env()/cwd() wouldn't cross the flatpak-spawn boundary, so they go
+        // as explicit flags. Needs --talk-name=org.freedesktop.Flatpak.
+        let mut c = portable_pty::CommandBuilder::new("flatpak-spawn");
+        c.arg("--host");
+        if let Some(dir) = &params.cwd {
+            c.arg(format!("--directory={}", dir));
+        }
+        for (k, v) in &envs {
+            c.arg(format!("--env={}={}", k, v));
+        }
+        c.arg(&exec_bin);
+        for a in &exec_args {
+            c.arg(a);
+        }
+        c
+    } else {
+        let mut c = portable_pty::CommandBuilder::new(&exec_bin);
+        c.args(&exec_args);
+        if let Some(dir) = &params.cwd {
+            c.cwd(dir);
+        }
+        for (k, v) in &envs {
+            c.env(k, v);
+        }
+        // Inherit the app's environment (PATH etc.) so the agent finds its deps.
+        for (k, v) in std::env::vars() {
+            c.env(k, v);
+        }
+        c
+    };
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;

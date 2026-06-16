@@ -327,6 +327,16 @@ Source of truth for product requirements. When a requirement changes, update thi
   when: a share is started and the link/advertised address is built
   then: the address is the machine's real private-LAN IPv4 (not a VPN/tunnel/bridge address and never loopback), so another machine on the same network can reach it
 
+* scenario: share panel reflects the backend's active shares
+  given: a share is already active on the backend (e.g. an auto-started "share all workspaces" on launch)
+  when: the user opens the Share panel
+  then: that share shows as Live (the panel syncs from the backend's active-share list, not a stale in-memory flag)
+
+* scenario: peer file fetch error is shown
+  given: a discovered peer's share port is unreachable (firewall / different subnet)
+  when: the user expands that peer to load its files
+  then: the real reason is shown (e.g. "Could not reach 192.168.x:port — …"), and the request times out rather than hanging
+
 ***
 
 ## Peer Discovery (PEER)
@@ -1768,6 +1778,11 @@ Source of truth for product requirements. When a requirement changes, update thi
   given: a preset agent binary is not installed on system
   when: the user tries to select it
   then: the agent is not selected and a "Not installed" badge is shown
+
+* scenario: host-installed agents detected and run under Flatpak
+  given: Canonic runs as a Flatpak (sandboxed) and the user has CLI agents installed on the host
+  when: agent install is checked and an agent session is launched
+  then: detection and launch run on the host via `flatpak-spawn --host` (not the sandbox PATH), so host-installed agents are found and run, with MCP env forwarded
 
 ### Flavor and Model
 

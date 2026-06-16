@@ -243,6 +243,9 @@ const peers = ref([])
 
 onMounted(async () => {
   peers.value = await window.canonic.peers.list() || []
+  // Reflect the backend's real active shares (e.g. an auto-started workspace
+  // share) so this panel doesn't show a stale "not sharing".
+  store.syncActiveShares?.().catch?.(() => {})
 })
 
 async function startShare() {

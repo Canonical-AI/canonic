@@ -33,6 +33,10 @@ finish-args:
   - --filesystem=home
   # Desktop notifications (share requests, peer events).
   - --talk-name=org.freedesktop.Notifications
+  # Run host-installed CLI agents (claude/gemini/codex) via `flatpak-spawn
+  # --host` — they live on the host, not in the sandbox. This is the Flatpak
+  # Development portal; without it agent detection and launch fail in Flatpak.
+  - --talk-name=org.freedesktop.Flatpak
 
 modules:
   - name: canonic

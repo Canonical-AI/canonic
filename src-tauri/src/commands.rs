@@ -3454,6 +3454,62 @@ pub fn in_flatpak() -> bool {
     std::path::Path::new("/.flatpak-info").exists()
 }
 
+/// The PATH a host-spawned agent should see. When the app is launched from the
+/// macOS Finder/Dock (or a Linux .desktop), it inherits launchd's minimal PATH
+/// (`/usr/bin:/bin:/usr/sbin:/sbin`) — Homebrew, npm-global, and the user's CLI
+/// agents live outside it, so `which claude` and friends find nothing. We ask the
+/// user's login shell for its real PATH (it sources the shell profile) and merge
+/// in common fallbacks. Cached: the login shell is only spawned once.
+///
+/// Not used under Flatpak — `flatpak-spawn --host` already runs in the host
+/// session, which has the full PATH.
+#[cfg(not(windows))]
+fn login_shell_path() -> &'static str {
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        let inherited = std::env::var("PATH").unwrap_or_default();
+
+        // Ask the login shell (-l sources the profile, -i an interactive rc) for PATH.
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        let shell_path = std::process::Command::new(&shell)
+            .args(["-ilc", "printf '%s' \"$PATH\""])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+
+        let home = std::env::var("HOME").unwrap_or_default();
+        let fallbacks = [
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            &format!("{home}/.local/bin"),
+            &format!("{home}/.cargo/bin"),
+            &format!("{home}/.npm-global/bin"),
+            &format!("{home}/.bun/bin"),
+            &format!("{home}/.deno/bin"),
+            &format!("{home}/.volta/bin"),
+        ];
+
+        // Merge shell PATH first (most authoritative), then inherited, then fallbacks,
+        // dropping empties and duplicates while preserving order.
+        let mut seen = std::collections::HashSet::new();
+        let mut dirs: Vec<String> = Vec::new();
+        for dir in shell_path
+            .split(':')
+            .chain(inherited.split(':'))
+            .map(|s| s.to_string())
+            .chain(fallbacks.iter().map(|s| s.to_string()))
+        {
+            if !dir.is_empty() && seen.insert(dir.clone()) {
+                dirs.push(dir);
+            }
+        }
+        dirs.join(":")
+    })
+}
+
 /// Build a Command that runs `program args` on the host, transparently using
 /// `flatpak-spawn --host` when sandboxed. Requires --talk-name=org.freedesktop
 /// .Flatpak in the manifest (the Flatpak Development portal).
@@ -3465,6 +3521,10 @@ fn host_command(program: &str, args: &[&str]) -> std::process::Command {
     } else {
         let mut c = std::process::Command::new(program);
         c.args(args);
+        // GUI launch inherits a minimal PATH; give the child the real login-shell
+        // PATH so program lookup (and the program's own PATH) finds host agents.
+        #[cfg(not(windows))]
+        c.env("PATH", login_shell_path());
         c
     }
 }
@@ -3696,7 +3756,8 @@ pub fn agent_control_add_custom_agent(config: Value) -> Result<Value, String> {
         obj.insert("customAgents".to_string(), Value::Array(custom_agents));
     }
     config_write(cfg)?;
-    Ok(entry)
+    // Store expects { ok, agent } and only renders the new agent when ok is truthy.
+    Ok(json!({ "ok": true, "agent": entry }))
 }
 
 #[tauri::command]
@@ -3972,11 +4033,16 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
         if let Some(dir) = &params.cwd {
             c.cwd(dir);
         }
-        for (k, v) in &envs {
+        // Inherit the app's environment so the agent finds its deps.
+        for (k, v) in std::env::vars() {
             c.env(k, v);
         }
-        // Inherit the app's environment (PATH etc.) so the agent finds its deps.
-        for (k, v) in std::env::vars() {
+        // Override PATH with the login-shell PATH: a GUI launch inherits launchd's
+        // minimal PATH, so a bare binary like `claude` wouldn't be found otherwise.
+        #[cfg(not(windows))]
+        c.env("PATH", login_shell_path());
+        // MCP/session env last so it always wins over the inherited environment.
+        for (k, v) in &envs {
             c.env(k, v);
         }
         c

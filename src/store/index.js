@@ -1293,6 +1293,10 @@ export const useAppStore = defineStore("app", () => {
         Promise.resolve(api.update?.check?.()).catch(() => {});
       }
 
+      // Reflect any shares the backend already has active (source of truth) so
+      // the Share panel shows the real state instead of a stale "not sharing".
+      await syncActiveShares();
+
       if (cfg?.autoShareAllWorkspaces && !sharesByFile["__all_workspaces__"]) {
         await startAllWorkspacesShare();
       }
@@ -3616,6 +3620,7 @@ export const useAppStore = defineStore("app", () => {
     stopWorkspaceShare,
     startAllWorkspacesShare,
     stopAllWorkspacesShare,
+    syncActiveShares,
     searchResults,
     config,
     sidebarTab,

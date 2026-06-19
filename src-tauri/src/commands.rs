@@ -3446,14 +3446,96 @@ pub fn agent_cancel(_session_id: String) -> Result<Value, String> {
 }
 
 // --- AI Control Preset & Sessions ---
+
+/// True when running inside a Flatpak sandbox. The sandbox has its own PATH and
+/// filesystem, so host-installed CLI agents (claude/gemini/codex live on the
+/// host, not in the GNOME runtime) are invisible unless we run them on the host.
+pub fn in_flatpak() -> bool {
+    std::path::Path::new("/.flatpak-info").exists()
+}
+
+/// The PATH a host-spawned agent should see. When the app is launched from the
+/// macOS Finder/Dock (or a Linux .desktop), it inherits launchd's minimal PATH
+/// (`/usr/bin:/bin:/usr/sbin:/sbin`) — Homebrew, npm-global, and the user's CLI
+/// agents live outside it, so `which claude` and friends find nothing. We ask the
+/// user's login shell for its real PATH (it sources the shell profile) and merge
+/// in common fallbacks. Cached: the login shell is only spawned once.
+///
+/// Not used under Flatpak — `flatpak-spawn --host` already runs in the host
+/// session, which has the full PATH.
+#[cfg(not(windows))]
+fn login_shell_path() -> &'static str {
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        let inherited = std::env::var("PATH").unwrap_or_default();
+
+        // Ask the login shell (-l sources the profile, -i an interactive rc) for PATH.
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        let shell_path = std::process::Command::new(&shell)
+            .args(["-ilc", "printf '%s' \"$PATH\""])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+
+        let home = std::env::var("HOME").unwrap_or_default();
+        let fallbacks = [
+            "/opt/homebrew/bin",
+            "/opt/homebrew/sbin",
+            "/usr/local/bin",
+            &format!("{home}/.local/bin"),
+            &format!("{home}/.cargo/bin"),
+            &format!("{home}/.npm-global/bin"),
+            &format!("{home}/.bun/bin"),
+            &format!("{home}/.deno/bin"),
+            &format!("{home}/.volta/bin"),
+        ];
+
+        // Merge shell PATH first (most authoritative), then inherited, then fallbacks,
+        // dropping empties and duplicates while preserving order.
+        let mut seen = std::collections::HashSet::new();
+        let mut dirs: Vec<String> = Vec::new();
+        for dir in shell_path
+            .split(':')
+            .chain(inherited.split(':'))
+            .map(|s| s.to_string())
+            .chain(fallbacks.iter().map(|s| s.to_string()))
+        {
+            if !dir.is_empty() && seen.insert(dir.clone()) {
+                dirs.push(dir);
+            }
+        }
+        dirs.join(":")
+    })
+}
+
+/// Build a Command that runs `program args` on the host, transparently using
+/// `flatpak-spawn --host` when sandboxed. Requires --talk-name=org.freedesktop
+/// .Flatpak in the manifest (the Flatpak Development portal).
+fn host_command(program: &str, args: &[&str]) -> std::process::Command {
+    if in_flatpak() {
+        let mut c = std::process::Command::new("flatpak-spawn");
+        c.arg("--host").arg(program).args(args);
+        c
+    } else {
+        let mut c = std::process::Command::new(program);
+        c.args(args);
+        // GUI launch inherits a minimal PATH; give the child the real login-shell
+        // PATH so program lookup (and the program's own PATH) finds host agents.
+        #[cfg(not(windows))]
+        c.env("PATH", login_shell_path());
+        c
+    }
+}
+
 fn is_installed(binary: &str) -> bool {
     #[cfg(windows)]
     let cmd = "where";
     #[cfg(not(windows))]
     let cmd = "which";
 
-    std::process::Command::new(cmd)
-        .arg(binary)
+    host_command(cmd, &[binary])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -3506,8 +3588,7 @@ fn list_models(agent_id: &str) -> (Vec<String>, Option<String>, String) {
             _ => "",
         };
         if is_installed(binary) {
-            if let Ok(output) = std::process::Command::new(binary)
-                .args(run_args)
+            if let Ok(output) = host_command(binary, &run_args)
                 .output()
             {
                 if output.status.success() {
@@ -3675,7 +3756,8 @@ pub fn agent_control_add_custom_agent(config: Value) -> Result<Value, String> {
         obj.insert("customAgents".to_string(), Value::Array(custom_agents));
     }
     config_write(cfg)?;
-    Ok(entry)
+    // Store expects { ok, agent } and only renders the new agent when ok is truthy.
+    Ok(json!({ "ok": true, "agent": entry }))
 }
 
 #[tauri::command]
@@ -3907,31 +3989,64 @@ pub fn pty_spawn(app: tauri::AppHandle, params: PtySpawnParams) -> Result<Value,
         pixel_height: 0,
     }).map_err(|e| e.to_string())?;
 
-    let mut cmd = portable_pty::CommandBuilder::new(&exec_bin);
-    cmd.args(&exec_args);
-    if let Some(dir) = &params.cwd {
-        cmd.cwd(dir);
-    }
-
-    if let Some(mcp) = params.mcp_port {
-        let token = crate::mcp::get_token().unwrap_or_default();
-        cmd.env("CANONIC_MCP_URL", format!("http://127.0.0.1:{}/mcp?token={}", mcp, token));
-        cmd.env("CANONIC_MCP_SSE", format!("http://127.0.0.1:{}/sse?token={}", mcp, token));
-        cmd.env("CANONIC_MCP_TOKEN", &token);
-    }
-    cmd.env("GEMINI_CLI_TRUST_WORKSPACE", "true");
-    cmd.env("TERM", "xterm-256color");
-
     let color_fgbg = if params.color_scheme.as_deref() == Some("light") {
         "0;15"
     } else {
         "15;0"
     };
-    cmd.env("COLORFGBG", color_fgbg);
 
-    for (k, v) in std::env::vars() {
-        cmd.env(k, v);
+    // Env the agent should see. (The MCP server listens on the host's 127.0.0.1;
+    // under Flatpak --share=network shares the host loopback, so a host-spawned
+    // agent reaches it on the same address.)
+    let mut envs: Vec<(String, String)> = Vec::new();
+    if let Some(mcp) = params.mcp_port {
+        let token = crate::mcp::get_token().unwrap_or_default();
+        envs.push(("CANONIC_MCP_URL".into(), format!("http://127.0.0.1:{}/mcp?token={}", mcp, token)));
+        envs.push(("CANONIC_MCP_SSE".into(), format!("http://127.0.0.1:{}/sse?token={}", mcp, token)));
+        envs.push(("CANONIC_MCP_TOKEN".into(), token));
     }
+    envs.push(("GEMINI_CLI_TRUST_WORKSPACE".into(), "true".into()));
+    envs.push(("TERM".into(), "xterm-256color".into()));
+    envs.push(("COLORFGBG".into(), color_fgbg.to_string()));
+
+    let cmd = if in_flatpak() {
+        // Agents are installed on the host, not in the sandbox. Run via
+        // `flatpak-spawn --host [--directory=cwd] [--env=K=V …] <bin> <args>`.
+        // cmd.env()/cwd() wouldn't cross the flatpak-spawn boundary, so they go
+        // as explicit flags. Needs --talk-name=org.freedesktop.Flatpak.
+        let mut c = portable_pty::CommandBuilder::new("flatpak-spawn");
+        c.arg("--host");
+        if let Some(dir) = &params.cwd {
+            c.arg(format!("--directory={}", dir));
+        }
+        for (k, v) in &envs {
+            c.arg(format!("--env={}={}", k, v));
+        }
+        c.arg(&exec_bin);
+        for a in &exec_args {
+            c.arg(a);
+        }
+        c
+    } else {
+        let mut c = portable_pty::CommandBuilder::new(&exec_bin);
+        c.args(&exec_args);
+        if let Some(dir) = &params.cwd {
+            c.cwd(dir);
+        }
+        // Inherit the app's environment so the agent finds its deps.
+        for (k, v) in std::env::vars() {
+            c.env(k, v);
+        }
+        // Override PATH with the login-shell PATH: a GUI launch inherits launchd's
+        // minimal PATH, so a bare binary like `claude` wouldn't be found otherwise.
+        #[cfg(not(windows))]
+        c.env("PATH", login_shell_path());
+        // MCP/session env last so it always wins over the inherited environment.
+        for (k, v) in &envs {
+            c.env(k, v);
+        }
+        c
+    };
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
